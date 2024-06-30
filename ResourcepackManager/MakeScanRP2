@@ -1,0 +1,21 @@
+CC = gcc
+TYPE = -static
+DIR = ./ResourcepackManager/
+LIBDIR = -LC:\mingw64\lib
+INCLUDES =  -lpdcurses $(TYPE) -lminizip -lz -lbz2 -lzstd -llzma -lbcrypt
+
+FILE = ScanRP2
+ICON = icon
+
+$(DIR)$(ICON): $(DIR)$(ICON).rc
+	echo "Compiling $(DIR)/$(ICON).o"
+	windres -i $(DIR)$(ICON).rc -o $(DIR)$(ICON).o
+
+$(FILE): $(DIR)$(FILE).c $(DIR)$(ICON).o
+	echo "Compiling $(DIR)/$(FILE).c"
+	$(CC) -g $(DIR)$(FILE).c -Wall -Wextra -o $(DIR)$(FILE).exe $(DIR)$(ICON).o $(LIBDIR) $(INCLUDES)
+
+all: $(FILE)
+
+clean:
+	rm -f $(FILE).exe

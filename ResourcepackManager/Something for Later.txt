@@ -1,0 +1,113 @@
+Software features ideas:
+Modify "CustomModelData" models: deleting model, adding model.
+Overwrite models: copying model files to their corrent directory and updating the texture pathname
+Manage atlas logger: creating, adding and/or removing directories
+Model Assign and Diffrentiate: Copy one model for multiple textures. Separate the model's groups as unique variants, beeing
+connected models, clock, compass, bow and crossbow and other.
+Resourcepack merge: stack and merge two resourcepacks
+Resourcepack Convert: Convert a resourcepack from a version to another
+
+Software functions:
+Display the resourcepack contents in it's own directories, excluding textures.
+- A model file will display it's content in a collapse style list, you will be able to edit the contents
+Resourcepack scan: scan a rescourcepack and store it's contents in memmory.
+- Scan the default files for overwrite function
+Queries, the changes will be saved in a querry list, some querries having priority of execution
+Store a file content in a struct:
+https://minecraft.wiki/w/Model
+https://minecraft.wiki/w/Tutorials/Models#Item_predicates
+https://stackoverflow.com/questions/708238/how-do-i-add-an-icon-to-a-mingw-gcc-compiled-executable
+
+//Open and Copy an image
+FILE *source, *target;
+int i;
+source = fopen("Source", "rb"); 
+
+if( source == NULL ) { printf("Press any key to exit...\n");} //exit(EXIT_FAILURE); 
+
+fseek(source, 0, SEEK_END);
+int length = ftell(source);
+
+fseek(source, 0, SEEK_SET);
+target = fopen("Destination", "wb"); 
+
+if( target == NULL ) { fclose(source); } //exit(EXIT_FAILURE);
+
+for(i = 0; i < length; i++){
+    fputc(fgetc(source), target);
+}
+
+printf("File copied successfully.\n"); 
+fclose(source); 
+fclose(target);
+
+//Create a Directory
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+
+const char *name = "Arbitrary Directory";
+
+int main(void) {
+  errno = 0;
+  int ret = mkdir(name, S_IRWXU);
+  if (ret == -1) {
+    switch (errno) {
+      case EACCES:
+        printf("the parent directory does not allow write");
+        exit(EXIT_FAILURE);
+      case EEXIST:
+        printf("pathname already exists");
+        exit(EXIT_FAILURE);
+      case ENAMETOOLONG:
+        printf("pathname is too long");
+        exit(EXIT_FAILURE);
+      default:
+        perror("mkdir");
+        exit(EXIT_FAILURE);
+    }
+  }
+
+  exit(EXIT_SUCCESS);
+}
+
+********************************************
+//Remove a File
+int main()
+{
+    if (remove("abc.txt") == 0)
+        printf("Deleted successfully");
+    else
+        printf("Unable to delete the file");
+ 
+    return 0;
+}
+
+______          _     ___  ___                                  
+| ___ \        | |    |  \/  |                                  
+| |_/ /_ _  ___| | __ | .  . | __ _ _ __   __ _  __ _  ___ _ __ 
+|  __/ _` |/ __| |/ / | |\/| |/ _` | '_ \ / _` |/ _` |/ _ \ '__|
+| | | (_| | (__|   <  | |  | | (_| | | | | (_| | (_| |  __/ |   
+\_|  \__,_|\___|_|\_\ \_|  |_/\__,_|_| |_|\__,_|\__, |\___|_|   
+                                                 __/ |          
+                                                |___/           
+
+ ____                 __                                                                     
+/\  _`\              /\ \          /'\_/`\                                                   
+\ \ \L\ \ __      ___\ \ \/'\     /\      \     __      ___      __       __      __   _ __  
+ \ \ ,__/'__`\   /'___\ \ , <     \ \ \__\ \  /'__`\  /' _ `\  /'__`\   /'_ `\  /'__`\/\`'__\
+  \ \ \/\ \L\.\_/\ \__/\ \ \\`\    \ \ \_/\ \/\ \L\.\_/\ \/\ \/\ \L\.\_/\ \L\ \/\  __/\ \ \/ 
+   \ \_\ \__/.\_\ \____\\ \_\ \_\   \ \_\\ \_\ \__/.\_\ \_\ \_\ \__/.\_\ \____ \ \____\\ \_\ 
+    \/_/\/__/\/_/\/____/ \/_/\/_/    \/_/ \/_/\/__/\/_/\/_/\/_/\/__/\/_/\/___L\ \/____/ \/_/ 
+                                                                          /\____/            
+                                                                          \_/__/             
+
+ ______            _        ______                                      
+(_____ \          | |      |  ___ \                                     
+ _____) )___  ____| |  _   | | _ | | ____ ____   ____  ____  ____  ____ 
+|  ____/ _  |/ ___) | / )  | || || |/ _  |  _ \ / _  |/ _  |/ _  )/ ___)
+| |   ( ( | ( (___| |< (   | || || ( ( | | | | ( ( | ( ( | ( (/ /| |    
+|_|    \_||_|\____)_| \_)  |_||_||_|\_||_|_| |_|\_||_|\_|| |\____)_|    
+                                                     (_____|            
+
