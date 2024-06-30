@@ -585,14 +585,69 @@ int main () {
     // returnString(&rp->name, "name");
     returnString(&path, "lang");
 
-    FOLDER* lang = createFolder(NULL, path);
-    returnString(&lang->name, "name");
-    lang->subdir = scanFolder(lang, path);
+    FOLDER* lang = scanFolder(NULL, path);
 
-    int height = LINES, width = COLS;
-    char** text = (char**)calloc(4, sizeof(char*));
+    int height = LINES, width = COLS, lenght;
+    //Getting logo
+    char** text = (char**)calloc(3, sizeof(char*)), **logo = NULL, *pointer;
+    pointer = strstr(lang->content->tab, "[Options]:\n");
+    lenght = pointer - lang->content->tab;
+    pointer = NULL;
+    for (int x = strlen("[Options]: "), y = 0, checkpoint = strlen("[Options]: "), size; x < lenght; x++) {
+        if (lang->content->tab[x] == '\n') {
+            char** temp = (char**)realloc(logo, (y+1)*sizeof(char*));
+            if (temp != NULL) {
+                logo = temp;
+                size = x - checkpoint - 1;
+                pointer = (char*)calloc(size+1, sizeof(char));
+                strncpy(pointer, lang->content->tab+checkpoint, size);
+                logo[y] = pointer;
+                y++;
+                checkpoint = x;
+                pointer = NULL;
+            } else {
+                perror("Error allocating memory for logo");
+                for (int i = 0; i < y; i++) {
+                    free(logo[i]);
+                }
+            }
+        }
+    }
+
+    //Getting menu text
+    pointer = strstr(lang->content->tab, "[Options]:\n");
+    pointer = pointer+strlen("[Options]: ");
+    lenght = pointer - lang->content->tab;
+    pointer = NULL;
+    for (int x = lenght, y = 0, checkpoint = lenght; x < (int)lang->content->size; x++) {
+        if (lang->content->tab[x] == '\n') {
+            lenght = x - checkpoint;
+            char** temp = (char**)realloc(text, (y+1)*sizeof(char*));
+            if (temp != NULL) {
+                text = temp;
+                pointer = (char*)calloc(lenght+1, sizeof(char));
+                strncpy(pointer, lang->content->tab+checkpoint, lenght);
+                text[y] = pointer;
+                y++;
+                checkpoint = x+1;
+            } else {
+                perror("Erro allocating memory for text");
+            }
+        }
+    }
+    freeFolder(lang);
+    // text[0] = (char*)calloc(lenght+1-strlen("[Logo]:"), sizeof(char));
+    // strncpy(text[0], lang->content->tab+strlen("[Logo]:\n"), lenght - strlen("[Logo]:\n"));
+    // for (int x = lenght+strlen("[Options]:\n"), checkpoint = lenght+strlen("[Options]:\n"), y = 1; x < strlen(lang->content->tab); x++) {
+    //     if (lang->content->tab[x] == '\n') {
+    //         lenght = x - checkpoint;
+    //         text[y] = (char*)calloc(lenght+1, sizeof(char));
+    //         strncpy(text[y], lang->content->tab+checkpoint, lenght);
+    //         checkpoint = x+1;
+    //         y++;
+    //     }
+    // }
     WINDOW* tab = newwin(4, width, 0, 0);
-
 
     return 0;
 }
