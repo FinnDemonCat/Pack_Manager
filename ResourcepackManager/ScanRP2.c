@@ -305,18 +305,25 @@ void addFile(FOLDER** folder, ARCHIVE* model) {
     folder[0]->count++;
 }
 
-void printLines(const WINDOW* window, const char* list, int y, int x) {
-    size_t lenght;
-    char *pointer = strstr(list, "\n"), *checkpoint = list[0], buffer[1025];
+size_t printLines(WINDOW* window, char* list, int y, int x) {
+    size_t lenght, big = 0;
+    char *pointer = strchr(list, '\n'), *checkpoint = &list[0], buffer[1025];
 
     while(pointer != NULL) {
         pointer = pointer + 1;
-        lenght = pointer - checkpoint;
+        lenght = pointer - checkpoint -1;
+        if (lenght > big) {
+            big = lenght;
+        }
         strncpy(buffer, checkpoint, lenght);
+        buffer[lenght] = '\0';
         mvwprintw(window, y, x, buffer);
+        checkpoint = pointer;
+        pointer = strchr(pointer, '\n');
         y++;
     }
     
+    return big;
 }
 
 FOLDER* scanFolder(FOLDER* pack, char* path) {
@@ -594,93 +601,75 @@ int main () {
         return 1;
     }
 
-    
-    // FOLDER* rp = createFolder(NULL, path);
-    // returnString(&rp->name, "name");
-    returnString(&path, "lang");
-
-    FOLDER* lang = scanFolder(NULL, path);
-
-    int lenght, logolinesCount = 0;
     //Getting logo
-    char** text = (char**)calloc(3, sizeof(char*)), **logo = NULL, *pointer;
+    returnString(&path, "lang");
+    FOLDER* lang = scanFolder(NULL, path);
+    size_t lenght;
+    char *text, *logo = NULL, *pointer;
+    
     pointer = strstr(lang->content->tab, "[Options]:\n");
     lenght = pointer - lang->content->tab;
-    pointer = NULL;
-    for (int x = strlen("[Options]: "), y = 0, checkpoint = strlen("[Options]: "), size; x < lenght; x++) {
-        if (lang->content->tab[x] == '\n') {
-            char** temp = (char**)realloc(logo, (y+1)*sizeof(char*));
-            if (temp != NULL) {
-                logolinesCount++;
-                logo = temp;
-                size = x - checkpoint - 1;
-                pointer = (char*)calloc(size+1, sizeof(char));
-                strncpy(pointer, lang->content->tab+checkpoint, size);
-                logo[y] = pointer;
-                y++;
-                checkpoint = x;
-                pointer = NULL;
-            } else {
-                perror("Error allocating memory for logo");
-                for (int i = 0; i < y; i++) {
-                    free(logo[i]);
-                }
-            }
-        }
+    logo = (char*)calloc(lenght+1, sizeof(char));
+    if (logo != NULL) {
+        strncpy(logo, lang->content->tab+8, lenght-8);
+        logo[lenght-8] = '\0';
+    } else {
+        perror("Error when allocating memory for logo");
+        return 1;
     }
 
-    //Getting menu text
-    pointer = strstr(lang->content->tab, "[Options]:\n");
-    pointer = pointer+strlen("[Options]: ");
+    //Skipping "[Options]:\n" part and getting sidebar
+    pointer = pointer + 11;
     lenght = pointer - lang->content->tab;
-    pointer = NULL;
-    for (int x = lenght, y = 0, checkpoint = lenght; x < (int)lang->content->size; x++) {
-        if (lang->content->tab[x] == '\n') {
-            lenght = x - checkpoint;
-            char** temp = (char**)realloc(text, (y+1)*sizeof(char*));
-            if (temp != NULL) {
-                text = temp;
-                pointer = (char*)calloc(lenght+1, sizeof(char));
-                strncpy(pointer, lang->content->tab+checkpoint, lenght);
-                text[y] = pointer;
-                y++;
-                checkpoint = x+1;
-            } else {
-                perror("Erro allocating memory for text");
-            }
-        }
+    text = (char*)calloc(lenght+1, sizeof(char));
+    if (text != NULL) {
+        strncpy(text, pointer, lenght);
+    } else {
+        perror("Error when allocating memory for sidebar text");
+        return 1;
     }
     
     //Starting the menu;
     initscr();
-    int height = LINES, width = COLS, input = 0, tab_width = width/4, cursor[2];
+    int height = LINES, width = COLS, input = 0, tab_width = width/4, cursor[2], optLenght;
     cursor[0] = cursor[1] = 0;
     bool quit = false;
+
     WINDOW* sidebar = newwin(height, tab_width, 0, 0);
+    WINDOW* window = newwin(height, (width-tab_width), 0, tab_width);
     refresh();
     curs_set(0);
+    noecho();
+    keypad(window, true);
+
+    char* temp = strchr(logo, '\n');
+    size_t center = temp - logo;
+    center = (width*3/4) - center;
+    center /= 2;
+
     box(sidebar, 0, 0);
+    optLenght = (int)printLines(sidebar, text, 1, 1);
+    printLines(window, logo, 0, center);
     wrefresh(sidebar);
-    keypad(sidebar, true);
+    wrefresh(window);
 
     while (!quit) {
-        for (int x = 0; x < 3; x++) {
-            mvwprintw(sidebar, x+1, 1, text[x]);
-        }
-        mvwchgat(sidebar, cursor[0]+1, 1, strlen(text[cursor[0]]), A_STANDOUT, 0, NULL);
+        mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
         wrefresh(sidebar);
-        input = wgetch(sidebar);
+        input = wgetch(window);
 
         switch (input)
         {
         case KEY_DOWN:
             if (cursor[0] < 3) {
                 cursor[0]++;
+                mvwchgat(sidebar, cursor[0]-1, 1, optLenght, A_NORMAL, 0, NULL);
             }
             break;
         case KEY_UP:
             if (cursor[0] > 0) {
                 cursor[0]--;
+                mvwchgat(sidebar, cursor[0]-1, 1, optLenght, A_NORMAL, 0, NULL);
             }
             break;
         case ENTER:
@@ -689,7 +678,7 @@ int main () {
             }
             break;
         case TAB:
-            /* code */
+            cursor[1] = !cursor[1];
             break;
         case KEY_RESIZE:
             endwin();
@@ -710,12 +699,8 @@ int main () {
     }
 
     //Free query
-    for (int x = 0; x < 3; x++) {
-        free(text[x]);
-    }
-    for (int x = 0; x < logolinesCount; x++) {
-        free(logo[x]);
-    }
+    free(text);
+    free(logo);
     freeFolder(lang);
     endwin();
 
