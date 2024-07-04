@@ -631,12 +631,12 @@ int main () {
     
     //Starting the menu;
     initscr();
-    int height = LINES, width = COLS, input = 0, tab_width = width/4, cursor[2], optLenght;
+    int height = LINES, width = COLS, input = 0, cursor[2], optLenght;
     cursor[0] = cursor[1] = 0;
     bool quit = false;
 
-    WINDOW* sidebar = newwin(height, tab_width, 0, 0);
-    WINDOW* window = newwin(height, (width-tab_width), 0, tab_width);
+    WINDOW* sidebar = newwin(height, 32, 0, 0);
+    WINDOW* window = newwin(height, (width-32), 0, 32);
     refresh();
     curs_set(0);
     noecho();
@@ -661,15 +661,15 @@ int main () {
         switch (input)
         {
         case KEY_DOWN:
-            if (cursor[0] < 3) {
+            if (cursor[0] < 2) {
+                mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
                 cursor[0]++;
-                mvwchgat(sidebar, cursor[0]-1, 1, optLenght, A_NORMAL, 0, NULL);
             }
             break;
         case KEY_UP:
             if (cursor[0] > 0) {
+                mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
                 cursor[0]--;
-                mvwchgat(sidebar, cursor[0]-1, 1, optLenght, A_NORMAL, 0, NULL);
             }
             break;
         case ENTER:
@@ -681,15 +681,28 @@ int main () {
             cursor[1] = !cursor[1];
             break;
         case KEY_RESIZE:
+            resize_term(0, 0);
             endwin();
             refresh();
-            resize_term(0, 0);
+            clear();
+            wclear(window);
+            wclear(sidebar);
+
             height = LINES;
             width = COLS;
-            tab_width = width/4;
-            resize_window(sidebar, height, tab_width);
+
+            resize_window(sidebar, height, 32);
+            resize_window(window, height, (width-32));
             box(sidebar, 0, 0);
+            optLenght = (int)printLines(sidebar, text, 1, 1);
+            temp = strchr(logo, '\n');
+            center = temp - logo;
+            center = (width-32) - center;
+            center /= 2;
+            printLines(window, logo, 0, center);
+
             wrefresh(sidebar);
+            wrefresh(window);
 
             break;
         
