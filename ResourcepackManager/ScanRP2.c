@@ -305,6 +305,20 @@ void addFile(FOLDER** folder, ARCHIVE* model) {
     folder[0]->count++;
 }
 
+void printLines(const WINDOW* window, const char* list, int y, int x) {
+    size_t lenght;
+    char *pointer = strstr(list, "\n"), *checkpoint = list[0], buffer[1025];
+
+    while(pointer != NULL) {
+        pointer = pointer + 1;
+        lenght = pointer - checkpoint;
+        strncpy(buffer, checkpoint, lenght);
+        mvwprintw(window, y, x, buffer);
+        y++;
+    }
+    
+}
+
 FOLDER* scanFolder(FOLDER* pack, char* path) {
     int dirNumber = 0, result = 0, type = 0, folderCursor = FOLDERCHUNK;
     long *dirPosition = (long*)calloc(folderCursor, sizeof(long));
@@ -587,7 +601,7 @@ int main () {
 
     FOLDER* lang = scanFolder(NULL, path);
 
-    int height = LINES, width = COLS, lenght;
+    int lenght, logolinesCount = 0;
     //Getting logo
     char** text = (char**)calloc(3, sizeof(char*)), **logo = NULL, *pointer;
     pointer = strstr(lang->content->tab, "[Options]:\n");
@@ -597,6 +611,7 @@ int main () {
         if (lang->content->tab[x] == '\n') {
             char** temp = (char**)realloc(logo, (y+1)*sizeof(char*));
             if (temp != NULL) {
+                logolinesCount++;
                 logo = temp;
                 size = x - checkpoint - 1;
                 pointer = (char*)calloc(size+1, sizeof(char));
@@ -635,19 +650,74 @@ int main () {
             }
         }
     }
+    
+    //Starting the menu;
+    initscr();
+    int height = LINES, width = COLS, input = 0, tab_width = width/4, cursor[2];
+    cursor[0] = cursor[1] = 0;
+    bool quit = false;
+    WINDOW* sidebar = newwin(height, tab_width, 0, 0);
+    refresh();
+    curs_set(0);
+    box(sidebar, 0, 0);
+    wrefresh(sidebar);
+    keypad(sidebar, true);
+
+    while (!quit) {
+        for (int x = 0; x < 3; x++) {
+            mvwprintw(sidebar, x+1, 1, text[x]);
+        }
+        mvwchgat(sidebar, cursor[0]+1, 1, strlen(text[cursor[0]]), A_STANDOUT, 0, NULL);
+        wrefresh(sidebar);
+        input = wgetch(sidebar);
+
+        switch (input)
+        {
+        case KEY_DOWN:
+            if (cursor[0] < 3) {
+                cursor[0]++;
+            }
+            break;
+        case KEY_UP:
+            if (cursor[0] > 0) {
+                cursor[0]--;
+            }
+            break;
+        case ENTER:
+            if (cursor[0] == 2) {
+                quit = true;
+            }
+            break;
+        case TAB:
+            /* code */
+            break;
+        case KEY_RESIZE:
+            endwin();
+            refresh();
+            resize_term(0, 0);
+            height = LINES;
+            width = COLS;
+            tab_width = width/4;
+            resize_window(sidebar, height, tab_width);
+            box(sidebar, 0, 0);
+            wrefresh(sidebar);
+
+            break;
+        
+        default:
+            break;
+        }
+    }
+
+    //Free query
+    for (int x = 0; x < 3; x++) {
+        free(text[x]);
+    }
+    for (int x = 0; x < logolinesCount; x++) {
+        free(logo[x]);
+    }
     freeFolder(lang);
-    // text[0] = (char*)calloc(lenght+1-strlen("[Logo]:"), sizeof(char));
-    // strncpy(text[0], lang->content->tab+strlen("[Logo]:\n"), lenght - strlen("[Logo]:\n"));
-    // for (int x = lenght+strlen("[Options]:\n"), checkpoint = lenght+strlen("[Options]:\n"), y = 1; x < strlen(lang->content->tab); x++) {
-    //     if (lang->content->tab[x] == '\n') {
-    //         lenght = x - checkpoint;
-    //         text[y] = (char*)calloc(lenght+1, sizeof(char));
-    //         strncpy(text[y], lang->content->tab+checkpoint, lenght);
-    //         checkpoint = x+1;
-    //         y++;
-    //     }
-    // }
-    WINDOW* tab = newwin(4, width, 0, 0);
+    endwin();
 
     return 0;
 }
