@@ -1,0 +1,29 @@
+[raw]
+{
+    "variants": {
+        [multiple variants]
+        "[state]=[definition]": [
+            { "model": "[definition]", "[axis]": [definition], "uvlock": [definition], "weight": [definition] }
+        ],
+        [single variant]
+        "[state]=[definition]":  { "model": "[definition]", "[axis]": [definition], "uvlock": [definition], "weight": [definition] }
+    }
+    "multipart": [
+        {   "apply": { "model": "[definition]" }},
+        {
+            "when": {
+                [simple]
+                { "[conditon]": "[definition]" },
+                [complex]
+                "[gate]": [
+                    [multiple states]
+                    { "[gate]": [ { "[state]": "[definition]" } ] }
+                    [single state]
+                    { "[state]": "[definition]" }
+                ]
+            },
+            "apply": { "model": "[definition]", "[axis]": [definition], "uvlock": [definition], "weight": [definition] }
+        },
+    ]
+}
+[processed]

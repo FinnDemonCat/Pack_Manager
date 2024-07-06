@@ -1,0 +1,85 @@
+[raw]
+{
+    "credit": "[definition]",
+    "textures": {
+        "layer[x]": "[definition]",
+        "[variable]": "[definition]",
+        "particle": "[definition]"
+    },
+    "elements": [
+        {
+			"from": [x, y, z],
+			"to": [x, y, z],
+			"rotation": {"angle": [definition], "axis": "[definition]", "origin": [x, y, z]},
+			"faces": {
+				"north": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
+				"east": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
+				"south": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
+				"west": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
+				"up": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
+				"down": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]}
+			}
+		}
+    ],
+	"gui_light": "[definition]",
+	"display": {
+		"thirdperson_righthand": {
+			"rotation": [x, y, z],
+			"translation": [x, y, z],
+			"scale": [x, y, z]
+		},
+		"thirdperson_lefthand": {
+			"rotation": [x, y, z],
+			"translation": [x, y, z],
+			"scale": [x, y, z]
+		},
+		"firstperson_righthand": {
+			"rotation": [x, y, z],
+			"translation": [x, y, z],
+			"scale": [x, y, z]
+		},
+		"firstperson_lefthand": {
+			"rotation": [x, y, z],
+			"translation": [x, y, z],
+			"scale": [x, y, z]
+		},
+		"gui": {
+			"rotation": [x, y, z],
+			"translation": [x, y, z],
+			"scale": [x, y, z]
+		},
+		"head": {
+			"rotation": [x, y, z],
+			"translation": [x, y, z],
+			"scale": [x, y, z]
+		},
+		"ground": {
+			"rotation": [x, y, z],
+			"translation": [x, y, z],
+			"scale": [x, y, z]
+		},
+		"fixed": {
+			"rotation": [x, y, z],
+			"translation": [x, y, z],
+			"scale": [x, y, z]
+		}
+	},
+	"groups": [
+		[elementx],
+		{
+			"name": "[definition]",
+			"origin": [x, y, z],
+			"color": [definition],
+			"children": [elements]
+		}
+	],
+	"overrides": [
+    {
+      "predicate": {
+        "[type]": [definition]
+      },
+      "model": "[definition]"
+    }
+  ]
+}
+[processed]

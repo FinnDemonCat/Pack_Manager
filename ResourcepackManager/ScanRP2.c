@@ -637,6 +637,7 @@ int main () {
 
     WINDOW* sidebar = newwin(height, 32, 0, 0);
     WINDOW* window = newwin(height, (width-32), 0, 32);
+    WINDOW* subwin = derwin(window, (height-8), (width-32), 8, 0);
     refresh();
     curs_set(0);
     noecho();
@@ -648,10 +649,12 @@ int main () {
     center /= 2;
 
     box(sidebar, 0, 0);
-    optLenght = (int)printLines(sidebar, text, 1, 1);
+    box(subwin, 0, 0);
+    optLenght = (int)printLines(sidebar, text, 0, 1);
     printLines(window, logo, 0, center);
     wrefresh(sidebar);
     wrefresh(window);
+    wrefresh(subwin);
 
     while (!quit) {
         mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
@@ -687,14 +690,17 @@ int main () {
             clear();
             wclear(window);
             wclear(sidebar);
+            wclear(subwin);
 
             height = LINES;
             width = COLS;
 
             resize_window(sidebar, height, 32);
             resize_window(window, height, (width-32));
+            resize_window(subwin, (height-8), (width-32));
+            box(subwin, 0, 0);
             box(sidebar, 0, 0);
-            optLenght = (int)printLines(sidebar, text, 1, 1);
+            optLenght = (int)printLines(sidebar, text, 0, 1);
             temp = strchr(logo, '\n');
             center = temp - logo;
             center = (width-32) - center;
@@ -703,6 +709,7 @@ int main () {
 
             wrefresh(sidebar);
             wrefresh(window);
+            wrefresh(subwin);
 
             break;
         
@@ -714,6 +721,9 @@ int main () {
     //Free query
     free(text);
     free(logo);
+    delwin(window);
+    delwin(sidebar);
+    delwin(subwin);
     freeFolder(lang);
     endwin();
 
