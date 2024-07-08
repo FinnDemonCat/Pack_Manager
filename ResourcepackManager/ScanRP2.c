@@ -137,7 +137,6 @@ int fileType(const char* path) {
     return -1;
 }
 
-//Create folder
 FOLDER* createFolder(FOLDER* parent, const char* name) {
     FOLDER* folder = (FOLDER*)malloc(sizeof(FOLDER));
     if (folder == NULL) {
@@ -175,6 +174,8 @@ void addFolder(FOLDER** parent, FOLDER* subdir) {
     parent[0]->subdir[parent[0]->subcount] = *subdir;
     parent[0]->subcount++;
 }
+
+//Read from zip file to get file content
 ARCHIVE* getUnzip(unzFile* file, const char* name) {
     char *buffer, *placeholder;
     size_t bytesRead, length = 0, capacity = 1024;
@@ -305,6 +306,51 @@ void addFile(FOLDER** folder, ARCHIVE* model) {
     folder[0]->count++;
 }
 
+ARCHIVE* searchFile(FOLDER* target, char* file) {
+    size_t *position = calloc(8, sizeof(size_t)), navCount = 0;
+    FOLDER* navigator = target;
+    ARCHIVE* target_file = NULL;
+    bool found = false;
+
+    if (position == NULL) {
+        perror("Error alocating memory for position array");
+        return NULL;
+    } else {
+        for (int x = 0; x < 8; x++) {
+            position[x] = 0;
+        }
+    }
+
+    while (!found) {
+        if (position[navCount] < navigator->subcount) {
+            navigator = &navigator->subdir[position[navCount]];
+            navCount++;
+        } else if (position[navCount] == navigator->subcount) {
+            for (int x = 0; navigator->count > 0 && x < (int)navigator->count; x++) {
+                if (strcmp(navigator->content[x].name, file) == 0) {
+                    target_file = &navigator->content[x];
+                    found = true;
+                    break;
+                }
+            }
+
+        } else if (navigator->parent != NULL && navCount > 0) {
+            position[navCount] = 0;
+            navCount--;
+            navigator = navigator->parent;
+            navigator = &navigator->subdir[position[navCount]];
+        }
+
+        if (navigator->parent == NULL) {
+            break;
+        }
+        position[navCount]++;
+    }
+    free(position);
+    return target_file;
+}
+
+//Print lines that contain \n in the curses screen
 size_t printLines(WINDOW* window, char* list, int y, int x) {
     size_t lenght, big = 0;
     char *pointer = strchr(list, '\n'), *checkpoint = &list[0], buffer[1025];
@@ -326,6 +372,7 @@ size_t printLines(WINDOW* window, char* list, int y, int x) {
     return big;
 }
 
+//Read from a target file into the memory
 FOLDER* scanFolder(FOLDER* pack, char* path) {
     int dirNumber = 0, result = 0, type = 0, folderCursor = FOLDERCHUNK;
     long *dirPosition = (long*)calloc(folderCursor, sizeof(long));
@@ -438,29 +485,6 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
 
             //0 is folder, 1 is file
             if (type == 0) {
-                /* 
-                //New memory logic
-                if (folder->subcount == 0) {
-                    folder->subdir = (FOLDER*)calloc(folderCapacity, sizeof(FOLDER));
-
-                    if (folder->subdir == NULL) {
-                        perror("Error allocating memory for new folder");
-                        return NULL;
-                    }
-                } else if (folder->subcount >= (size_t)folderCapacity) {
-                    folderCapacity *= 2;
-                    printf("Reallocating more memory: %d", folderCapacity);
-                    folder->subdir = (FOLDER*)realloc(folder->subdir, folderCapacity*sizeof(FOLDER));
-
-                    if (folder->subdir == NULL) {
-                        perror("Error reallocating memory for new folder");
-                    }
-                }
-
-                //folder->subdir[folder->subcount] = *pointer; 
-                folder->subdir[folder->subcount] = *createFolder(folder, placeholder);
-                folder->subcount++;
-                */
                 FOLDER* pointer = createFolder(folder, placeholder);
                 addFolder(&folder, pointer);
                 
@@ -468,29 +492,6 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
 
             } else if (type == 1) {
                 ARCHIVE* pointer = getFile(path);
-                /* 
-                if (folder->count == 0) {
-                    folder->content = (ARCHIVE*)calloc(fileCapacity, sizeof(ARCHIVE));
-
-                    if (folder->content == NULL) {
-                        perror("Error allocating memory for new file");
-                        return NULL;
-                    }
-                } else if (folder->count >= (size_t)fileCapacity-1) {
-                    fileCapacity *= 2;
-                    printf("Reallocating more memory: %d|%d\n", fileCapacity, (int)folder->count);
-                    folder->content = (ARCHIVE*)realloc(folder->content, fileCapacity*sizeof(ARCHIVE));
-
-                    if (folder->content == NULL) {
-                        perror("Error reallocating memory for new file");
-                        return NULL;
-                    }
-                }
-
-                //pointer = getFile(path);
-                folder->content[folder->count] = *getFile(path);
-                folder->count++;
-                */
                 addFile(&folder, pointer);
                 printf("FILE: <%s>\n", path);
 
@@ -581,7 +582,6 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
     return NULL;
 }
 
-
 int main () {
     char *path = calloc(PATH_MAX, sizeof(char));
     if (path == NULL) {
@@ -604,8 +604,11 @@ int main () {
     //Getting logo
     returnString(&path, "lang");
     FOLDER* lang = scanFolder(NULL, path);
+    FOLDER* targets = (FOLDER*)calloc(2, sizeof(FOLDER));
+    returnString(&path, "path");
+
     size_t lenght;
-    char *text, *logo = NULL, *pointer;
+    char *text, *logo = NULL, **entriesList = NULL, *pointer, **message, *temp, buffer[256];
     
     pointer = strstr(lang->content->tab, "[Options]:\n");
     lenght = pointer - lang->content->tab;
@@ -628,12 +631,32 @@ int main () {
         perror("Error when allocating memory for sidebar text");
         return 1;
     }
+
+    //Getting messages
+    message = (char**)calloc(3, sizeof(char*));
+    pointer = strstr(lang->content->tab, "[Messages]:\n");
+    pointer = pointer+12;
+    for (int x = 0; x < 3; x++) {
+        temp = strchr(pointer, '\n');
+        lenght = temp - pointer;
+        temp = NULL;
+        temp = (char*)calloc(lenght, sizeof(char));
+        strncpy(temp, pointer, lenght-1);
+        message[x] = temp;
+        pointer += 1;
+        pointer = strchr(pointer, '\n');
+        pointer += 1;
+        temp = NULL;
+    }
+    
+    freeFolder(lang);
     
     //Starting the menu;
     initscr();
     int height = LINES, width = COLS, input = 0, cursor[2], optLenght;
     cursor[0] = cursor[1] = 0;
     bool quit = false;
+    n_entries = 0;
 
     WINDOW* sidebar = newwin(height, 32, 0, 0);
     WINDOW* window = newwin(height, (width-32), 0, 32);
@@ -643,7 +666,7 @@ int main () {
     noecho();
     keypad(window, true);
 
-    char* temp = strchr(logo, '\n');
+    temp = strchr(logo, '\n');
     size_t center = temp - logo;
     center = (width*3/4) - center;
     center /= 2;
@@ -657,8 +680,54 @@ int main () {
     wrefresh(subwin);
 
     while (!quit) {
-        mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
-        wrefresh(sidebar);
+        switch (cursor[0])
+        {  
+        case 0:
+            if (n_entries == 0) {
+                getcwd(path, PATH_MAX);
+                returnString(&path, "RP1");
+                entriesList = (char**)calloc(8, sizeof(char*));
+
+                struct dirent *entry;
+                DIR* scan = opendir(path);
+                seekdir(scan, 2);
+
+                entry = readdir(scan);
+                while (entry != NULL && n_entries < 8) {
+                    strcpy(buffer, entry->d_name);
+                    buffer[strlen(entry->d_name)] = '\0';
+                    char* temp = strdup(buffer);
+                    entriesList[n_entries] = temp;
+                    n_entries++;
+                    entry = readdir(scan);
+                }
+                if (entry == NULL) {
+                    mvwprintw(subwin, 1, 1, message[0]);
+                }
+            }
+            for (int x = 0; x < n_entries; x++) {
+                mvwprintw(subwin, x+1, 1, entriesList[x]);
+            }
+            break;
+        default:
+            break;
+        }
+
+        switch (cursor[1])
+        {
+        case 0:
+            mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
+            wrefresh(sidebar);
+            break;
+        case 1:
+            mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
+            mvwchgat(subwin, cursor[0]+1, 1, strlen(entriesList[cursor[0]]), A_STANDOUT, 0, NULL);
+            wrefresh(sidebar);
+            break;
+        default:
+            break;
+        }
+
         input = wgetch(window);
 
         switch (input)
@@ -676,8 +745,11 @@ int main () {
             }
             break;
         case ENTER:
-            if (cursor[0] == 2) {
+            switch (cursor[0])
+            {
+            case 2:
                 quit = true;
+                break;
             }
             break;
         case TAB:
@@ -721,10 +793,14 @@ int main () {
     //Free query
     free(text);
     free(logo);
+    for (int x = 0; x < 3; x++) {
+        free(message[x]);
+    }
     delwin(window);
     delwin(sidebar);
     delwin(subwin);
     freeFolder(lang);
+    freeFolder(targets);
     endwin();
 
     return 0;
