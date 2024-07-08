@@ -1,0 +1,24 @@
+[raw]
+{
+    "sources": [
+        {
+            "type": "directory",
+            "source": "[definition]",
+            "prefix": "[definition]/"
+        },
+        {
+            "type": "single",
+            "resource": "[definition]"
+        },
+        {
+            "type": "paletted_permutations",
+            "textures": [
+                "[definition]"
+            ],
+            "palette_key": "[definition]",
+            "permutations": {
+                "[tag]": "[definition]",
+            }
+        }
+    ]
+}

@@ -12,3 +12,7 @@ Main Menu
 Scan Resourcepacks
 Merge Resourcepacks
 Quit
+[Messages]:
+No entries found in resourcepack folder! Press ENTER to update.
+Select at max 2 resourcepacks.
+No resourcepacks scanned.

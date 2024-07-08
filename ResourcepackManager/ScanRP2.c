@@ -594,7 +594,6 @@ int main () {
     }
     if (path != NULL) {
         printf("path = <%s>\n", path);
-        // returnString(&path, "RP1");
     } else {
         printf("<%s>", path);
         perror("Invalid path");
@@ -604,6 +603,8 @@ int main () {
     //Getting logo
     returnString(&path, "lang");
     FOLDER* lang = scanFolder(NULL, path);
+    path = NULL;
+    path = (char*)calloc(PATH_MAX, sizeof(char));
     FOLDER* targets = (FOLDER*)calloc(2, sizeof(FOLDER));
     returnString(&path, "path");
 
@@ -623,7 +624,8 @@ int main () {
 
     //Skipping "[Options]:\n" part and getting sidebar
     pointer = pointer + 11;
-    lenght = pointer - lang->content->tab;
+    temp = strstr(pointer, "[Messages]");
+    lenght = temp - pointer;
     text = (char*)calloc(lenght+1, sizeof(char));
     if (text != NULL) {
         strncpy(text, pointer, lenght);
@@ -634,7 +636,7 @@ int main () {
 
     //Getting messages
     message = (char**)calloc(3, sizeof(char*));
-    pointer = strstr(lang->content->tab, "[Messages]:\n");
+    pointer = temp;
     pointer = pointer+12;
     for (int x = 0; x < 3; x++) {
         temp = strchr(pointer, '\n');
@@ -683,6 +685,7 @@ int main () {
         switch (cursor[0])
         {  
         case 0:
+            //If no entries have been found in the resourcepacks folder
             if (n_entries == 0) {
                 getcwd(path, PATH_MAX);
                 returnString(&path, "RP1");
@@ -693,6 +696,9 @@ int main () {
                 seekdir(scan, 2);
 
                 entry = readdir(scan);
+                if (entry == NULL) {
+                    mvwprintw(subwin, 1, 1, message[0]);
+                }
                 while (entry != NULL && n_entries < 8) {
                     strcpy(buffer, entry->d_name);
                     buffer[strlen(entry->d_name)] = '\0';
@@ -701,13 +707,12 @@ int main () {
                     n_entries++;
                     entry = readdir(scan);
                 }
-                if (entry == NULL) {
-                    mvwprintw(subwin, 1, 1, message[0]);
-                }
             }
+            mvwprintw(subwin, 1, 1, "> %s", message[1]);
             for (int x = 0; x < n_entries; x++) {
-                mvwprintw(subwin, x+1, 1, entriesList[x]);
+                mvwprintw(subwin, x+2, 1, entriesList[x]);
             }
+            wrefresh(subwin);
             break;
         default:
             break;
@@ -720,9 +725,8 @@ int main () {
             wrefresh(sidebar);
             break;
         case 1:
-            mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
-            mvwchgat(subwin, cursor[0]+1, 1, strlen(entriesList[cursor[0]]), A_STANDOUT, 0, NULL);
-            wrefresh(sidebar);
+            mvwchgat(subwin, cursor[0]+2, 1, strlen(entriesList[cursor[0]]), A_STANDOUT, 0, NULL);
+            wrefresh(subwin);
             break;
         default:
             break;
@@ -733,27 +737,33 @@ int main () {
         switch (input)
         {
         case KEY_DOWN:
-            if (cursor[0] < 2) {
+            if (cursor[1] == 0 && cursor[0] < 2) {
                 mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
                 cursor[0]++;
+            } else if (cursor[1] == 1 && cursor[0] < n_entries-1 && cursor[0] < getmaxy(subwin)) {
+                mvwchgat(subwin, cursor[0]+2, 1, optLenght, A_NORMAL, 0, NULL);
+                cursor[0]++;
             }
+            
             break;
         case KEY_UP:
+            mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
             if (cursor[0] > 0) {
-                mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
                 cursor[0]--;
             }
             break;
         case ENTER:
-            switch (cursor[0])
-            {
-            case 2:
+            if (cursor[1] == 0 && cursor[0] == 2) {
                 quit = true;
-                break;
+            } else if (cursor[1] == 1) {
+
             }
             break;
         case TAB:
+            mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
+            wrefresh(sidebar);
             cursor[1] = !cursor[1];
+            cursor[0] = 0;
             break;
         case KEY_RESIZE:
             resize_term(0, 0);
@@ -799,7 +809,6 @@ int main () {
     delwin(window);
     delwin(sidebar);
     delwin(subwin);
-    freeFolder(lang);
     freeFolder(targets);
     endwin();
 
