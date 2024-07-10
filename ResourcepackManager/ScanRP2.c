@@ -19,6 +19,12 @@ int n_folders = 0;
 int n_files = 0;
 int n_entries = 0;
 
+typedef struct QUEUE {
+    int *value, end;
+    char** item;
+    size_t size;
+} QUEUE;
+
 typedef struct ARCHIVE {
     char* tab;
     char* name;
@@ -35,6 +41,52 @@ typedef struct FOLDER{
     size_t file_capacity;
     ARCHIVE* content;
 } FOLDER;
+
+QUEUE* initQueue(size_t size) {
+    QUEUE* queue = malloc(sizeof(QUEUE));
+    queue->value = (int*)calloc(size, sizeof(int));
+    for (int x = 0; x < (int)size; x++) {
+        queue->value[x] = 0;
+    }
+    
+    queue->item = (char**)calloc(size, sizeof(char*));
+    for (int x = 0; x < (int)size; x++) {
+        queue->item[x] = (char*)calloc(PATH_MAX, sizeof(char));
+    }
+    queue->end = 0;
+    queue->size = size;
+    return queue;
+}
+
+void enQueue(QUEUE* queue, char* item) {
+    if (queue->end == (int)queue->size) {
+        return;
+    }
+    strncpy(queue->item[queue->end], item, PATH_MAX);
+    queue->end++;
+}
+
+void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
+    for (int i = 0; i < queue->end; i++) {
+        mvwprintw(window, y+i, x, queue->item[i]);
+    }
+}
+
+void deQueue(QUEUE* queue, int item) {
+    for (int x = item; x < queue->end-1; x++) {
+        strncpy(queue->item[x], queue->item[x+1], PATH_MAX);
+    }
+    queue->end--;
+}
+
+void endQueue(QUEUE* queue) {
+    free(queue->value);
+    for (;queue->end > 0; queue->end--) {
+        free(queue->item[queue->end-1]);
+    }
+    free(queue->item);
+    free(queue);
+}
 
 //Concatenate two strings to acess a path, return to the parent path or get the directory's name
 void returnString (char** path, const char* argument) {
@@ -609,7 +661,7 @@ int main () {
     returnString(&path, "path");
 
     size_t lenght;
-    char *text, *logo = NULL, **entriesList = NULL, *pointer, **message, *temp, buffer[256];
+    char *text, *logo = NULL, *pointer, **message, *temp;
     
     pointer = strstr(lang->content->tab, "[Options]:\n");
     lenght = pointer - lang->content->tab;
@@ -650,9 +702,7 @@ int main () {
         pointer += 1;
         temp = NULL;
     }
-    
-    freeFolder(lang);
-    
+        
     //Starting the menu;
     initscr();
     int height = LINES, width = COLS, input = 0, cursor[2], optLenght;
@@ -681,51 +731,50 @@ int main () {
     wrefresh(window);
     wrefresh(subwin);
 
+    QUEUE *entries, *query = initQueue(2);
+
     while (!quit) {
-        switch (cursor[0])
-        {  
-        case 0:
-            //If no entries have been found in the resourcepacks folder
-            if (n_entries == 0) {
-                getcwd(path, PATH_MAX);
-                returnString(&path, "RP1");
-                entriesList = (char**)calloc(8, sizeof(char*));
-
-                struct dirent *entry;
-                DIR* scan = opendir(path);
-                seekdir(scan, 2);
-
-                entry = readdir(scan);
-                if (entry == NULL) {
-                    mvwprintw(subwin, 1, 1, message[0]);
-                }
-                while (entry != NULL && n_entries < 8) {
-                    strcpy(buffer, entry->d_name);
-                    buffer[strlen(entry->d_name)] = '\0';
-                    char* temp = strdup(buffer);
-                    entriesList[n_entries] = temp;
-                    n_entries++;
-                    entry = readdir(scan);
-                }
-            }
-            mvwprintw(subwin, 1, 1, "> %s", message[1]);
-            for (int x = 0; x < n_entries; x++) {
-                mvwprintw(subwin, x+2, 1, entriesList[x]);
-            }
-            wrefresh(subwin);
-            break;
-        default:
-            break;
-        }
-
         switch (cursor[1])
         {
         case 0:
+            switch (cursor[0])
+            {  
+            case 0:
+                //If no entries have been found in the resourcepacks folder
+                if (n_entries == 0) {
+                    getcwd(path, PATH_MAX);
+                    returnString(&path, "RP1");
+                    entries = initQueue(8);
+
+                    struct dirent *entry;
+                    DIR* scan = opendir(path);
+                    seekdir(scan, 2);
+
+                    entry = readdir(scan);
+                    if (entry == NULL) {
+                        mvwprintw(subwin, 1, 1, message[0]);
+                    }
+                    while (entry != NULL && n_entries < 8) {
+                        enQueue(entries, entry->d_name);
+                        n_entries++;
+                        entry = readdir(scan);
+                    }
+                    mvwprintw(subwin, 1, 1, "> %s", message[1]);
+                    peekQueue(subwin, 2, 1, entries);
+                    for (int x = 0; x < entries->end; x++) {
+                        mvwprintw(subwin, x+2, 1, "%s [ ]", entries->item[x]);
+                    }
+                    wrefresh(subwin);
+                }
+                break;
+            default:
+                break;
+            }
             mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
             wrefresh(sidebar);
             break;
         case 1:
-            mvwchgat(subwin, cursor[0]+2, 1, strlen(entriesList[cursor[0]]), A_STANDOUT, 0, NULL);
+            mvwchgat(subwin, cursor[0]+2, 1, strlen(entries->item[cursor[0]])+4, A_STANDOUT, 0, NULL);
             wrefresh(subwin);
             break;
         default:
@@ -741,27 +790,70 @@ int main () {
                 mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
                 cursor[0]++;
             } else if (cursor[1] == 1 && cursor[0] < n_entries-1 && cursor[0] < getmaxy(subwin)) {
-                mvwchgat(subwin, cursor[0]+2, 1, optLenght, A_NORMAL, 0, NULL);
+                mvwchgat(subwin, cursor[0]+2, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
                 cursor[0]++;
             }
             
             break;
         case KEY_UP:
-            mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
+            if (cursor[1] == 0) {
+                mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
+            } else {
+                mvwchgat(subwin, cursor[0]+2, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
+            }
             if (cursor[0] > 0) {
                 cursor[0]--;
             }
             break;
         case ENTER:
-            if (cursor[1] == 0 && cursor[0] == 2) {
-                quit = true;
+            if (cursor[1] == 0) {
+                switch (cursor[0])
+                {
+                case 1:
+                    //Merge resourcepacks function
+                    break;
+                case 2:
+                    quit = true;
+                    break;
+                default:
+                    break;
+                }
             } else if (cursor[1] == 1) {
-
+                if (entries->value[cursor[0]] == 1) {
+                    for (int x = 0; x < query->end; x++) {
+                        if (strcmp(query->item[x], entries->item[cursor[0]]) == 0) {
+                            deQueue(query, x);
+                            break;
+                        }
+                    }
+                } else {
+                    query->value[query->end] = query->end;
+                    enQueue(query, entries->item[cursor[0]]);
+                }
+                entries->value[cursor[0]] = !entries->value[cursor[0]];
+                for (int x = 0; x < entries->end; x++) {
+                    if (entries->value[x] == 1) {
+                        mvwprintw(subwin, x+2, 1, "%s [X]  ", entries->item[x]);
+                    } else {
+                        mvwprintw(subwin, x+2, 1, "%s [ ]  ", entries->item[x]);
+                    }
+                    for (int y = 0; y < query->end; y++) {
+                        if (strcmp(entries->item[x], query->item[y]) == 0) {
+                            mvwprintw(subwin, x+2, strlen(entries->item[x])+5, " %d", query->value[y]+1);
+                            break;
+                        }
+                    }
+                }
             }
             break;
         case TAB:
-            mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
-            wrefresh(sidebar);
+            if (cursor[1] == 0) {
+                mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
+                wrefresh(sidebar);
+            } else {
+                mvwchgat(subwin, cursor[0]+2, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
+                wrefresh(subwin);
+            }
             cursor[1] = !cursor[1];
             cursor[0] = 0;
             break;
@@ -809,7 +901,10 @@ int main () {
     delwin(window);
     delwin(sidebar);
     delwin(subwin);
+    endQueue(query);
+    endQueue(entries);
     freeFolder(targets);
+    freeFolder(lang);
     endwin();
 
     return 0;
