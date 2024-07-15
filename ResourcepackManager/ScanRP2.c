@@ -20,7 +20,8 @@ int n_files = 0;
 int n_entries = 0;
 
 typedef struct QUEUE {
-    int *value, end;
+    int *value;
+    int end;
     char** item;
     size_t size;
 } QUEUE;
@@ -51,7 +52,8 @@ QUEUE* initQueue(size_t size) {
     
     queue->item = (char**)calloc(size, sizeof(char*));
     for (int x = 0; x < (int)size; x++) {
-        queue->item[x] = (char*)calloc(PATH_MAX, sizeof(char));
+        queue->item[x] = (char*)calloc(PATH_MAX+1, sizeof(char));
+        queue->value[x] = 0;
     }
     queue->end = 0;
     queue->size = size;
@@ -68,13 +70,14 @@ void enQueue(QUEUE* queue, char* item) {
 
 void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
     for (int i = 0; i < queue->end; i++) {
-        mvwprintw(window, y+i, x, queue->item[i]);
+        mvwprintw(window, y+i, x, "%s [%d]", queue->item[i], queue->value[i]);
     }
 }
 
 void deQueue(QUEUE* queue, int item) {
     for (int x = item; x < queue->end-1; x++) {
         strncpy(queue->item[x], queue->item[x+1], PATH_MAX);
+        queue->value[x] = queue->value[x+1];
     }
     queue->end--;
 }
@@ -760,7 +763,6 @@ int main () {
                         entry = readdir(scan);
                     }
                     mvwprintw(subwin, 1, 1, "> %s", message[1]);
-                    peekQueue(subwin, 2, 1, entries);
                     for (int x = 0; x < entries->end; x++) {
                         mvwprintw(subwin, x+2, 1, "%s [ ]", entries->item[x]);
                     }
@@ -821,28 +823,27 @@ int main () {
             } else if (cursor[1] == 1) {
                 if (entries->value[cursor[0]] == 1) {
                     for (int x = 0; x < query->end; x++) {
-                        if (strcmp(query->item[x], entries->item[cursor[0]]) == 0) {
+                        if (strcmp(entries->item[cursor[0]], query->item[x]) == 0) {
                             deQueue(query, x);
                             break;
                         }
                     }
-                } else {
-                    query->value[query->end] = query->end;
+                }
+                if (entries->value[cursor[0]] == 0) {
                     enQueue(query, entries->item[cursor[0]]);
+                    query->value[query->end-1] = cursor[0];
                 }
                 entries->value[cursor[0]] = !entries->value[cursor[0]];
+
                 for (int x = 0; x < entries->end; x++) {
-                    if (entries->value[x] == 1) {
-                        mvwprintw(subwin, x+2, 1, "%s [X]  ", entries->item[x]);
-                    } else {
+                    if (entries->value[x] == 0) {
                         mvwprintw(subwin, x+2, 1, "%s [ ]  ", entries->item[x]);
+                    } else {
+                        mvwprintw(subwin, x+2, 1, "%s [X]  ", entries->item[x]);
                     }
-                    for (int y = 0; y < query->end; y++) {
-                        if (strcmp(entries->item[x], query->item[y]) == 0) {
-                            mvwprintw(subwin, x+2, strlen(entries->item[x])+5, " %d", query->value[y]+1);
-                            break;
-                        }
-                    }
+                }
+                for (int x = 0; x < query->end; x++) {
+                    mvwprintw(subwin, query->value[x]+2, strlen(entries->item[query->value[x]])+6, "%d", x+1);
                 }
             }
             break;
