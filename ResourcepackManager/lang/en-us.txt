@@ -14,5 +14,5 @@ Merge Resourcepacks
 Quit
 [Messages]:
 No entries found in resourcepack folder! Press ENTER to update.
-Select at max 2 resourcepacks.
+Select up to 8 resourcepacks to scan.
 No resourcepacks scanned.

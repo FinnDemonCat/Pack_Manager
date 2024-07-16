@@ -301,7 +301,7 @@ char** getLang(FOLDER* lang, int file) {
 
     //Getting logo
     pointer = strstr(lang->content[file].tab, "[Options]");
-    checkpoint = lang->content[file].tab[0];
+    checkpoint = &lang->content[file].tab[0];
     checkpoint += 8;
     lenght = (pointer - checkpoint) + 1;
 
@@ -454,42 +454,29 @@ size_t printLines(WINDOW* window, char* list, int y, int x, int line) {
     size_t lenght, big = 0;
     char *pointer = list, *checkpoint = list;
 
-    for (int x = 1; x < line, pointer != NULL; x++) {
-        pointer = strchr(pointer, '\n');
-        pointer += 1;
-    }
-    
-    while (pointer != NULL && line == 0) {
-        checkpoint = pointer;
-        pointer = strchr(pointer, '\n');
-        pointer += 1;
-        lenght = pointer - checkpoint;
-        mvwprintw(window, y, x, "%.*s", lenght, checkpoint);
-        y++;
-    }
-
     if (line > 0) {
+        for (int x = 1; x < line && pointer != NULL; x++) {
+            pointer = strchr(pointer, '\n');
+            pointer += 1;
+        }
         checkpoint = pointer;
         pointer = strchr(pointer, '\n');
         pointer += 1;
         lenght = pointer - checkpoint;
-        mvwprintw(window, y, x, "%.*s", lenght, checkpoint);
-    }
+        mvwprintw(window, y, x, "%.*s", lenght-1, checkpoint);
 
-    // while(pointer != NULL) {
-    //     pointer = pointer + 1;
-    //     lenght = pointer - checkpoint -1;
-    //     if (lenght > big) {
-    //         big = lenght;
-    //     }
-    //     strncpy(buffer, checkpoint, lenght);
-    //     buffer[lenght] = '\0';
-    //     mvwprintw(window, y, x, buffer);
-    //     checkpoint = pointer;
-    //     pointer = strchr(pointer, '\n');
-    //     y++;
-    // }
-    
+    } else {
+        while ((pointer = strchr(pointer, '\n')) != NULL && line == 0) {
+            pointer += 1;
+            lenght = pointer - checkpoint;
+            mvwprintw(window, y, x, "%.*s", lenght-1, checkpoint);
+            y++;
+            checkpoint = pointer;
+            if (big < lenght) {
+                big = lenght;
+            }
+        }
+    }
     return big;
 }
 
@@ -779,13 +766,14 @@ int main () {
 
                     entry = readdir(scan);
                     if (entry == NULL) {
-                        printLines(subwin, 1, 1, translated[1], 1);
+                        printLines(subwin, translated[1], 1, 1, 1);
                     }
                     while (entry != NULL && n_entries < 8) {
                         enQueue(entries, entry->d_name);
                         n_entries++;
                         entry = readdir(scan);
                     }
+                    printLines(subwin, translated[1], 1, 1, 2);
                     for (int x = 0; x < entries->end; x++) {
                         mvwprintw(subwin, x+2, 1, "%s [ ]", entries->item[x]);
                     }
