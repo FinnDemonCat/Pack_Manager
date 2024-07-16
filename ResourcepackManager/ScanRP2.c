@@ -291,6 +291,50 @@ ARCHIVE* getUnzip(unzFile* file, const char* name) {
     return model;
 }
 
+char** getLang(FOLDER* lang, int file) {
+    char *pointer, *checkpoint, *temp, **translated = (char**)calloc(3, sizeof(char*));
+    size_t lenght;
+
+    //First options
+    //Second messages
+    //Third Logo
+
+    //Getting logo
+    pointer = strstr(lang->content[file].tab, "[Options]");
+    checkpoint = lang->content[file].tab[0];
+    checkpoint += 8;
+    lenght = (pointer - checkpoint) + 1;
+
+    temp = (char*)calloc(lenght, sizeof(char));
+    strncpy(temp, checkpoint, lenght-1);
+
+    translated[2] = temp;
+    temp = NULL;
+
+    //Getting Options
+    pointer += 11;
+    checkpoint = pointer;
+    pointer = strstr(pointer, "[Messages]");
+    lenght = (pointer - checkpoint) + 1;
+
+    temp = (char*)calloc(lenght, sizeof(char));
+    strncpy(temp, checkpoint, lenght-1);
+
+    translated[0] = temp;
+    temp = NULL;
+
+    //Getting Messages
+    pointer += 12;
+    lenght = (strlen(lang->content[file].tab) + 1) - (pointer - lang->content[file].tab);
+    temp = (char*)calloc(lenght, sizeof(char));
+    strncpy(temp, pointer, lenght-1);
+
+    translated[1] = temp;
+    temp = NULL;
+    
+    return translated;
+}
+
 //Read a file into a buffer and return the ARCHIVE pointer
 ARCHIVE* getFile(const char* path) {
     char *buffer, *placeholder;
@@ -406,23 +450,45 @@ ARCHIVE* searchFile(FOLDER* target, char* file) {
 }
 
 //Print lines that contain \n in the curses screen
-size_t printLines(WINDOW* window, char* list, int y, int x) {
+size_t printLines(WINDOW* window, char* list, int y, int x, int line) {
     size_t lenght, big = 0;
-    char *pointer = strchr(list, '\n'), *checkpoint = &list[0], buffer[1025];
+    char *pointer = list, *checkpoint = list;
 
-    while(pointer != NULL) {
-        pointer = pointer + 1;
-        lenght = pointer - checkpoint -1;
-        if (lenght > big) {
-            big = lenght;
-        }
-        strncpy(buffer, checkpoint, lenght);
-        buffer[lenght] = '\0';
-        mvwprintw(window, y, x, buffer);
+    for (int x = 1; x < line, pointer != NULL; x++) {
+        pointer = strchr(pointer, '\n');
+        pointer += 1;
+    }
+    
+    while (pointer != NULL && line == 0) {
         checkpoint = pointer;
         pointer = strchr(pointer, '\n');
+        pointer += 1;
+        lenght = pointer - checkpoint;
+        mvwprintw(window, y, x, "%.*s", lenght, checkpoint);
         y++;
     }
+
+    if (line > 0) {
+        checkpoint = pointer;
+        pointer = strchr(pointer, '\n');
+        pointer += 1;
+        lenght = pointer - checkpoint;
+        mvwprintw(window, y, x, "%.*s", lenght, checkpoint);
+    }
+
+    // while(pointer != NULL) {
+    //     pointer = pointer + 1;
+    //     lenght = pointer - checkpoint -1;
+    //     if (lenght > big) {
+    //         big = lenght;
+    //     }
+    //     strncpy(buffer, checkpoint, lenght);
+    //     buffer[lenght] = '\0';
+    //     mvwprintw(window, y, x, buffer);
+    //     checkpoint = pointer;
+    //     pointer = strchr(pointer, '\n');
+    //     y++;
+    // }
     
     return big;
 }
@@ -433,7 +499,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
     long *dirPosition = (long*)calloc(folderCursor, sizeof(long));
     //struct stat status;
     struct dirent *entry;
-    char placeholder[1024];
+    char placeholder[1024], *location = strdup(path);
 
     if (dirPosition == NULL) {
         perror("Error allocating memory for directory cursor");
@@ -445,29 +511,29 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
         }
     }
 
-    DIR* scanner = opendir(path);
+    DIR* scanner = opendir(location);
     if (scanner != NULL) {
         seekdir(scanner, 2);
         entry = readdir(scanner);
         strcpy(placeholder, entry->d_name);
-        returnString(&path, placeholder);
+        returnString(&location, placeholder);
     } else {
-        printf("Error acessing %s: %s\n", path, strerror(errno));
+        printf("Error acessing %s: %s\n", location, strerror(errno));
         return NULL;
     }
     // strcpy(placeholder, entry->d_name);
     FOLDER* folder = createFolder(pack, placeholder);
 
     //Differentiate folder from zip file
-    type = fileType(path);
+    type = fileType(location);
     if ((type) == 0) {
 
         closedir(scanner);
-        scanner = opendir(path);
+        scanner = opendir(location);
         if (scanner != NULL) {
             seekdir(scanner, 2);
         } else {
-            printf("Could not open %s: %s\n", path, strerror(errno));
+            printf("Could not open %s: %s\n", location, strerror(errno));
             return NULL;
         }
         
@@ -503,7 +569,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
 
                     dirPosition[dirNumber] = 2;
                     dirNumber--;
-                    returnString(&path, "path");
+                    returnString(&location, "path");
                     folder = folder->parent;
                 }
                 //Entering new folder
@@ -511,7 +577,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
                     folder = &folder->subdir[dirPosition[dirNumber]-2];
                     dirPosition[dirNumber]++;
                     dirNumber++;
-                    returnString(&path, folder->name);
+                    returnString(&location, folder->name);
 
                 }
                 //End of loop
@@ -521,12 +587,12 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
                 }
 
                 closedir(scanner);
-                scanner = opendir(path);
+                scanner = opendir(location);
                 if (scanner != NULL) {
                     seekdir(scanner, dirPosition[dirNumber]);
                     entry = readdir(scanner);
                 } else {
-                    printf("scanFolder: error openning %s %s\n", path, strerror(errno));
+                    printf("scanFolder: error openning %s %s\n", location, strerror(errno));
                 }
             }
 
@@ -535,30 +601,30 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
             }
 
             strcpy(placeholder, entry->d_name);
-            returnString(&path, placeholder);
-            type = fileType(path);
+            returnString(&location, placeholder);
+            type = fileType(location);
 
             //0 is folder, 1 is file
             if (type == 0) {
                 FOLDER* pointer = createFolder(folder, placeholder);
                 addFolder(&folder, pointer);
                 
-                printf("FOLDER: <%s>\n", path);
+                printf("FOLDER: <%s>\n", location);
 
             } else if (type == 1) {
-                ARCHIVE* pointer = getFile(path);
+                ARCHIVE* pointer = getFile(location);
                 addFile(&folder, pointer);
-                printf("FILE: <%s>\n", path);
+                printf("FILE: <%s>\n", location);
 
             }
-            returnString(&path, "path");
+            returnString(&location, "path");
             
         } 
         return folder;
         
     } else if (type == 2) {
         closedir(scanner);
-        unzFile rp = unzOpen(path);
+        unzFile rp = unzOpen(location);
         if (rp == NULL) {
             perror("Could not open zipfile");
             unzClose(rp);
@@ -626,9 +692,9 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
     } else if (type == 1) {
         while(entry != NULL) {
             strcpy(placeholder, entry->d_name);
-            returnString(&path, "path");
-            returnString(&path, placeholder);
-            ARCHIVE* file = getFile(path);
+            returnString(&location, "path");
+            returnString(&location, placeholder);
+            ARCHIVE* file = getFile(location);
             addFile(&folder, file);
             entry = readdir(scanner);
         }
@@ -655,56 +721,14 @@ int main () {
         return 1;
     }
 
-    //Getting logo
+    //Scanning the lang folder
     returnString(&path, "lang");
     FOLDER* lang = scanFolder(NULL, path);
-    path = NULL;
-    path = (char*)calloc(PATH_MAX, sizeof(char));
     FOLDER* targets = (FOLDER*)calloc(2, sizeof(FOLDER));
     returnString(&path, "path");
 
-    size_t lenght;
-    char *text, *logo = NULL, *pointer, **message, *temp;
-    
-    pointer = strstr(lang->content->tab, "[Options]:\n");
-    lenght = pointer - lang->content->tab;
-    logo = (char*)calloc(lenght+1, sizeof(char));
-    if (logo != NULL) {
-        strncpy(logo, lang->content->tab+8, lenght-8);
-        logo[lenght-8] = '\0';
-    } else {
-        perror("Error when allocating memory for logo");
-        return 1;
-    }
-
-    //Skipping "[Options]:\n" part and getting sidebar
-    pointer = pointer + 11;
-    temp = strstr(pointer, "[Messages]");
-    lenght = temp - pointer;
-    text = (char*)calloc(lenght+1, sizeof(char));
-    if (text != NULL) {
-        strncpy(text, pointer, lenght);
-    } else {
-        perror("Error when allocating memory for sidebar text");
-        return 1;
-    }
-
-    //Getting messages
-    message = (char**)calloc(3, sizeof(char*));
-    pointer = temp;
-    pointer = pointer+12;
-    for (int x = 0; x < 3; x++) {
-        temp = strchr(pointer, '\n');
-        lenght = temp - pointer;
-        temp = NULL;
-        temp = (char*)calloc(lenght, sizeof(char));
-        strncpy(temp, pointer, lenght-1);
-        message[x] = temp;
-        pointer += 1;
-        pointer = strchr(pointer, '\n');
-        pointer += 1;
-        temp = NULL;
-    }
+    //Getting lang file
+    char** translated = getLang(lang, 0);
         
     //Starting the menu;
     initscr();
@@ -721,15 +745,15 @@ int main () {
     noecho();
     keypad(window, true);
 
-    temp = strchr(logo, '\n');
-    size_t center = temp - logo;
+    char* temp = strchr(translated[2], '\n');
+    size_t center = temp - translated[2];
     center = (width*3/4) - center;
     center /= 2;
 
     box(sidebar, 0, 0);
     box(subwin, 0, 0);
-    optLenght = (int)printLines(sidebar, text, 0, 1);
-    printLines(window, logo, 0, center);
+    optLenght = (int)printLines(sidebar, translated[0], 0, 1, 0);
+    printLines(window, translated[2], 0, center, 0);
     wrefresh(sidebar);
     wrefresh(window);
     wrefresh(subwin);
@@ -755,14 +779,13 @@ int main () {
 
                     entry = readdir(scan);
                     if (entry == NULL) {
-                        mvwprintw(subwin, 1, 1, message[0]);
+                        printLines(subwin, 1, 1, translated[1], 1);
                     }
                     while (entry != NULL && n_entries < 8) {
                         enQueue(entries, entry->d_name);
                         n_entries++;
                         entry = readdir(scan);
                     }
-                    mvwprintw(subwin, 1, 1, "> %s", message[1]);
                     for (int x = 0; x < entries->end; x++) {
                         mvwprintw(subwin, x+2, 1, "%s [ ]", entries->item[x]);
                     }
@@ -875,12 +898,12 @@ int main () {
             resize_window(subwin, (height-8), (width-32));
             box(subwin, 0, 0);
             box(sidebar, 0, 0);
-            optLenght = (int)printLines(sidebar, text, 0, 1);
-            temp = strchr(logo, '\n');
-            center = temp - logo;
+            optLenght = (int)printLines(sidebar, translated[0], 0, 1, 0);
+            temp = strchr(translated[2], '\n');
+            center = temp - translated[2];
             center = (width-32) - center;
             center /= 2;
-            printLines(window, logo, 0, center);
+            printLines(window, translated[2], 0, center, 0);
 
             wrefresh(sidebar);
             wrefresh(window);
@@ -894,11 +917,10 @@ int main () {
     }
 
     //Free query
-    free(text);
-    free(logo);
     for (int x = 0; x < 3; x++) {
-        free(message[x]);
+        free(translated[x]);
     }
+    free(translated);
     delwin(window);
     delwin(sidebar);
     delwin(subwin);
