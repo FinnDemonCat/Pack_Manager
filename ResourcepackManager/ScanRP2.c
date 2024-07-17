@@ -481,10 +481,10 @@ size_t printLines(WINDOW* window, char* list, int y, int x, int line) {
 }
 
 //Read from a target file into the memory
-FOLDER* scanFolder(FOLDER* pack, char* path) {
+//-1 takes the directory as guarantee, any other number will be taken as position
+FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
     int dirNumber = 0, result = 0, type = 0, folderCursor = FOLDERCHUNK;
     long *dirPosition = (long*)calloc(folderCursor, sizeof(long));
-    //struct stat status;
     struct dirent *entry;
     char placeholder[1024], *location = strdup(path);
 
@@ -500,7 +500,11 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
 
     DIR* scanner = opendir(location);
     if (scanner != NULL) {
-        seekdir(scanner, 2);
+        if (position == -1) {
+            seekdir(scanner, 2);
+        } else {
+            seekdir(scanner, position + 2);
+        }
         entry = readdir(scanner);
         strcpy(placeholder, entry->d_name);
         returnString(&location, placeholder);
@@ -508,7 +512,6 @@ FOLDER* scanFolder(FOLDER* pack, char* path) {
         printf("Error acessing %s: %s\n", location, strerror(errno));
         return NULL;
     }
-    // strcpy(placeholder, entry->d_name);
     FOLDER* folder = createFolder(pack, placeholder);
 
     //Differentiate folder from zip file
@@ -710,8 +713,8 @@ int main () {
 
     //Scanning the lang folder
     returnString(&path, "lang");
-    FOLDER* lang = scanFolder(NULL, path);
-    FOLDER* targets = (FOLDER*)calloc(2, sizeof(FOLDER));
+    FOLDER* lang = scanFolder(NULL, path, -1);
+    FOLDER* targets = createFolder(NULL, "targets");
     returnString(&path, "path");
 
     //Getting lang file
@@ -719,8 +722,8 @@ int main () {
         
     //Starting the menu;
     initscr();
-    int height = LINES, width = COLS, input = 0, cursor[2], optLenght;
-    cursor[0] = cursor[1] = 0;
+    int height = LINES, width = COLS, input = 0, cursor[3], optLenght;
+    cursor[0] = cursor[1] = cursor[2] = 0;
     bool quit = false;
     n_entries = 0;
 
@@ -745,21 +748,22 @@ int main () {
     wrefresh(window);
     wrefresh(subwin);
 
-    QUEUE *entries, *query = initQueue(2);
+    QUEUE *entries, *query;
+    query = initQueue(8);
+    entries = initQueue(8);
 
     while (!quit) {
-        switch (cursor[1])
+        switch (cursor[2])
         {
         case 0:
-            switch (cursor[0])
-            {  
+            //Display tab content
+            wclear(subwin);
+            box(subwin, 0, 0);
+            switch (cursor[0]) {  
             case 0:
                 //If no entries have been found in the resourcepacks folder
-                if (n_entries == 0) {
-                    getcwd(path, PATH_MAX);
+                if (entries->end < 1) {
                     returnString(&path, "RP1");
-                    entries = initQueue(8);
-
                     struct dirent *entry;
                     DIR* scan = opendir(path);
                     seekdir(scan, 2);
@@ -773,21 +777,51 @@ int main () {
                         n_entries++;
                         entry = readdir(scan);
                     }
-                    printLines(subwin, translated[1], 1, 1, 2);
-                    for (int x = 0; x < entries->end; x++) {
-                        mvwprintw(subwin, x+2, 1, "%s [ ]", entries->item[x]);
-                    }
-                    wrefresh(subwin);
                 }
+                printLines(subwin, translated[1], 0, 1, 2);
+                for (int x = 0; x < entries->end; x++) {
+                    if (entries->value[x] == 0) {
+                        mvwprintw(subwin, x+1, 1, "%s [ ]  ", entries->item[x]);
+                    } else {
+                        mvwprintw(subwin, x+1, 1, "%s [X]  ", entries->item[x]);
+                    }
+                }
+                for (int x = 0; x < query->end; x++) {
+                    mvwprintw(subwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
+                }
+                n_entries = entries->end;
+                break;
+            case 1:
+                if (targets->subcount == 0) {
+                    printLines(subwin, translated[1], 1, 1, 3);
+                    break;
+                }
+                for (int x = 0; x < (int)targets->subcount; x++) {
+                    mvwprintw(subwin, x+1, 1, targets->subdir[x].name);
+                }
+                n_entries = targets->subcount;
+                break;
+            case 2:
+                for (int x = 0; x < (int)lang->count; x++) {
+                    mvwprintw(subwin, x+1, 1, lang->content[x].name);
+                }
+                n_entries = lang->count;
                 break;
             default:
                 break;
             }
             mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
             wrefresh(sidebar);
+            wrefresh(subwin);
             break;
         case 1:
-            mvwchgat(subwin, cursor[0]+2, 1, strlen(entries->item[cursor[0]])+4, A_STANDOUT, 0, NULL);
+            if (cursor[1] == 0 && entries->end > 0) {
+                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[0])+4, A_STANDOUT, 0, NULL);
+            } else if (cursor[1] == 1 && targets->subcount > 0) {
+                mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[0].name)+1, A_STANDOUT, 0, NULL);
+            } else if (cursor[1] == 2 && lang->count > 0) {
+                mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[0].name)+1, A_STANDOUT, 0, NULL);
+            }
             wrefresh(subwin);
             break;
         default:
@@ -799,75 +833,103 @@ int main () {
         switch (input)
         {
         case KEY_DOWN:
-            if (cursor[1] == 0 && cursor[0] < 2) {
+            if (cursor[2] == 0 && cursor[0] < 3) {
                 mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
                 cursor[0]++;
-            } else if (cursor[1] == 1 && cursor[0] < n_entries-1 && cursor[0] < getmaxy(subwin)) {
-                mvwchgat(subwin, cursor[0]+2, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
+            } else if (cursor[2] == 1 && cursor[0] < n_entries-1 && cursor[0] < getmaxy(subwin)) {
+                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
                 cursor[0]++;
             }
             
             break;
         case KEY_UP:
-            if (cursor[1] == 0) {
+            if (cursor[2] == 0) {
                 mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
             } else {
-                mvwchgat(subwin, cursor[0]+2, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
+                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
             }
             if (cursor[0] > 0) {
                 cursor[0]--;
             }
             break;
         case ENTER:
-            if (cursor[1] == 0) {
+            if (cursor[2] == 0) {
                 switch (cursor[0])
                 {
                 case 1:
                     //Merge resourcepacks function
                     break;
-                case 2:
+                case 3:
                     quit = true;
                     break;
                 default:
                     break;
                 }
-            } else if (cursor[1] == 1) {
-                if (entries->value[cursor[0]] == 1) {
-                    for (int x = 0; x < query->end; x++) {
-                        if (strcmp(entries->item[cursor[0]], query->item[x]) == 0) {
-                            deQueue(query, x);
-                            break;
+            } else if (cursor[2] == 1) {
+                switch (cursor[1])
+                {
+                case 0:
+                    //Resoucepack Selection
+                    if (entries->value[cursor[0]] == 1) {
+                        for (int x = 0; x < query->end; x++) {
+                            if (strcmp(entries->item[cursor[0]], query->item[x]) == 0) {
+                                deQueue(query, x);
+                                break;
+                            }
+                        }
+                    } else if (entries->value[cursor[0]] == 0) {
+                        enQueue(query, entries->item[cursor[0]]);
+                        query->value[query->end-1] = cursor[0];
+                    }
+                    entries->value[cursor[0]] = !entries->value[cursor[0]];
+
+                    for (int x = 0; x < entries->end; x++) {
+                        if (entries->value[x] == 0) {
+                            mvwprintw(subwin, x+1, 1, "%s [ ]  ", entries->item[x]);
+                        } else {
+                            mvwprintw(subwin, x+1, 1, "%s [X]  ", entries->item[x]);
                         }
                     }
-                }
-                if (entries->value[cursor[0]] == 0) {
-                    enQueue(query, entries->item[cursor[0]]);
-                    query->value[query->end-1] = cursor[0];
-                }
-                entries->value[cursor[0]] = !entries->value[cursor[0]];
-
-                for (int x = 0; x < entries->end; x++) {
-                    if (entries->value[x] == 0) {
-                        mvwprintw(subwin, x+2, 1, "%s [ ]  ", entries->item[x]);
-                    } else {
-                        mvwprintw(subwin, x+2, 1, "%s [X]  ", entries->item[x]);
+                    for (int x = 0; x < query->end; x++) {
+                        mvwprintw(subwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
                     }
+                    break;
+                case 1:
+                    //Scaned resourcepacks
+                    
+                    break;
+                case 2:
+                    //Change language
+                    for (int x = 0; x < 3; x++) {
+                        free(translated[x]);
+                    }
+                    translated = getLang(lang, cursor[0]);
+                    break;
+                default:
+                    break;
                 }
-                for (int x = 0; x < query->end; x++) {
-                    mvwprintw(subwin, query->value[x]+2, strlen(entries->item[query->value[x]])+6, "%d", x+1);
-                }
+                
             }
             break;
         case TAB:
-            if (cursor[1] == 0) {
-                mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
-                wrefresh(sidebar);
-            } else {
-                mvwchgat(subwin, cursor[0]+2, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
-                wrefresh(subwin);
+            if (cursor[1] < 3) {
+                if (cursor[2] == 0) {
+                    mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
+                    cursor[1] = cursor[0];
+                    cursor[0] = 0;
+                    wrefresh(sidebar);
+                } else if (cursor[2] == 1) {
+                    if (cursor[1] == 0) {
+                        mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[0])+4, A_NORMAL, 0, NULL);
+                    } else if (cursor[1] == 1) {
+                        mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[0].name)+1, A_NORMAL, 0, NULL);
+                    } else if (cursor[1] == 2) {
+                        mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[0].name)+1, A_NORMAL, 0, NULL);
+                    }
+                    cursor[0] = cursor[1];
+                }
+                cursor[2] = !cursor[2];
             }
-            cursor[1] = !cursor[1];
-            cursor[0] = 0;
             break;
         case KEY_RESIZE:
             resize_term(0, 0);
@@ -892,6 +954,20 @@ int main () {
             center = (width-32) - center;
             center /= 2;
             printLines(window, translated[2], 0, center, 0);
+
+            if (cursor[0] == 0) {
+                for (int x = 0; x < entries->end; x++) {
+                    if (entries->value[x] == 0) {
+                        mvwprintw(subwin, x+2, 1, "%s [ ]  ", entries->item[x]);
+                    } else {
+                        mvwprintw(subwin, x+2, 1, "%s [X]  ", entries->item[x]);
+                    }
+                }
+                for (int x = 0; x < query->end; x++) {
+                    mvwprintw(subwin, query->value[x]+2, strlen(entries->item[query->value[x]])+6, "%d", x+1);
+                }
+                printLines(subwin, translated[1], 1, 1, 2);
+            }
 
             wrefresh(sidebar);
             wrefresh(window);
