@@ -724,7 +724,7 @@ int main () {
     initscr();
     int height = LINES, width = COLS, input = 0, cursor[3], optLenght;
     cursor[0] = cursor[1] = cursor[2] = 0;
-    bool quit = false;
+    bool quit = false, update = false;
     n_entries = 0;
 
     WINDOW* sidebar = newwin(height, 32, 0, 0);
@@ -741,7 +741,6 @@ int main () {
     center /= 2;
 
     box(sidebar, 0, 0);
-    box(subwin, 0, 0);
     optLenght = (int)printLines(sidebar, translated[0], 0, 1, 0);
     printLines(window, translated[2], 0, center, 0);
     wrefresh(sidebar);
@@ -753,15 +752,12 @@ int main () {
     entries = initQueue(8);
 
     while (!quit) {
-        switch (cursor[2])
-        {
-        case 0:
-            //Display tab content
+        if (cursor[2] == 0 || update == true) {
             wclear(subwin);
             box(subwin, 0, 0);
-            switch (cursor[0]) {  
+            switch (cursor[1])
+            {
             case 0:
-                //If no entries have been found in the resourcepacks folder
                 if (entries->end < 1) {
                     returnString(&path, "RP1");
                     struct dirent *entry;
@@ -778,26 +774,30 @@ int main () {
                         entry = readdir(scan);
                     }
                 }
-                printLines(subwin, translated[1], 0, 1, 2);
-                for (int x = 0; x < entries->end; x++) {
-                    if (entries->value[x] == 0) {
-                        mvwprintw(subwin, x+1, 1, "%s [ ]  ", entries->item[x]);
-                    } else {
-                        mvwprintw(subwin, x+1, 1, "%s [X]  ", entries->item[x]);
+                if (entries->end > 0) {
+                    printLines(subwin, translated[1], 0, 1, 2);
+                    for (int x = 0; x < entries->end; x++) {
+                        if (entries->value[x] == 0) {
+                            mvwprintw(subwin, x+1, 1, "%s [ ]  ", entries->item[x]);
+                        } else {
+                            mvwprintw(subwin, x+1, 1, "%s [X]  ", entries->item[x]);
+                        }
                     }
-                }
-                for (int x = 0; x < query->end; x++) {
-                    mvwprintw(subwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
+                    for (int x = 0; x < query->end; x++) {
+                        mvwprintw(subwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
+                    }
+                } else {
+                    printLines(subwin, translated[1], 1, 1, 1);
                 }
                 n_entries = entries->end;
                 break;
             case 1:
-                if (targets->subcount == 0) {
+                if (targets->subcount > 0) {
+                    for (int x = 0; x < (int)targets->subcount; x++) {
+                        mvwprintw(subwin, x+1, 1, targets->subdir[x].name);
+                    }
+                } else {
                     printLines(subwin, translated[1], 1, 1, 3);
-                    break;
-                }
-                for (int x = 0; x < (int)targets->subcount; x++) {
-                    mvwprintw(subwin, x+1, 1, targets->subdir[x].name);
                 }
                 n_entries = targets->subcount;
                 break;
@@ -807,69 +807,80 @@ int main () {
                 }
                 n_entries = lang->count;
                 break;
-            default:
+            }
+        }
+        if (cursor[2] == 1 || update == true) {
+            switch (cursor[1])
+            {
+            case 0:
+                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_STANDOUT, 0, NULL);
+                break;
+            case 1:
+                mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[cursor[0]].name)+1, A_STANDOUT, 0, NULL);
+                break;
+            case 2:
+                mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name)+1, A_STANDOUT, 0, NULL);
                 break;
             }
-            mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
-            wrefresh(sidebar);
-            wrefresh(subwin);
-            break;
-        case 1:
-            if (cursor[1] == 0 && entries->end > 0) {
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[0])+4, A_STANDOUT, 0, NULL);
-            } else if (cursor[1] == 1 && targets->subcount > 0) {
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[0].name)+1, A_STANDOUT, 0, NULL);
-            } else if (cursor[1] == 2 && lang->count > 0) {
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[0].name)+1, A_STANDOUT, 0, NULL);
-            }
-            wrefresh(subwin);
-            break;
-        default:
-            break;
         }
-
+        update = false;
+        if (cursor[2] == 0) {
+            mvwchgat(sidebar, cursor[1]+1, 1, optLenght, A_STANDOUT, 0, NULL);
+        }
+        wrefresh(subwin);
+        wrefresh(sidebar);
+        
         input = wgetch(window);
 
         switch (input)
         {
         case KEY_DOWN:
-            if (cursor[2] == 0 && cursor[0] < 3) {
-                mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
-                cursor[0]++;
-            } else if (cursor[2] == 1 && cursor[0] < n_entries-1 && cursor[0] < getmaxy(subwin)) {
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
+            if (cursor[2] == 0 && cursor[1] < 3) {
+                mvwchgat(sidebar, cursor[1]+1, 1, optLenght, A_NORMAL, 0, NULL);
+                cursor[0] = 0;
+                cursor[1]++;
+            } else if (cursor[2] == 1 && cursor[0] < n_entries-1) {
+                switch (cursor[1])
+                {
+                case 0:
+                    mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
+                    break;
+                case 1:
+                    mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[cursor[0]].name)+1, A_NORMAL, 0, NULL);
+                    break;
+                case 2:
+                    mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name)+1, A_NORMAL, 0, NULL);
+                    break;
+                }
                 cursor[0]++;
             }
-            
             break;
         case KEY_UP:
-            if (cursor[2] == 0) {
-                mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
-            } else {
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
-            }
-            if (cursor[0] > 0) {
+            if (cursor[2] == 0 && cursor[1] > 0) {
+                mvwchgat(sidebar, cursor[1]+1, 1, optLenght, A_NORMAL, 0, NULL);
+                cursor[0] = 0;
+                cursor[1]--;
+            } else  if (cursor[2] == 1 && cursor[0] > 0) {
+                switch (cursor[1])
+                {
+                case 0:
+                    mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
+                    break;
+                case 1:
+                    mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[cursor[0]].name)+1, A_NORMAL, 0, NULL);
+                    break;
+                case 2:
+                    mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name)+1, A_NORMAL, 0, NULL);
+                    break;
+                }
                 cursor[0]--;
             }
             break;
         case ENTER:
-            if (cursor[2] == 0) {
-                switch (cursor[0])
-                {
-                case 1:
-                    //Merge resourcepacks function
-                    break;
-                case 3:
-                    quit = true;
-                    break;
-                default:
-                    break;
-                }
-            } else if (cursor[2] == 1) {
+            if (cursor[2] == 1) {
                 switch (cursor[1])
                 {
                 case 0:
-                    //Resoucepack Selection
                     if (entries->value[cursor[0]] == 1) {
                         for (int x = 0; x < query->end; x++) {
                             if (strcmp(entries->item[cursor[0]], query->item[x]) == 0) {
@@ -890,45 +901,49 @@ int main () {
                             mvwprintw(subwin, x+1, 1, "%s [X]  ", entries->item[x]);
                         }
                     }
+
                     for (int x = 0; x < query->end; x++) {
                         mvwprintw(subwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
                     }
                     break;
                 case 1:
-                    //Scaned resourcepacks
-                    
+                    /* code */
                     break;
                 case 2:
-                    //Change language
                     for (int x = 0; x < 3; x++) {
                         free(translated[x]);
                     }
+                    free(translated);
                     translated = getLang(lang, cursor[0]);
+                    wclear(sidebar);
+                    wclear(window);
+                    wclear(subwin);
+                    box(sidebar, 0, 0);
+                    box(subwin, 0, 0);
+                    printLines(sidebar, translated[0], 0, 1, 0);
+                    printLines(window, translated[2], 0, 0, 0);
+                    wrefresh(sidebar);
+                    wrefresh(window);
+                    wrefresh(subwin);
+                    update = true;
                     break;
                 default:
                     break;
                 }
-                
+            } else if (cursor[2] == 0 && cursor[1] == 3) {
+                quit = true;
             }
             break;
         case TAB:
-            if (cursor[1] < 3) {
-                if (cursor[2] == 0) {
-                    mvwchgat(sidebar, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
-                    cursor[1] = cursor[0];
-                    cursor[0] = 0;
-                    wrefresh(sidebar);
-                } else if (cursor[2] == 1) {
-                    if (cursor[1] == 0) {
-                        mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[0])+4, A_NORMAL, 0, NULL);
-                    } else if (cursor[1] == 1) {
-                        mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[0].name)+1, A_NORMAL, 0, NULL);
-                    } else if (cursor[1] == 2) {
-                        mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[0].name)+1, A_NORMAL, 0, NULL);
-                    }
-                    cursor[0] = cursor[1];
-                }
+            if (cursor[1] == 0 && entries->end > 0) {
                 cursor[2] = !cursor[2];
+                mvwchgat(sidebar, cursor[1]+1, 1, optLenght, A_NORMAL, 0, NULL);
+            } else if (cursor[1] == 1 && targets->subcount > 0) {
+                cursor[2] = !cursor[2];
+                mvwchgat(sidebar, cursor[1]+1, 1, optLenght, A_NORMAL, 0, NULL);
+            } else if (cursor[1] == 2 && lang->count > 0) {
+                cursor[2] = !cursor[2];
+                mvwchgat(sidebar, cursor[1]+1, 1, optLenght, A_NORMAL, 0, NULL);
             }
             break;
         case KEY_RESIZE:
@@ -974,10 +989,10 @@ int main () {
             wrefresh(subwin);
 
             break;
-        
         default:
             break;
         }
+
     }
 
     //Free query
