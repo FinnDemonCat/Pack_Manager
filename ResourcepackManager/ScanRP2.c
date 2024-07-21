@@ -32,7 +32,7 @@ typedef struct ARCHIVE {
     size_t size;
 } ARCHIVE;
 
-typedef struct FOLDER{
+typedef struct FOLDER {
     char* name;
     struct FOLDER* parent;
     struct FOLDER* subdir;
@@ -42,6 +42,26 @@ typedef struct FOLDER{
     size_t file_capacity;
     ARCHIVE* content;
 } FOLDER;
+
+typedef struct RESOLUTION {
+    WINDOW* window;
+    char* parameters;
+    int y, x, size_y, size_x;
+} RESOLUTION;
+
+WINDOW* sidebar;
+WINDOW* window;
+WINDOW* miniwin;
+WINDOW* action;
+
+RESOLUTION* _sidebar;
+RESOLUTION* _window;
+RESOLUTION* _miniwin;
+RESOLUTION* _action;
+
+FOLDER* lang;
+QUEUE* entries;
+QUEUE* query;
 
 QUEUE* initQueue(size_t size) {
     QUEUE* queue = malloc(sizeof(QUEUE));
@@ -145,19 +165,6 @@ void returnString (char** path, const char* argument) {
     }
 }
 
-void freeFolder(FOLDER* folder) {
-    for (;folder->count > 0; folder->count--) {
-        ARCHIVE* file = &folder->content[folder->count-1];
-        free(file->name);
-        free(file->tab);
-    }
-    for (;folder->subcount > 0; folder->subcount--) {
-        freeFolder(&folder->subdir[folder->subcount-1]);
-    }
-    free(folder->subdir);
-    free(folder->name);
-}
-
 //Check for the filetype, counting zip file
 int fileType(const char* path) {
     char* pointer = strrchr(path, '/');
@@ -190,6 +197,20 @@ int fileType(const char* path) {
         return -1;
     }
     return -1;
+}
+
+
+void freeFolder(FOLDER* folder) {
+    for (;folder->count > 0; folder->count--) {
+        ARCHIVE* file = &folder->content[folder->count-1];
+        free(file->name);
+        free(file->tab);
+    }
+    for (;folder->subcount > 0; folder->subcount--) {
+        freeFolder(&folder->subdir[folder->subcount-1]);
+    }
+    free(folder->subdir);
+    free(folder->name);
 }
 
 FOLDER* createFolder(FOLDER* parent, const char* name) {
@@ -291,50 +312,6 @@ ARCHIVE* getUnzip(unzFile* file, const char* name) {
     return model;
 }
 
-char** getLang(FOLDER* lang, int file) {
-    char *pointer, *checkpoint, *temp, **translated = (char**)calloc(3, sizeof(char*));
-    size_t lenght;
-
-    //First options
-    //Second messages
-    //Third Logo
-
-    //Getting logo
-    pointer = strstr(lang->content[file].tab, "[Options]");
-    checkpoint = &lang->content[file].tab[0];
-    checkpoint += 8;
-    lenght = (pointer - checkpoint) + 1;
-
-    temp = (char*)calloc(lenght, sizeof(char));
-    strncpy(temp, checkpoint, lenght-1);
-
-    translated[2] = temp;
-    temp = NULL;
-
-    //Getting Options
-    pointer += 11;
-    checkpoint = pointer;
-    pointer = strstr(pointer, "[Messages]");
-    lenght = (pointer - checkpoint) + 1;
-
-    temp = (char*)calloc(lenght, sizeof(char));
-    strncpy(temp, checkpoint, lenght-1);
-
-    translated[0] = temp;
-    temp = NULL;
-
-    //Getting Messages
-    pointer += 12;
-    lenght = (strlen(lang->content[file].tab) + 1) - (pointer - lang->content[file].tab);
-    temp = (char*)calloc(lenght, sizeof(char));
-    strncpy(temp, pointer, lenght-1);
-
-    translated[1] = temp;
-    temp = NULL;
-    
-    return translated;
-}
-
 //Read a file into a buffer and return the ARCHIVE pointer
 ARCHIVE* getFile(const char* path) {
     char *buffer, *placeholder;
@@ -405,50 +382,49 @@ void addFile(FOLDER** folder, ARCHIVE* model) {
     folder[0]->count++;
 }
 
-void confirmationDialog(WINDOW* dialog, char* lang, int line, int* sizes) {
-    size_t center, size;
-    char *pointer = lang, *checkpoint, *checkpoint2;
-    box(dialog, 0, 0);
-    center = getmaxx(dialog);
 
-    for (int x = 1; x < line; x++, pointer += 1) {
-        pointer = strchr(pointer, '\n');
-    }
+char** getLang(FOLDER* lang, int file) {
+    char *pointer, *checkpoint, *temp, **translated = (char**)calloc(3, sizeof(char*));
+    size_t lenght;
+
+    //First options
+    //Second messages
+    //Third Logo
+
+    //Getting logo
+    pointer = strstr(lang->content[file].tab, "[Options]");
+    checkpoint = &lang->content[file].tab[0];
+    checkpoint += 8;
+    lenght = (pointer - checkpoint) + 1;
+
+    temp = (char*)calloc(lenght, sizeof(char));
+    strncpy(temp, checkpoint, lenght-1);
+
+    translated[2] = temp;
+    temp = NULL;
+
+    //Getting Options
+    pointer += 11;
     checkpoint = pointer;
-    pointer = strchr(pointer, '\n');
-    pointer += 1;
-    size = pointer - checkpoint;
+    pointer = strstr(pointer, "[Messages]");
+    lenght = (pointer - checkpoint) + 1;
+
+    temp = (char*)calloc(lenght, sizeof(char));
+    strncpy(temp, checkpoint, lenght-1);
+
+    translated[0] = temp;
+    temp = NULL;
+
+    //Getting Messages
+    pointer += 12;
+    lenght = (strlen(lang->content[file].tab) + 1) - (pointer - lang->content[file].tab);
+    temp = (char*)calloc(lenght, sizeof(char));
+    strncpy(temp, pointer, lenght-1);
+
+    translated[1] = temp;
+    temp = NULL;
     
-    if (size < center - 2) {
-        mvwprintw(dialog, 1, ((center - size - 1)/2), "%.*s", size - 1, checkpoint);
-    } else {
-        checkpoint2 = &checkpoint[center - 2];
-        for (int x = (center - 2); *checkpoint2 != ' '; x--) {
-            checkpoint2 = &checkpoint[x];
-        }
-
-        mvwprintw(dialog, 1, ((center - (checkpoint2 - checkpoint - 1))/2), "%.*s", (checkpoint2 - checkpoint - 1), checkpoint);
-        mvwprintw(dialog, 2, ((center - (pointer - checkpoint2 - 1))/2), "%.*s", (pointer - checkpoint2 - 1), checkpoint2);
-    }
-
-    //Get Lang "YES"
-    checkpoint = pointer;
-    pointer = strchr(pointer, '\n');
-    pointer += 1;
-
-    size = pointer - checkpoint - 1;
-    sizes[0] = size;
-    mvwprintw(dialog, getmaxy(dialog) - 2, ((center - size)/4), "%.*s", size, checkpoint);
-
-    //Get Lang "NO"
-    checkpoint = pointer;
-    pointer = strchr(pointer, '\n');
-    pointer += 1;
-
-    sizes[1] = size;
-    size = pointer - checkpoint - 1;
-
-    mvwprintw(dialog, getmaxy(dialog) - 2, ((center - size)*3/4), "%.*s", size, checkpoint);
+    return translated;
 }
 
 ARCHIVE* searchFile(FOLDER* target, char* file) {
@@ -524,6 +500,135 @@ size_t printLines(WINDOW* window, char* list, int y, int x, int line) {
         }
     }
     return big;
+}
+
+void confirmationDialog(char* lang, int line, int* sizes) {
+    size_t center, size;
+    char *pointer = lang, *checkpoint, *checkpoint2;
+    box(action, 0, 0);
+    center = getmaxx(action);
+
+    for (int x = 1; x < line; x++, pointer += 1) {
+        pointer = strchr(pointer, '\n');
+    }
+    checkpoint = pointer;
+    pointer = strchr(pointer, '\n');
+    pointer += 1;
+    size = pointer - checkpoint;
+    
+    if (size < center - 2) {
+        mvwprintw(action, 1, ((center - size - 1)/2), "%.*s", size - 1, checkpoint);
+    } else {
+        checkpoint2 = &checkpoint[center - 2];
+        for (int x = (center - 2); *checkpoint2 != ' '; x--) {
+            checkpoint2 = &checkpoint[x];
+        }
+
+        mvwprintw(action, 1, ((center - (checkpoint2 - checkpoint - 1))/2), "%.*s", (checkpoint2 - checkpoint - 1), checkpoint);
+        mvwprintw(action, 2, ((center - (pointer - checkpoint2 - 1))/2), "%.*s", (pointer - checkpoint2 - 1), checkpoint2);
+    }
+
+    //Get Lang "YES"
+    checkpoint = pointer;
+    pointer = strchr(pointer, '\n');
+    pointer += 1;
+
+    size = pointer - checkpoint - 1;
+    sizes[0] = size;
+    mvwprintw(action, getmaxy(action) - 2, ((center - size)/4), "%.*s", size, checkpoint);
+
+    //Get Lang "NO"
+    checkpoint = pointer;
+    pointer = strchr(pointer, '\n');
+    pointer += 1;
+
+    size = pointer - checkpoint - 1;
+    sizes[1] = size;
+
+    mvwprintw(action, getmaxy(action) - 2, ((center - size)*3/4), "%.*s", size, checkpoint);
+}
+
+void calcWindow(RESOLUTION* target, char* parameters) {
+    int *ratio[4];
+    float alpha, beta, gamma, delta, epsilon, zeta;
+    char operator, operator2, formula[4][32], *constant, par[2][16];
+    ratio[0] = &target->y;
+    ratio[1] = &target->x;
+    ratio[2] = &target->size_y;
+    ratio[3] = &target->size_x;
+
+    sscanf(parameters, "%31[^,], %31[^,], %31[^,], %31[^,]", formula[0], formula[1], formula[2], formula[3]);
+
+    for (int i = 0; i < 4; i++) {
+        alpha = beta = gamma = delta = epsilon = zeta = 0;
+        sscanf(formula[i], "(%15[^)]) %c (%15[^)])", par[0], &operator2, par[1]);
+
+        //First element
+        if ((constant = strstr(par[0], "LINES")) != NULL) {
+            alpha = LINES;
+            sscanf(par[0], "%*s %c %f", &operator, &beta);
+
+        } else if ((constant = strstr(par[0], "COLS")) != NULL) {
+            alpha = COLS;
+            sscanf(par[0], "%*s %c %f", &operator, &beta);
+
+        } else {
+            sscanf(par[0], "%f %c %f", &alpha, &operator, &beta);
+
+        }
+
+        if (operator == '+') {
+            epsilon = alpha + beta;
+        } else if (operator == '-') {
+            epsilon = alpha - beta;
+        } else if (operator == '/') {
+            epsilon = alpha / beta;
+        } else if (operator == '*') {
+            epsilon = alpha * beta;
+        } else {
+            epsilon = alpha;
+        }
+
+        //Second element
+        if ((constant = strstr(par[1], "LINES")) != NULL) {
+            gamma = LINES;
+            sscanf(par[1], "%*s %c %f", &operator, &delta);
+
+        } else if ((constant = strstr(par[1], "COLS")) != NULL) {
+            gamma = COLS;
+            sscanf(par[1], "%*s %c %f", &operator, &delta);
+
+        } else {
+            sscanf(par[1], "%f %c %f", &gamma, &operator, &delta);
+
+        }
+
+        if (operator == '+') {
+            zeta = gamma + delta;
+        } else if (operator == '-') {
+            zeta = gamma - delta;
+        } else if (operator == '/') {
+            zeta = gamma / delta;
+        } else if (operator == '*') {
+            zeta = gamma * delta;
+        } else {
+            zeta = gamma;
+        }
+
+        //Ratio Calculation
+        if (operator2 == '+') {
+            *ratio[i] = epsilon + zeta;
+        } else if (operator2 == '-') {
+            *ratio[i] = epsilon - zeta;
+        } else if (operator2 == '/') {
+            *ratio[i] = epsilon / zeta;
+        } else if (operator2 == '*') {
+            *ratio[i] = epsilon * zeta;
+        } else {
+            *ratio[i] = epsilon;
+        }
+    }
+    target->parameters = parameters;
 }
 
 //Read from a target file into the memory
@@ -759,7 +864,7 @@ int main () {
 
     //Scanning the lang folder
     returnString(&path, "lang");
-    FOLDER* lang = scanFolder(NULL, path, -1);
+    lang = scanFolder(NULL, path, -1);
     FOLDER* targets = createFolder(NULL, "targets");
     returnString(&path, "path");
 
@@ -773,10 +878,29 @@ int main () {
     bool quit = false, update = false, response = false;
     n_entries = 0;
 
-    WINDOW* sidebar = newwin(height, 32, 0, 0);
-    WINDOW* window = newwin(height, (width-32), 0, 32);
-    WINDOW* subwin = derwin(window, (height-8), (width-32), 8, 0);
-    WINDOW* action = newwin(8, 36, ((height-8)/2), ((width-36)/2));
+    _sidebar = (RESOLUTION*)malloc(sizeof(RESOLUTION));
+    _window = (RESOLUTION*)malloc(sizeof(RESOLUTION));
+    _miniwin = (RESOLUTION*)malloc(sizeof(RESOLUTION));
+    _action = (RESOLUTION*)malloc(sizeof(RESOLUTION));
+
+    
+    calcWindow(_sidebar, "(0), (0), (LINES), (32)");
+    sidebar = newwin(_sidebar->size_y, _sidebar->size_x, _sidebar->y, _sidebar->x);
+    _sidebar->window = sidebar;
+
+    calcWindow(_window, "(LINES) * (1), (COLS) - (32), (0) * (1), (32) * (0)");
+    window = newwin(_window->size_y, _window->size_x, _window->y, _window->x);
+    _window->window = window;
+    
+    calcWindow(_miniwin, "(LINES) - (8), (COLS) - (32), (8), (0)");
+    miniwin = derwin(window, _miniwin->size_y, _miniwin->size_x, _miniwin->y, _miniwin->x);
+    _miniwin->window = miniwin;
+   
+
+    calcWindow(_action, "(8), (36), (LINES - 8) / (2 * 1), (COLS - 36) / (2 * 1)");
+    action = newwin(_action->size_y, _action->size_x, _action->y, _action->x);
+    _action->window = action;
+
     refresh();
     curs_set(0);
     noecho();
@@ -792,16 +916,15 @@ int main () {
     printLines(window, translated[2], 0, center, 0);
     wrefresh(sidebar);
     wrefresh(window);
-    wrefresh(subwin);
+    wrefresh(miniwin);
 
-    QUEUE *entries, *query;
     query = initQueue(8);
     entries = initQueue(8);
 
     while (!quit) {
         if (cursor[2] == 0 || update == true) {
-            wclear(subwin);
-            box(subwin, 0, 0);
+            wclear(miniwin);
+            box(miniwin, 0, 0);
             switch (cursor[1])
             {
             case 0:
@@ -813,7 +936,7 @@ int main () {
 
                     entry = readdir(scan);
                     if (entry == NULL) {
-                        printLines(subwin, translated[1], 1, 1, 1);
+                        printLines(miniwin, translated[1], 1, 1, 1);
                     }
                     while (entry != NULL && n_entries < 8) {
                         enQueue(entries, entry->d_name);
@@ -822,38 +945,42 @@ int main () {
                     }
                 }
                 if (entries->end > 0) {
-                    printLines(subwin, translated[1], 0, 1, 2);
+                    printLines(miniwin, translated[1], 0, 1, 2);
                     for (int x = 0; x < entries->end; x++) {
                         if (entries->value[x] == 0) {
-                            mvwprintw(subwin, x+1, 1, "%s [ ]  ", entries->item[x]);
+                            mvwprintw(miniwin, x+1, 1, "%s [ ]  ", entries->item[x]);
                         } else {
-                            mvwprintw(subwin, x+1, 1, "%s [X]  ", entries->item[x]);
+                            mvwprintw(miniwin, x+1, 1, "%s [X]  ", entries->item[x]);
                         }
                     }
                     for (int x = 0; x < query->end; x++) {
-                        mvwprintw(subwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
+                        mvwprintw(miniwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
                     }
                 } else {
-                    printLines(subwin, translated[1], 1, 1, 1);
+                    printLines(miniwin, translated[1], 1, 1, 1);
                 }
                 n_entries = entries->end;
                 break;
             case 1:
                 if (targets->subcount > 0) {
                     for (int x = 0; x < (int)targets->subcount; x++) {
-                        mvwprintw(subwin, x+1, 1, targets->subdir[x].name);
+                        mvwprintw(miniwin, x+1, 1, targets->subdir[x].name);
                     }
                 } else {
-                    printLines(subwin, translated[1], 1, 1, 3);
+                    printLines(miniwin, translated[1], 1, 1, 3);
                 }
                 n_entries = targets->subcount;
                 break;
             case 2:
                 for (int x = 0; x < (int)lang->count; x++) {
-                    mvwprintw(subwin, x+1, 1, lang->content[x].name);
+                    mvwprintw(miniwin, x+1, 1, lang->content[x].name);
                 }
                 n_entries = lang->count;
                 break;
+            }
+
+            if (query->end > 0) {
+                mvwprintw(sidebar, 1, optLenght+1, "[!]");
             }
         }
         
@@ -863,13 +990,13 @@ int main () {
             switch (cursor[1])
             {
             case 0:
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_STANDOUT, 0, NULL);
+                mvwchgat(miniwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_STANDOUT, 0, NULL);
                 break;
             case 1:
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[cursor[0]].name)+1, A_STANDOUT, 0, NULL);
+                mvwchgat(miniwin, cursor[0]+1, 1, strlen(targets->subdir[cursor[0]].name)+1, A_STANDOUT, 0, NULL);
                 break;
             case 2:
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name)+1, A_STANDOUT, 0, NULL);
+                mvwchgat(miniwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name)+1, A_STANDOUT, 0, NULL);
                 break;
             }
         } else if (cursor[2] == 2) {
@@ -882,7 +1009,7 @@ int main () {
         update = false;
         
         wrefresh(action);
-        wrefresh(subwin);
+        wrefresh(miniwin);
         wrefresh(sidebar);
         
         input = wgetch(window);
@@ -891,13 +1018,13 @@ int main () {
             switch (cursor[1])
             {
             case 0:
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
+                mvwchgat(miniwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]])+4, A_NORMAL, 0, NULL);
                 break;
             case 1:
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(targets->subdir[cursor[0]].name)+1, A_NORMAL, 0, NULL);
+                mvwchgat(miniwin, cursor[0]+1, 1, strlen(targets->subdir[cursor[0]].name)+1, A_NORMAL, 0, NULL);
                 break;
             case 2:
-                mvwchgat(subwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name)+1, A_NORMAL, 0, NULL);
+                mvwchgat(miniwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name)+1, A_NORMAL, 0, NULL);
                 break;
             }
         } else if (cursor[2] == 0) {
@@ -949,7 +1076,7 @@ int main () {
                 {
                 case 0:
                     if (query->end > 0) {
-                        confirmationDialog(action, translated[1], 5, actionLenght);
+                        confirmationDialog(translated[1], 5, actionLenght);
                         cursor[0] = 0;
                         cursor[2] = 2;
                         wrefresh(action);
@@ -983,14 +1110,14 @@ int main () {
 
                     for (int x = 0; x < entries->end; x++) {
                         if (entries->value[x] == 0) {
-                            mvwprintw(subwin, x+1, 1, "%s [ ]  ", entries->item[x]);
+                            mvwprintw(miniwin, x+1, 1, "%s [ ]  ", entries->item[x]);
                         } else {
-                            mvwprintw(subwin, x+1, 1, "%s [X]  ", entries->item[x]);
+                            mvwprintw(miniwin, x+1, 1, "%s [X]  ", entries->item[x]);
                         }
                     }
 
                     for (int x = 0; x < query->end; x++) {
-                        mvwprintw(subwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
+                        mvwprintw(miniwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
                     }
 
                     if (query->end > 0) {
@@ -1011,9 +1138,9 @@ int main () {
                     translated = getLang(lang, cursor[0]);
                     wclear(sidebar);
                     wclear(window);
-                    wclear(subwin);
+                    wclear(miniwin);
                     box(sidebar, 0, 0);
-                    box(subwin, 0, 0);
+                    box(miniwin, 0, 0);
                     optLenght = printLines(sidebar, translated[0], 0, 1, 0);
 
                     temp = strchr(translated[2], '\n');
@@ -1024,7 +1151,7 @@ int main () {
                     printLines(window, translated[2], 0, center, 0);
                     wrefresh(sidebar);
                     wrefresh(window);
-                    wrefresh(subwin);
+                    wrefresh(miniwin);
                     update = true;
                     break;
                 default:
@@ -1058,15 +1185,15 @@ int main () {
             clear();
             wclear(window);
             wclear(sidebar);
-            wclear(subwin);
+            wclear(miniwin);
 
             height = LINES;
             width = COLS;
 
             resize_window(sidebar, height, 32);
             resize_window(window, height, (width-32));
-            resize_window(subwin, (height-8), (width-32));
-            box(subwin, 0, 0);
+            resize_window(miniwin, (height-8), (width-32));
+            box(miniwin, 0, 0);
             box(sidebar, 0, 0);
             optLenght = (int)printLines(sidebar, translated[0], 0, 1, 0);
             temp = strchr(translated[2], '\n');
@@ -1078,20 +1205,20 @@ int main () {
             if (cursor[0] == 0) {
                 for (int x = 0; x < entries->end; x++) {
                     if (entries->value[x] == 0) {
-                        mvwprintw(subwin, x+2, 1, "%s [ ]  ", entries->item[x]);
+                        mvwprintw(miniwin, x+2, 1, "%s [ ]  ", entries->item[x]);
                     } else {
-                        mvwprintw(subwin, x+2, 1, "%s [X]  ", entries->item[x]);
+                        mvwprintw(miniwin, x+2, 1, "%s [X]  ", entries->item[x]);
                     }
                 }
                 for (int x = 0; x < query->end; x++) {
-                    mvwprintw(subwin, query->value[x]+2, strlen(entries->item[query->value[x]])+6, "%d", x+1);
+                    mvwprintw(miniwin, query->value[x]+2, strlen(entries->item[query->value[x]])+6, "%d", x+1);
                 }
-                printLines(subwin, translated[1], 1, 1, 2);
+                printLines(miniwin, translated[1], 1, 1, 2);
             }
 
             wrefresh(sidebar);
             wrefresh(window);
-            wrefresh(subwin);
+            wrefresh(miniwin);
 
             break;
         default:
@@ -1103,10 +1230,14 @@ int main () {
     for (int x = 0; x < 3; x++) {
         free(translated[x]);
     }
+    free(_sidebar);
+    free(_window);
+    free(_miniwin);
+    free(_action);
     free(translated);
     delwin(window);
     delwin(sidebar);
-    delwin(subwin);
+    delwin(miniwin);
     delwin(action);
     endQueue(query);
     endQueue(entries);
