@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <zlib.h>
 #include <minizip/zip.h>
+#include <math.h>
 
 #define ENTER 10
 #define TAB '\t'
@@ -45,7 +46,7 @@ typedef struct FOLDER {
 
 typedef struct RESOLUTION {
     WINDOW* window;
-    char* parameters;
+    int parameters[4][7];
     int y, x, size_y, size_x;
 } RESOLUTION;
 
@@ -548,87 +549,183 @@ void confirmationDialog(char* lang, int line, int* sizes) {
     mvwprintw(action, getmaxy(action) - 2, ((center - size)*3/4), "%.*s", size, checkpoint);
 }
 
-void calcWindow(RESOLUTION* target, char* parameters) {
-    int *ratio[4];
-    float alpha, beta, gamma, delta, epsilon, zeta;
-    char operator, operator2, formula[4][32], *constant, par[2][16];
-    ratio[0] = &target->y;
-    ratio[1] = &target->x;
-    ratio[2] = &target->size_y;
-    ratio[3] = &target->size_x;
-
-    sscanf(parameters, "%31[^,], %31[^,], %31[^,], %31[^,]", formula[0], formula[1], formula[2], formula[3]);
-
-    for (int i = 0; i < 4; i++) {
-        alpha = beta = gamma = delta = epsilon = zeta = 0;
-        sscanf(formula[i], "(%15[^)]) %c (%15[^)])", par[0], &operator2, par[1]);
-
-        //First element
-        if ((constant = strstr(par[0], "LINES")) != NULL) {
-            alpha = LINES;
-            sscanf(par[0], "%*s %c %f", &operator, &beta);
-
-        } else if ((constant = strstr(par[0], "COLS")) != NULL) {
-            alpha = COLS;
-            sscanf(par[0], "%*s %c %f", &operator, &beta);
-
-        } else {
-            sscanf(par[0], "%f %c %f", &alpha, &operator, &beta);
-
-        }
-
-        if (operator == '+') {
-            epsilon = alpha + beta;
-        } else if (operator == '-') {
-            epsilon = alpha - beta;
-        } else if (operator == '/') {
-            epsilon = alpha / beta;
-        } else if (operator == '*') {
-            epsilon = alpha * beta;
-        } else {
-            epsilon = alpha;
-        }
-
-        //Second element
-        if ((constant = strstr(par[1], "LINES")) != NULL) {
-            gamma = LINES;
-            sscanf(par[1], "%*s %c %f", &operator, &delta);
-
-        } else if ((constant = strstr(par[1], "COLS")) != NULL) {
-            gamma = COLS;
-            sscanf(par[1], "%*s %c %f", &operator, &delta);
-
-        } else {
-            sscanf(par[1], "%f %c %f", &gamma, &operator, &delta);
-
-        }
-
-        if (operator == '+') {
-            zeta = gamma + delta;
-        } else if (operator == '-') {
-            zeta = gamma - delta;
-        } else if (operator == '/') {
-            zeta = gamma / delta;
-        } else if (operator == '*') {
-            zeta = gamma * delta;
-        } else {
-            zeta = gamma;
-        }
-
-        //Ratio Calculation
-        if (operator2 == '+') {
-            *ratio[i] = epsilon + zeta;
-        } else if (operator2 == '-') {
-            *ratio[i] = epsilon - zeta;
-        } else if (operator2 == '/') {
-            *ratio[i] = epsilon / zeta;
-        } else if (operator2 == '*') {
-            *ratio[i] = epsilon * zeta;
-        } else {
-            *ratio[i] = epsilon;
-        }
+void setWindowRatio(RESOLUTION* target, char* ratios) {
+    char buffer[4][64], placeholder[2][32], operator, operator2, *pointer, *checkpoint;
+    int alpha, beta, gamma, delta;
+    int epsilon, zeta, eta;
+    
+    pointer = checkpoint = ratios;
+    pointer = strchr(pointer, ',');
+    
+    for (int x = 0; pointer != NULL; x++) {
+        pointer += 2;
+        strncpy(buffer[x], checkpoint, (pointer - checkpoint - 2));
+        buffer[x][(pointer - checkpoint - 2)] = '\0';
+        checkpoint = pointer;
+        pointer = strchr(pointer, ',');
     }
-    target->parameters = parameters;
+    strncpy(buffer[3], checkpoint, 63);
+
+    //"(8), (36), ((LINES - 8) / 2), ((COLS - 36) / 2)"
+    for (int x = 0; x < 4; x++) {
+        alpha = beta = gamma = delta = epsilon = zeta = eta = 0;
+        placeholder[0][0] = '\0';
+        placeholder[1][0] = '\0';
+        operator = operator2 = ' ';
+
+        pointer = buffer[x];
+        checkpoint = pointer + 1;
+        if ((pointer = strchr(pointer, ')')) != NULL) {
+            strncpy(placeholder[0], checkpoint, (pointer - checkpoint));
+            placeholder[0][pointer - checkpoint] = '\0';
+        }
+
+        if ((pointer += 1) != NULL) {
+            operator = *pointer;
+        }
+
+        if ((checkpoint = strchr(checkpoint, '(')) != NULL && (pointer = strrchr(pointer, ')')) != NULL) {
+            checkpoint += 1;
+            strncpy(placeholder[1], checkpoint, (pointer - checkpoint));
+            placeholder[1][pointer - checkpoint] = '\0';
+        }
+
+        if ((strstr(placeholder[0], "LINES")) != NULL) {
+            alpha = -1;
+            sscanf(placeholder[0], "%*s %c %d", &operator2, &beta);
+        } else if ((strstr(placeholder[0], "COLS")) != NULL) {
+            alpha = -1;
+            sscanf(placeholder[0], "%*s %c %d", &operator2, &beta);
+        } else {
+            sscanf(placeholder[0], "%d %c %d", &alpha, &operator2, &beta);
+        }
+
+        if ((operator2 = strchr(placeholder[0], '+') != NULL)) {
+            epsilon = 0;
+        } else if ((operator2 = strchr(placeholder[0], '-') != NULL)) {
+            epsilon = 1;
+        } else if ((operator2 = strchr(placeholder[0], '/') != NULL)) {
+            epsilon = 2;
+        } else if ((operator2 = strchr(placeholder[0], '*') != NULL)) {
+            epsilon = 3;
+        } else {
+            epsilon = -1;
+        }
+
+        if ((strstr(placeholder[1], "LINES")) != NULL) {
+            gamma = LINES;
+            sscanf(placeholder[1], "%*s %c %d", &operator2, &delta);
+        } else if ((strstr(placeholder[1], "COLS")) != NULL) {
+            gamma = COLS;
+            sscanf(placeholder[1], "%*s %c %d", &operator2, &delta);
+        } else {
+            sscanf(placeholder[1], "%d %c %d", &gamma, &operator2, &delta);
+        }
+        if ((operator2 = strchr(placeholder[1], '+') != NULL)) {
+            zeta = 0;
+        } else if ((operator2 = strchr(placeholder[1], '-') != NULL)) {
+            zeta = 1;
+        } else if ((operator2 = strchr(placeholder[1], '/') != NULL)) {
+            zeta = 2;
+        } else if ((operator2 = strchr(placeholder[1], '*') != NULL)) {
+            zeta = 3;
+        } else {
+            zeta = -1;
+        }
+
+        if (operator == '+') {
+            eta = 0;
+        } else if (operator == '-') {
+            eta = 1;
+        } else if (operator == '/') {
+            eta = 2;
+        } else if (operator == '*') {
+            eta = 3;
+        } else {
+            eta = -1;
+        }
+
+        target->parameters[x][0] = alpha;
+        target->parameters[x][1] = epsilon;
+        target->parameters[x][2] = beta;
+        target->parameters[x][3] = eta;
+        target->parameters[x][4] = gamma;
+        target->parameters[x][5] = zeta;
+        target->parameters[x][6] = delta;
+    }
+
+}
+
+void calcWindow(RESOLUTION* target) {
+    int *variables[4], gamma[2];
+    int alpha, beta; //variables
+    int delta; //operator
+
+    variables[0] = &target->size_y;
+    variables[1] = &target->size_x;
+    variables[2] = &target->y;
+    variables[3] = &target->x;
+
+    for (int x = 0; x < 4; x++) {
+        gamma[0] = gamma[1] = 0;
+        alpha = beta = delta = 0;
+        for (int y = 0, z = 0; y < 7; y+= 4, z++) {
+            alpha = target->parameters[x][y];
+            delta = target->parameters[x][y+1];
+            beta = target->parameters[x][y+2];
+
+            if ((x % 2) == 0) {
+                if (alpha == -1) {
+                    alpha = LINES;
+                }
+            } else {
+                if (alpha == -1) {
+                    alpha = COLS;
+                }
+            }
+
+
+            switch (delta)
+            {
+            case 0:
+                gamma[z] = alpha + beta;
+                break;
+            case 1:
+                gamma[z] = alpha - beta;
+                break;
+            case 2:
+                gamma[z] = alpha / beta;
+                break;
+            case 3:
+                gamma[z] = alpha * beta;
+                break;
+            default:
+                gamma[z] = alpha;
+                break;
+            }
+        }
+
+        delta = target->parameters[x][3];
+
+        switch (delta)
+        {
+        case 0:
+            gamma[0] += gamma[1];
+            break;
+        case 1:
+            gamma[0] -= gamma[1];
+            break;
+        case 2:
+            gamma[0] /= gamma[1];
+            break;
+        case 3:
+            gamma[0] *= gamma[1];
+            break;
+        }
+
+        *variables[x] = gamma[0];
+    }
+    
 }
 
 //Read from a target file into the memory
@@ -873,7 +970,7 @@ int main () {
         
     //Starting the menu;
     initscr();
-    int height = LINES, width = COLS, input = 0, cursor[3], optLenght, actionLenght[2];
+    int input = 0, cursor[3], optLenght, actionLenght[2];
     cursor[0] = cursor[1] = cursor[2] = 0;
     bool quit = false, update = false, response = false;
     n_entries = 0;
@@ -883,23 +980,22 @@ int main () {
     _miniwin = (RESOLUTION*)malloc(sizeof(RESOLUTION));
     _action = (RESOLUTION*)malloc(sizeof(RESOLUTION));
 
+    setWindowRatio(_sidebar, "(LINES), (32), (0), (0)");
+    calcWindow(_sidebar);
+
+    setWindowRatio(_window, "(LINES), (COLS - 32), (0), (32)");
+    calcWindow(_window);
+
+    setWindowRatio(_miniwin, "(LINES - 8), (COLS - 32), (8), (0)");
+    calcWindow(_miniwin);
+
+    setWindowRatio(_action, "(8), (36), (LINES - 8)/(2), (COLS - 36)/(2)");
+    calcWindow(_action);
     
-    calcWindow(_sidebar, "(0), (0), (LINES), (32)");
     sidebar = newwin(_sidebar->size_y, _sidebar->size_x, _sidebar->y, _sidebar->x);
-    _sidebar->window = sidebar;
-
-    calcWindow(_window, "(LINES) * (1), (COLS) - (32), (0) * (1), (32) * (0)");
     window = newwin(_window->size_y, _window->size_x, _window->y, _window->x);
-    _window->window = window;
-    
-    calcWindow(_miniwin, "(LINES) - (8), (COLS) - (32), (8), (0)");
     miniwin = derwin(window, _miniwin->size_y, _miniwin->size_x, _miniwin->y, _miniwin->x);
-    _miniwin->window = miniwin;
-   
-
-    calcWindow(_action, "(8), (36), (LINES - 8) / (2 * 1), (COLS - 36) / (2 * 1)");
     action = newwin(_action->size_y, _action->size_x, _action->y, _action->x);
-    _action->window = action;
 
     refresh();
     curs_set(0);
@@ -908,7 +1004,7 @@ int main () {
 
     char* temp = strchr(translated[2], '\n');
     size_t center = temp - translated[2];
-    center = (width*3/4) - center;
+    center = (COLS*3/4) - center;
     center /= 2;
 
     box(sidebar, 0, 0);
@@ -916,7 +1012,6 @@ int main () {
     printLines(window, translated[2], 0, center, 0);
     wrefresh(sidebar);
     wrefresh(window);
-    wrefresh(miniwin);
 
     query = initQueue(8);
     entries = initQueue(8);
@@ -1005,10 +1100,10 @@ int main () {
             } else {
                 mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[1])*3/4), actionLenght[1], A_STANDOUT, 0, NULL);
             }
+            wrefresh(action);
         }
         update = false;
         
-        wrefresh(action);
         wrefresh(miniwin);
         wrefresh(sidebar);
         
@@ -1145,7 +1240,7 @@ int main () {
 
                     temp = strchr(translated[2], '\n');
                     center = temp - translated[2];
-                    center = (width*3/4) - center;
+                    center = (COLS*3/4) - center;
                     center /= 2;
 
                     printLines(window, translated[2], 0, center, 0);
@@ -1183,22 +1278,31 @@ int main () {
             endwin();
             refresh();
             clear();
+
             wclear(window);
             wclear(sidebar);
             wclear(miniwin);
+            wclear(action);
 
-            height = LINES;
-            width = COLS;
+            calcWindow(_window);
+            calcWindow(_sidebar);
+            calcWindow(_miniwin);
+            calcWindow(_action);
 
-            resize_window(sidebar, height, 32);
-            resize_window(window, height, (width-32));
-            resize_window(miniwin, (height-8), (width-32));
+            resize_window(window, _window->size_y, _window->size_x);
+            resize_window(sidebar, _sidebar->size_y, _sidebar->size_x);
+            resize_window(miniwin, _miniwin->size_y, _miniwin->size_x);
+            resize_window(action, _action->size_y, _action->size_x);
+
+            mvwin(action, _action->y, _action->x);
+            confirmationDialog(translated[1], 5, actionLenght);
+
             box(miniwin, 0, 0);
             box(sidebar, 0, 0);
             optLenght = (int)printLines(sidebar, translated[0], 0, 1, 0);
             temp = strchr(translated[2], '\n');
             center = temp - translated[2];
-            center = (width-32) - center;
+            center = (COLS-32) - center;
             center /= 2;
             printLines(window, translated[2], 0, center, 0);
 
