@@ -503,7 +503,9 @@ size_t printLines(WINDOW* window, char* list, int y, int x, int line) {
     return big;
 }
 
-void confirmationDialog(char* lang, int line, int* sizes) {
+//Prepares the confirmation dialog screen with the gives line from lang file.
+//Type 0 will prepare a yes/no question. Type 1 will prepare a notice
+void confirmationDialog(char* lang, int line, int* sizes, int type) {
     size_t center, size;
     char *pointer = lang, *checkpoint, *checkpoint2;
     box(action, 0, 0);
@@ -529,24 +531,44 @@ void confirmationDialog(char* lang, int line, int* sizes) {
         mvwprintw(action, 2, ((center - (pointer - checkpoint2 - 1))/2), "%.*s", (pointer - checkpoint2 - 1), checkpoint2);
     }
 
-    //Get Lang "YES"
-    checkpoint = pointer;
-    pointer = strchr(pointer, '\n');
-    pointer += 1;
+    if (type == 0) {
+        pointer = lang;
+        for (int x = 0; x < 6; x++, pointer++) {
+            pointer = strchr(pointer, '\n');
+        }
 
-    size = pointer - checkpoint - 1;
-    sizes[0] = size;
-    mvwprintw(action, getmaxy(action) - 2, ((center - size)/4), "%.*s", size, checkpoint);
+        //Get Lang "YES"
+        checkpoint = pointer;
+        pointer = strchr(pointer, '\n');
+        pointer += 1;
 
-    //Get Lang "NO"
-    checkpoint = pointer;
-    pointer = strchr(pointer, '\n');
-    pointer += 1;
+        size = pointer - checkpoint - 1;
+        sizes[0] = size;
+        mvwprintw(action, getmaxy(action) - 2, ((center - size)/4), "%.*s", size, checkpoint);
 
-    size = pointer - checkpoint - 1;
-    sizes[1] = size;
+        //Get Lang "NO"
+        checkpoint = pointer;
+        pointer = strchr(pointer, '\n');
+        pointer += 1;
 
-    mvwprintw(action, getmaxy(action) - 2, ((center - size)*3/4), "%.*s", size, checkpoint);
+        size = pointer - checkpoint - 1;
+        sizes[1] = size;
+
+        mvwprintw(action, getmaxy(action) - 2, ((center - size)*3/4), "%.*s", size, checkpoint);
+    } else {
+        pointer = lang;
+        for (int x = 0; x < 8; x++, pointer++) {
+            pointer = strchr(pointer, '\n');
+        }
+
+        checkpoint = pointer;
+        pointer = strchr(pointer, '\n');
+        pointer += 1;
+        size = pointer - checkpoint - 1;
+
+        sizes[0] = size;
+        mvwprintw(action, getmaxy(action) - 2, ((center - size)/2), "%.*s", size, checkpoint);
+    }
 }
 
 void setWindowRatio(RESOLUTION* target, char* ratios) {
@@ -729,7 +751,7 @@ void calcWindow(RESOLUTION* target) {
 }
 
 //Read from a target file into the memory
-//-1 takes the directory as guarantee, any other number will be taken as position
+//pack is the parent folder, path is the path to loop for and position is the file position. -1 Will take the path as target.
 FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
     int dirNumber = 0, result = 0, type = 0, folderCursor = FOLDERCHUNK;
     long *dirPosition = (long*)calloc(folderCursor, sizeof(long));
@@ -857,7 +879,8 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
             }
             returnString(&location, "path");
             
-        } 
+        }
+        free(location);
         return folder;
         
     } else if (type == 2) {
@@ -926,6 +949,8 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
 
             result = unzGoToNextFile(rp);
         }
+
+        free(location);
         return folder;
     } else if (type == 1) {
         while(entry != NULL) {
@@ -936,6 +961,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
             addFile(&folder, file);
             entry = readdir(scanner);
         }
+        free(location);
         return folder;
     }
     return NULL;
@@ -962,17 +988,19 @@ int main () {
     //Scanning the lang folder
     returnString(&path, "lang");
     lang = scanFolder(NULL, path, -1);
-    FOLDER* targets = createFolder(NULL, "targets");
     returnString(&path, "path");
+
+    FOLDER* targets = createFolder(NULL, "targets");
+    targets->subdir = (FOLDER*)calloc(2, sizeof(FOLDER));
 
     //Getting lang file
     char** translated = getLang(lang, 0);
         
     //Starting the menu;
     initscr();
-    int input = 0, cursor[3], optLenght, actionLenght[2];
+    int input = 0, cursor[3], optLenght, actionLenght[2], type = 0, relay_message = -1;
     cursor[0] = cursor[1] = cursor[2] = 0;
-    bool quit = false, update = false, response = false;
+    bool quit = false, update = false;
     n_entries = 0;
 
     _sidebar = (RESOLUTION*)malloc(sizeof(RESOLUTION));
@@ -1017,6 +1045,7 @@ int main () {
     entries = initQueue(8);
 
     while (!quit) {
+        
         if (cursor[2] == 0 || update == true) {
             wclear(miniwin);
             box(miniwin, 0, 0);
@@ -1095,10 +1124,12 @@ int main () {
                 break;
             }
         } else if (cursor[2] == 2) {
-            if (cursor[0] == 0) {
+            if (cursor[0] == 0 && type == 0) {
                 mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[0])/4), actionLenght[0], A_STANDOUT, 0, NULL);
-            } else {
+            } else if (type == 0){
                 mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[1])*3/4), actionLenght[1], A_STANDOUT, 0, NULL);
+            } else if (type == 1) {
+                mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[1])/2), actionLenght[0], A_STANDOUT, 0, NULL);
             }
             wrefresh(action);
         }
@@ -1147,9 +1178,9 @@ int main () {
         case KEY_LEFT:
             if (cursor[2] == 2) {
                 cursor[0] = !cursor[0];
-                if (cursor[0] == 0) {
+                if (cursor[0] == 0 && type == 0) {
                     mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[1])*3/4), actionLenght[1], A_NORMAL, 0, NULL);
-                } else {
+                } else if (type == 0) {
                     mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[0])/4), actionLenght[0], A_NORMAL, 0, NULL);
                 }
             }
@@ -1171,16 +1202,16 @@ int main () {
                 {
                 case 0:
                     if (query->end > 0) {
-                        confirmationDialog(translated[1], 5, actionLenght);
+                        type = 0;
+                        relay_message = 5;
+                        wclear(action);
+                        confirmationDialog(translated[1], relay_message, actionLenght, 0);
                         cursor[0] = 0;
                         cursor[2] = 2;
                         wrefresh(action);
-                    } else {
-                        
                     }
                     break;
                 case 1:
-                    /* code */
                     break;
                 case 3:
                     quit = true;
@@ -1253,12 +1284,30 @@ int main () {
                     break;
                 }
             } else if (cursor[2] == 2) {
-                if (cursor[0] == 0) {
-                    response = true;
-                }
-                cursor[2] = 0;
                 wclear(action);
-                update = true;
+                //Case the confirmation dialog is triggered, switch to different tabs actions
+                switch (cursor[1]) {
+                case 0:
+                    if (cursor[0] == 0 && targets->subcount < 1) {
+                        type = 1;
+                        for (int x = 0; x< query->end; x++) {
+                            targets->subdir[x] = *scanFolder(targets, path, query->value[x]);
+                        }
+                        
+                        relay_message = 6;
+                        confirmationDialog(translated[1], relay_message, actionLenght, 1);
+                        endQueue(query);
+                        query = initQueue(8);
+                    } else if (cursor[0] == 0) {
+                        cursor[2] = 0;
+                        update = true;
+
+                    }
+                    break;
+                case 1:
+                    /* code */
+                    break;
+                }
             }
             break;
         case TAB:
@@ -1295,7 +1344,7 @@ int main () {
             resize_window(action, _action->size_y, _action->size_x);
 
             mvwin(action, _action->y, _action->x);
-            confirmationDialog(translated[1], 5, actionLenght);
+            confirmationDialog(translated[1], relay_message, actionLenght, type);
 
             box(miniwin, 0, 0);
             box(sidebar, 0, 0);
@@ -1315,9 +1364,9 @@ int main () {
                     }
                 }
                 for (int x = 0; x < query->end; x++) {
-                    mvwprintw(miniwin, query->value[x]+2, strlen(entries->item[query->value[x]])+6, "%d", x+1);
+                    mvwprintw(miniwin, query->value[x]+1, strlen(entries->item[query->value[x]])+6, "%d", x+1);
                 }
-                printLines(miniwin, translated[1], 1, 1, 2);
+                printLines(miniwin, translated[1], 0, 1, 2);
             }
 
             wrefresh(sidebar);
