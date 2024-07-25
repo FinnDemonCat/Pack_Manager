@@ -1,12 +1,10 @@
 [Logo]:
-/\  _`\              /\ \       /'\_/`\                                                   
-\ \ \L\ \ __      ___\ \ \/'\  /\      \     __      ___      __       __      __   _ __  
- \ \ ,__/'__`\   /'___\ \ , <  \ \ \__\ \  /'__`\  /' _ `\  /'__`\   /'_ `\  /'__`\/\`'__\
-  \ \ \/\ \L\.\_/\ \__/\ \ \\`\ \ \ \_/\ \/\ \L\.\_/\ \/\ \/\ \L\.\_/\ \L\ \/\  __/\ \ \/ 
-   \ \_\ \__/.\_\ \____\\ \_\ \_\\ \_\\ \_\ \__/.\_\ \_\ \_\ \__/.\_\ \____ \ \____\\ \_\ 
-    \/_/\/__/\/_/\/____/ \/_/\/_/ \/_/ \/_/\/__/\/_/\/_/\/_/\/__/\/_/\/___L\ \/____/ \/_/ 
-                                                                       /\____/         
-                                                                       \_/__/          
+    ____             __      __  ___                                 
+   / __ \____ ______/ /__   /  |/  /___ _____  ____ _____ ____  _____
+  / /_/ / __ `/ ___/ //_/  / /|_/ / __ `/ __ \/ __ `/ __ `/ _ \/ ___/
+ / ____/ /_/ / /__/ ,<    / /  / / /_/ / / / / /_/ / /_/ /  __/ /    
+/_/    \__,_/\___/_/|_|  /_/  /_/\__,_/_/ /_/\__,_/\__, /\___/_/     
+                                                  /____/              
 [Options]:
 Menu Principal
 Escanear Resourcepacks
@@ -17,3 +15,10 @@ Sair
 Não foi encontrado resourecpacks na pasta! Precione ENTER para atualizar
 [Selecione no maximo 8 resourcepacks para escanear]
 Não foram escaneados resourcepacks
+Nenhum arquivo foi selecionado
+Escanear os arquivos selecionados?
+Terminado a xerox dos pacotes
+[Sim]
+[Nao]
+[Oky]
+Já foram escaneados pacotes

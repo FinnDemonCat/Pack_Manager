@@ -64,6 +64,10 @@ FOLDER* lang;
 QUEUE* entries;
 QUEUE* query;
 
+char** translated;
+char* report = NULL;
+size_t report_size = 1024, report_end = 0, report_lenght = 0;
+
 QUEUE* initQueue(size_t size) {
     QUEUE* queue = malloc(sizeof(QUEUE));
     queue->value = (int*)calloc(size, sizeof(int));
@@ -164,6 +168,26 @@ void returnString (char** path, const char* argument) {
             strcat(*path, argument);
         }
     }
+}
+
+void logger(char* message) {
+    if ((report_lenght + strlen(message)) > (report_size - 2)) {
+        report_size *= 2;
+        report = (char*)realloc(report, (report_size + 1) * sizeof(char));
+    }
+
+    if (strchr(message, '\n') != NULL) {
+        report_end++;
+    }
+
+    report_lenght += strlen(message);
+    strcat(report, message);
+}
+
+void printLog(char* path) {
+    FILE* reporting = fopen(path, "w+");
+    fprintf(reporting, report);
+    fclose(reporting);
 }
 
 //Check for the filetype, counting zip file
@@ -750,17 +774,68 @@ void calcWindow(RESOLUTION* target) {
     
 }
 
+void updateWindows() {
+    char* temp;
+    int result;
+
+    resize_term(0, 0);
+    endwin();
+    refresh();
+    clear();
+
+    wclear(action);
+    wclear(sidebar);
+    wclear(window);
+    wclear(miniwin);
+
+    calcWindow(_window);
+    calcWindow(_sidebar);
+    calcWindow(_miniwin);
+    calcWindow(_action);
+
+    resize_window(window, _window->size_y, _window->size_x);
+    resize_window(sidebar, _sidebar->size_y, _sidebar->size_x);
+    resize_window(miniwin, _miniwin->size_y, _miniwin->size_x);
+    resize_window(action, _action->size_y, _action->size_x);
+
+    mvwin(action, _action->y, _action->x);
+
+    box(miniwin, 0, 0);
+    box(sidebar, 0, 0);
+    
+    temp = strchr(translated[2], '\n');
+    result = temp - translated[2];
+    result = (COLS-32) - result;
+    result /= 2;
+
+    printLines(sidebar, translated[0], 0, 1, 0);
+    printLines(window, translated[2], 0, result, 0);
+
+    wrefresh(action);
+    wrefresh(miniwin);
+    wrefresh(window);
+    wrefresh(sidebar);
+}
+
 //Read from a target file into the memory
 //pack is the parent folder, path is the path to loop for and position is the file position. -1 Will take the path as target.
 FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
-    int dirNumber = 0, result = 0, type = 0, folderCursor = FOLDERCHUNK;
+    int dirNumber = 0, result = 0, type = 0, folderCursor = FOLDERCHUNK, line_number = 0, input;
     long *dirPosition = (long*)calloc(folderCursor, sizeof(long));
     struct dirent *entry;
-    char placeholder[1024], *location = strdup(path);
+    char placeholder[1024], *location = strdup(path), name[1024];
+
+    if (translated != NULL) {
+        updateWindows();
+        nodelay(window, true);
+    }
 
     if (dirPosition == NULL) {
-        perror("Error allocating memory for directory cursor");
-        free(dirPosition);
+        logger(name);
+        logger("Error allocating memory for cursor, ");
+        logger(strerror(errno));
+        logger("\n");
+
         return NULL;
     } else {
         for (int x = 0; x < folderCursor; x++) {
@@ -778,22 +853,40 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
         entry = readdir(scanner);
         strcpy(placeholder, entry->d_name);
         returnString(&location, placeholder);
+
+        logger("Scanning: ");
+        logger(placeholder);
+        
+        logger("\n");
+
     } else {
-        printf("Error acessing %s: %s\n", location, strerror(errno));
+        logger("Error acessing: ");
+        logger(placeholder);
+        logger(", ");
+        logger(strerror(errno));
+        logger("\n");
+
+        mvwprintw(miniwin, 1, 1, "Error acessing: %s %s", placeholder, strerror(errno));
         return NULL;
     }
+    wrefresh(miniwin);
     FOLDER* folder = createFolder(pack, placeholder);
 
+    strcpy(name, placeholder);
     //Differentiate folder from zip file
     type = fileType(location);
     if ((type) == 0) {
+        mvwprintw(miniwin, line_number, 1, "Started the scan process. The target is a folder");
+
+        //Create scoll function and input switch
+        line_number++;
 
         closedir(scanner);
         scanner = opendir(location);
         if (scanner != NULL) {
             seekdir(scanner, 2);
         } else {
-            printf("Could not open %s: %s\n", location, strerror(errno));
+            mvwprintw(miniwin, getmaxy(miniwin) - 2, 1, "Could not open target, %s", strerror(errno));
             return NULL;
         }
         
@@ -807,7 +900,8 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
                     if (folder->subcount > 0) {
                         FOLDER* temp = (FOLDER*)realloc(folder->subdir, folder->subcount*sizeof(FOLDER));
                         if (temp == NULL) {
-                            printf("Error resizing folder %s: %s\n", folder->name, strerror(errno));
+                            mvwprintw(miniwin, line_number, 1, "Error resizing folder %s: %s", folder->name, strerror(errno));
+                            line_number++;
 
                             //Error logic
                         } else {
@@ -818,7 +912,8 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
                     if (folder->count > 0) {
                         ARCHIVE* temp = (ARCHIVE*)realloc(folder->content, folder->count*sizeof(ARCHIVE));
                         if (temp == NULL) {
-                            printf("Error resizing archive %s: %s\n", folder->name, strerror(errno));
+                            mvwprintw(miniwin, line_number, 1, "Error resizing archive %s: %s", folder->name, strerror(errno));
+                            line_number++;
 
                             //Error logic
                         } else {
@@ -852,7 +947,8 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
                     seekdir(scanner, dirPosition[dirNumber]);
                     entry = readdir(scanner);
                 } else {
-                    printf("scanFolder: error openning %s %s\n", location, strerror(errno));
+                    mvwprintw(miniwin, line_number, 1, "scanFolder: error openning %s: %s", location, strerror(errno));
+                    line_number++;
                 }
             }
 
@@ -869,42 +965,82 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
                 FOLDER* pointer = createFolder(folder, placeholder);
                 addFolder(&folder, pointer);
                 
-                printf("FOLDER: <%s>\n", location);
-
+                mvwprintw(miniwin, line_number, 1, "FOLDER: <%s>", location);
+                line_number++;
             } else if (type == 1) {
                 ARCHIVE* pointer = getFile(location);
                 addFile(&folder, pointer);
-                printf("FILE: <%s>\n", location);
 
+                mvwprintw(miniwin, line_number, 1, "FILE: <%s>", location);
+                line_number++;
             }
+
             returnString(&location, "path");
-            
+            wrefresh(miniwin);
         }
+
+        nodelay(window, false);
+
         free(location);
+        pack->subcount++;
         return folder;
         
     } else if (type == 2) {
+
         closedir(scanner);
         unzFile rp = unzOpen(location);
         if (rp == NULL) {
-            perror("Could not open zipfile");
+            logger("Could not open zip folder, ");
+            logger(strerror(errno));
+            logger("\n");
+
+            wrefresh(miniwin);
             unzClose(rp);
             return NULL;
         }
 
         result = unzGoToFirstFile(rp);
         if (result != UNZ_OK) {
-            perror("Could not go to first file");
+            logger("Could not go to first file, ");
+            logger(strerror(errno));
+            logger("\n");
+
+            wrefresh(miniwin);
             unzClose(rp);
             return NULL;
-        }
+        } //546
 
         unz_file_info zip_entry;
         while (result == UNZ_OK) {
+            input = wgetch(window);
+
+            wclear(miniwin);
+            if (line_number < (getmaxy(miniwin) - 2)) {
+                for (int x = report_end - line_number, y = 1; x < (int)report_end && x > -1; x++, y++) {
+                    printLines(miniwin, report, y, 1, (x + 1));
+                }
+            } else {
+                for (int x = report_end - (getmaxy(miniwin) - 2), y = 1; x < (int)report_end && x > -1 && y < (getmaxy(miniwin) - 1); x++, y++) {
+                    printLines(miniwin, report, y, 1, (x + 1));
+                }
+            }
+            box(miniwin, 0, 0);
+            wrefresh(miniwin);
+
+            if (input == KEY_RESIZE) {
+                updateWindows();
+            }
+
+            input = 0;
             result = unzGetCurrentFileInfo(rp, &zip_entry, placeholder, sizeof(placeholder), NULL, 0, NULL, 0);
 
             if (result != UNZ_OK) {
-                printf("Error getting file info\n");
+                logger(name);
+                logger(": Error getting file info, ");
+                logger(strerror(errno));
+                logger("\n");
+                
+                wrefresh(miniwin);
                 return NULL;
             }
 
@@ -915,20 +1051,38 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
                 if (folder->subcount > 0) {
                     folder->subdir = (FOLDER*)realloc(folder->subdir, folder->subcount*sizeof(FOLDER));
                     if (folder->subdir == NULL) {
-                        perror("Could not realloc space when leaving folder");
+                        logger(name);
+                        logger(": Could not realloc space when leaving folder, ");
+                        logger(strerror(errno));
+                        logger("\n");
+
+                        wrefresh(miniwin);
                         return NULL;
                     }
                 }
                 if (folder->count > 0) {
                     folder->content = (ARCHIVE*)realloc(folder->content, folder->count*sizeof(ARCHIVE));
                     if (folder->content == NULL) {
-                        perror("Could not realloc space when leaving folder");
+                        logger(name);
+                        logger(": Could not realloc space for archive when leaving folder, ");
+                        logger(strerror(errno));
+                        logger("\n");
+
+                        wrefresh(miniwin);
                         return NULL;
                     }
                 }
+                
                 folder = folder->parent;
                 dirNumber--;
-                printf("Return to %s\n", folder->name);
+
+                logger(name);
+                logger(": Return to <");
+                logger(folder->name);
+                logger(">\n");
+                
+                line_number++;
+                wrefresh(miniwin);
             }
             
             type = fileType(placeholder);
@@ -939,17 +1093,29 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
                 folder = &folder->subdir[folder->subcount-1];
                 dirNumber++;
 
-                printf("FOLDER: <%s>\n", placeholder);
+                logger(name);
+                logger(": FOLDER: <");
+                logger(placeholder);
+                logger(">\n");
+                line_number++;
             } else if (type == 1) {
                 ARCHIVE* pointer = getUnzip(rp, placeholder);
                 addFile(&folder, pointer);
 
-                printf("FILE: <%s>\n", placeholder);
+                logger(name);
+                logger(": FILE: <");
+                logger(placeholder);
+                logger(">\n");
+                line_number++;
             }
 
+            free(temp);
             result = unzGoToNextFile(rp);
         }
 
+        nodelay(window, false);
+
+        pack->subcount++;
         free(location);
         return folder;
     } else if (type == 1) {
@@ -961,6 +1127,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
             addFile(&folder, file);
             entry = readdir(scanner);
         }
+
         free(location);
         return folder;
     }
@@ -985,6 +1152,8 @@ int main () {
         return 1;
     }
 
+    report = (char*)calloc(report_size, sizeof(char));
+
     //Scanning the lang folder
     returnString(&path, "lang");
     lang = scanFolder(NULL, path, -1);
@@ -994,7 +1163,7 @@ int main () {
     targets->subdir = (FOLDER*)calloc(2, sizeof(FOLDER));
 
     //Getting lang file
-    char** translated = getLang(lang, 0);
+    translated = getLang(lang, 0);
         
     //Starting the menu;
     initscr();
@@ -1129,7 +1298,7 @@ int main () {
             } else if (type == 0){
                 mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[1])*3/4), actionLenght[1], A_STANDOUT, 0, NULL);
             } else if (type == 1) {
-                mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[1])/2), actionLenght[0], A_STANDOUT, 0, NULL);
+                mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[0])/2), actionLenght[0], A_STANDOUT, 0, NULL);
             }
             wrefresh(action);
         }
@@ -1284,7 +1453,6 @@ int main () {
                     break;
                 }
             } else if (cursor[2] == 2) {
-                wclear(action);
                 //Case the confirmation dialog is triggered, switch to different tabs actions
                 switch (cursor[1]) {
                 case 0:
@@ -1379,6 +1547,10 @@ int main () {
         }
     }
 
+    returnString(&path, "path");
+    returnString(&path, "log\\log.txt");
+    printLog(path);
+
     //Free query
     for (int x = 0; x < 3; x++) {
         free(translated[x]);
@@ -1388,6 +1560,8 @@ int main () {
     free(_miniwin);
     free(_action);
     free(translated);
+    free(report);
+    free(path);
     delwin(window);
     delwin(sidebar);
     delwin(miniwin);

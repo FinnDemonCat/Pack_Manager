@@ -17,3 +17,10 @@ Quit
 No entries found in resourcepack folder! Press ENTER to update
 [Select up to 8 resourcepacks to scan]
 No resourcepacks scanned
+No files selected
+Scan selected files?
+Finished targets scan
+[Yes]
+[No]
+[Got it]
+There are scanned resourcepacks already
