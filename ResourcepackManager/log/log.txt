@@ -1,5 +1,9 @@
-Scanning: en-us.txt
-Scanning: Finn'sWorkshop.zip
+Location Path <C:\Users\Calie\Documents\Code\ResourcepackManager>
+Memory alloc for report was sucessfull
+Scanning:  en-us.txt
+Allocating memory for windows
+Starting screen
+Scanning:  Finn'sWorkshop.zip
 Finn'sWorkshop.zip: FOLDER: <assets/>
 Finn'sWorkshop.zip: FOLDER: <assets/actuallyadditions/>
 Finn'sWorkshop.zip: FOLDER: <assets/actuallyadditions/textures/>
@@ -332,6 +336,7 @@ Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/distillery/o
 Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/distillery/overlay_side.png>
 Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/distillery/overlay_side_active.png>
 Finn'sWorkshop.zip: Return to <machines>
+Reallocating more memory for folder [alloy_smelter], 32
 Finn'sWorkshop.zip: FOLDER: <assets/gregtech/textures/blocks/machines/electric_furnace/>
 Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/electric_furnace/overlay_front.png>
 Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/electric_furnace/overlay_front_active.png>
@@ -449,6 +454,7 @@ Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/laser_engrav
 Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/laser_engraver/overlay_top.png>
 Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/laser_engraver/overlay_top_active.png>
 Finn'sWorkshop.zip: Return to <machines>
+Reallocating more memory for folder [alloy_smelter], 64
 Finn'sWorkshop.zip: FOLDER: <assets/gregtech/textures/blocks/machines/lathe/>
 Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/lathe/overlay_front.png>
 Finn'sWorkshop.zip: FILE: <assets/gregtech/textures/blocks/machines/lathe/overlay_front_active.png>
@@ -1171,3 +1177,4 @@ Finn'sWorkshop.zip: Return to <assets>
 Finn'sWorkshop.zip: Return to <Finn'sWorkshop.zip>
 Finn'sWorkshop.zip: FILE: <pack.mcmeta>
 Finn'sWorkshop.zip: FILE: <pack.png>
+Ending program, logging.
