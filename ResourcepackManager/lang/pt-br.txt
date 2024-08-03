@@ -12,13 +12,15 @@ Combinar Resourcepacks
 Linguagem
 Sair
 [Messages]:
-Não foi encontrado resourecpacks na pasta! Precione ENTER para atualizar
+Nao foi encontrado resourecpacks na pasta! Precione ENTER para atualizar
 [Selecione no maximo 8 resourcepacks para escanear]
-Não foram escaneados resourcepacks
+Nao foram escaneados resourcepacks
 Nenhum arquivo foi selecionado
 Escanear os arquivos selecionados?
 Terminado a xerox dos pacotes
 [Sim]
 [Nao]
 [Oky]
-Já foram escaneados pacotes
+Ja foram escaneados pacotes
+Mesclar e Empilhar
+Substituir

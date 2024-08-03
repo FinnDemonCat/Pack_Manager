@@ -24,3 +24,5 @@ Finished targets scan
 [No]
 [Got it]
 There are scanned resourcepacks already
+Merge and Stack selectes packs?
+Override
