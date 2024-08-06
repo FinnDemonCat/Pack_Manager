@@ -74,12 +74,12 @@
 		}
 	],
 	"overrides": [
-    {
-      "predicate": {
-        "[type]": [definition]
-      },
-      "model": "[definition]"
-    }
-  ]
+		{
+		"predicate": {
+			"[type]": [definition]
+		},
+		"model": "[definition]"
+		}
+	]
 }
 [processed]

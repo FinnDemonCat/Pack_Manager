@@ -24,5 +24,6 @@ Finished targets scan
 [No]
 [Got it]
 There are scanned resourcepacks already
-Merge and Stack selectes packs?
+Merge and Stack
 Override
+Finished Query!
