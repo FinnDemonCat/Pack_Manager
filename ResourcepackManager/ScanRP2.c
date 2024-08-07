@@ -1107,21 +1107,14 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
     return NULL;
 }
 
-void overrideFiles(FOLDER* targets) {
-    FOLDER *navigator;
+void overrideFiles(FOLDER* base, FOLDER* override) {
+    FOLDER *navigator, *cursor;
     int position[16], dirNumber = 0, line_number = 0, x = -1;
     size_t lenght;
-    char *buffer, *pointer, *checkpoint;
+    char *buffer, *pointer, *checkpoint, *path, placeholder[PATH_MAX];
 
-    struct list {
-        FOLDER **linker;
-        size_t count;
-    };
-    struct list list[targets->subcount];
-    
-    for (int x = 0; x < (int)targets->subcount; x++) {
-        list[x].count = 0;
-    }
+    //Navigate through one resourcepack and on finding a folder with contents
+    //try following the same path on the second resourcepack to override
 
     for (int x = 0; x < 16; x++) {
         position[x] = 0;
@@ -1129,8 +1122,95 @@ void overrideFiles(FOLDER* targets) {
     position[dirNumber] = -1;
     nodelay(window, true);
 
-    navigator = &targets->subdir[0];
+    navigator = base;
+    path = strdup(base->name);
 
+    while (true) {
+        wclear(miniwin);
+        if (line_number < (getmaxy(miniwin) - 2)) {
+            for (int x = report_end - line_number, y = 1; x < (int)report_end && x > -1; x++, y++) {
+                printLines(miniwin, report, y, 1, (x + 1));
+            }
+        } else {
+            for (int x = report_end - (getmaxy(miniwin) - 2), y = 1; x < (int)report_end && x > -1 && y < (getmaxy(miniwin) - 1); x++, y++) {
+                printLines(miniwin, report, y, 1, (x + 1));
+            }
+        }
+
+        if (wgetch(window) == KEY_RESIZE) {
+            updateWindows();
+        }
+        box(miniwin, 0, 0);
+        wrefresh(miniwin);
+
+        position[dirNumber]++;
+
+        //Leaving Folder
+        while (position[dirNumber] == (int)navigator->parent->subcount && dirNumber > 0) {
+            position[dirNumber] = 0;
+            dirNumber--;
+            navigator = navigator->parent;
+            position[dirNumber]++;
+            line_number++;
+            returnString(path, "path");
+
+            logger("< %s\n", navigator->name);
+        }
+
+        if (strcmp(navigator->name, base->name) == 0 && dirNumber == 0) {
+            break;
+        }
+
+        returnString(path, "path");
+        navigator = &navigator->parent->subdir[position[dirNumber]];
+        returnString(path, navigator->name);
+
+        logger("> %s\n", navigator->name);
+        line_number++;
+        
+        //Entering the folder
+        while (navigator->subcount > 0) {
+            dirNumber++;
+            navigator = &navigator->subdir[position[dirNumber]];
+
+            returnString(path, navigator->name);
+            logger("> %s\n", navigator->name);
+            line_number++;
+        }
+
+        if (navigator->count > 0) {
+            pointer = path;
+            cursor = override;
+
+            while (pointer != NULL) {
+                checkpoint = pointer;
+                pointer = strchr(pointer, '\\');
+                pointer++;
+
+                strncpy(placeholder, checkpoint, (pointer - checkpoint - 1));
+
+                for (int x = 0; x < cursor->subcount; x++) {
+                    if (strcmp(placeholder, cursor->subdir[x].name) == 0) {
+                        cursor = &cursor->subdir[x];
+                        break;
+                    }
+                }
+
+                //If by the end of the loop it doesn't find the folder in that node, add it.
+                //If the same branch node is found, merge it
+                if (strcmp(cursor->name, placeholder) != 0) {
+                    logger("%s was not found in %s. Adding the folder to the branch\n", placeholder, override->name);
+                    //Addfolder
+                    break;
+                }
+                if (strcmp(navigator->name, cursor->name) == 0) {
+                    logger("<%s> branch was found in <%s>. Starting file merge\n", path, override->name);
+                    //override query
+                }
+            }
+        }
+    }
+    /* 
     while (true) {
         wclear(miniwin);
         if (line_number < (getmaxy(miniwin) - 2)) {
@@ -1198,92 +1278,9 @@ void overrideFiles(FOLDER* targets) {
             logger("Linking folder <%s>\n", navigator->name);
         }
     }
+    */
 
     logger("Finished targets linking, starting the override process\n");
-
-    //Fore every target scanned
-    for (int x = 0; x < (int)(targets->subcount - 1); x++) {
-
-        //For every folder in first pack linked
-        for (int alpha = 0; alpha < (int)list[x].count; alpha++) {
-
-            //For every folder in second pack linked
-            for (int beta = 0; beta < (int)list[x + 1].count; beta ++) {
-
-                //If a folder of the same name is found
-                if (strcmp(list[x].linker[alpha]->name, list[x + 1].linker[beta]->name) == 0) {
-
-                    //For every file in list[x].linker[alpha]
-                    for (int y = 0; y < (int)list[x].linker[alpha]->count; y++) {
-                        
-                        //For every file in list[x + 1].linker[beta]
-                        for (int z = 0; z < (int)list[x + 1].linker[beta]->count; z++) {
-
-                            //If a file with the same name is found
-                            if (strcmp(list[x].linker[alpha]->content[y].name, list[x + 1].linker[beta]->content[z].name) == 0) {
-
-                                if ((pointer = strstr(list[x].linker[alpha]->content[y].tab, "\"overrides\"")) != NULL) {
-                                    logger("stiching \"overrides\"\n");
-
-                                    if (pointer[13] != '[') {
-                                        logger("Invalid \"overrides\" statement in %s, jumping override\n", list[x].linker[alpha]->content[y].name);
-                                        continue;
-                                    }
-
-                                    //Getting the lenght of "overrides"
-                                    if ((checkpoint = strchr(pointer, ']')) != NULL) {
-                                        lenght = checkpoint - pointer;
-                                        logger("Found end of \"overrides\" statement\n");
-                                    } else {
-                                        logger("Invalid \"overrides\" statement in %s, jumping override\n", list[x].linker[alpha]->content[y].name);
-                                        continue;
-                                    }
-
-                                    //Reallocating memory for new size
-                                    buffer = (char*)calloc(lenght + list[x + 1].linker[beta]->content[z].size, sizeof(char));
-                                    list[x].linker[alpha]->content[y].tab = (char*)realloc(list[x].linker[alpha]->content[y].tab, (lenght + list[x + 1].linker[beta]->content[z].size + 7) * sizeof(char));
-
-                                    if (buffer == NULL) {
-                                        logger("Failed to allocate memory for buffer, %s\n", strerror(errno));
-                                        continue;
-                                    }
-                                    if (list[x].linker[alpha]->content[y].tab == NULL) {
-                                        logger("Fail to reallocate memmory for %s in %s, %s\n", list[x].linker[alpha]->content[y].name, list[x].linker[alpha]->name);
-                                        continue;
-                                    }
-
-                                    //Find end of last statement to stitch "overrides" to
-                                    if ((checkpoint = strrchr(list[x + 1].linker[beta]->content[z].tab, '}')) != NULL) {
-                                        for (int delta = (checkpoint - list[x + 1].linker[beta]->content[z].tab) - 1; delta > 0; delta--) {
-                                            if (list[x + 1].linker[beta]->content[z].tab[delta] == '}' || list[x + 1].linker[beta]->content[z].tab[delta] == ']') {
-                                                checkpoint = &list[x + 1].linker[beta]->content[z].tab[delta] + 1;
-                                                break;
-                                            }
-                                        }
-                                    }
-
-                                    sprintf(buffer, "%.*s\n\t%.*s\n}\n", (int)(checkpoint - list[x + 1].linker[beta]->content[z].tab), list[x + 1].linker[beta]->content[z].tab, (int)lenght, pointer);
-                                    strcpy(list[x].linker[alpha]->content[y].tab, buffer);
-                                    free(buffer);
-                                    logger("\"overrides\" statement stitched with sucess\nFile copied with sucess!\n");
-
-                                } else {
-                                    list[x].linker[alpha]->content[y].tab = (char*)realloc(list[x].linker[alpha]->content[y].tab, (list[x + 1].linker[beta]->content[z].size + 1) * sizeof(char));
-                                    if (list[x].linker[alpha]->content[y].tab != NULL) {
-                                        strcpy(list[x].linker[alpha]->content[y].tab, list[x + 1].linker[beta]->content[z].tab);
-                                        logger("File copied with sucess\n");
-                                    } else {
-                                        logger("Fail to reallocate memmory for %s in %s, %s\n", list[x].linker[alpha]->content[y].name, list[x].linker[alpha]->name);
-                                        continue;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 int main () {
@@ -1632,14 +1629,20 @@ int main () {
                     }
                     break;
                 case 1:
-                    if (relay_message == 13) {
+                    if (relay_message == 12) {
+                        wclear(action);
                         cursor[2] = 0;
                         update = true;
                     } else if (cursor[0] == 0 && targets->subcount > 0) {
                         wclear(action);
-                        overrideFiles(targets);
+
+                        for (int x = 0; x < targets->subcount - 1; x++) {
+                            overrideFiles(&targets->subdir[x], &targets->subdir[x + 1]);
+                        }
+                        //Later work on it getting the folders to override from a query
+
                         type = 1;
-                        relay_message = 13;
+                        relay_message = 12;
                         confirmationDialog(translated[1], relay_message, actionLenght, 1);
                     }
                     break;

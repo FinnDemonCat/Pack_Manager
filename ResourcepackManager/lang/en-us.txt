@@ -25,5 +25,4 @@ Finished targets scan
 [Got it]
 There are scanned resourcepacks already
 Merge and Stack
-Override
 Finished Query!
