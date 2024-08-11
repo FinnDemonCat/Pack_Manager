@@ -75,10 +75,8 @@
 	],
 	"overrides": [
 		{
-		"predicate": {
-			"[type]": [definition]
-		},
-		"model": "[definition]"
+		"model": "[definition]",
+		"predicate": {"[type]": [definition]}
 		}
 	]
 }
