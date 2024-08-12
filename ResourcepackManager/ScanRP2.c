@@ -1109,10 +1109,10 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
 
 void overrideFiles(FOLDER* base, FOLDER* override) {
     FOLDER *navigator, *cursor;
-    int position[16], coordinade[16], dirNumber = 0, line_number = 0, x = -1;
-    size_t lenght;
-    char *buffer, *placeholder, *pointer, *checkpoint, *liner;
-    QUEUE *folders, *files;
+    int position[16], coordinade[16], dirNumber = 0, line_number = 0;
+    size_t length;
+    char *buffer = NULL, *placeholder = NULL, *pointer, *checkpoint, *liner;
+    QUEUE *files;
 
     //Navigate override and compare with the base.
     //Get to the end of a branch, compare the matching nodes for their contents.
@@ -1122,7 +1122,6 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         position[x] = 0;
         coordinade[x] = 0;
     }
-    //position[dirNumber] = -1;
     nodelay(window, true);
 
     navigator = base;
@@ -1149,47 +1148,44 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         //Entering matching folder
         for (; position[dirNumber] < (int)navigator->subcount; position[dirNumber]++) {
 
-            for (; coordinade[dirNumber] < (int)cursor->subcount; coordinade[dirNumber]++) {
+            for (; coordinade[dirNumber] < (int)cursor->subcount;) {
 
                 if (strcmp(navigator->subdir[position[dirNumber]].name, cursor->subdir[coordinade[dirNumber]].name) == 0) {
                     navigator = &navigator->subdir[position[dirNumber]];
                     cursor = &cursor->subdir[coordinade[dirNumber]];
                     dirNumber++;
+                } else {
+                    coordinade[dirNumber]++;
                 }
             }
         }
 
-        
-
         if (navigator->count > 0) {
             //Queuing the contents for optmization
             files = initQueue(navigator->count);
-            for (int x = 0; x < cursor->count; x++) {
+            for (int x = 0; x < (int)cursor->count; x++) {
                 enQueue(files, cursor->content[x].name);
-                files[files->end].value = x;
+                files->value[files->end] = x;
             }
             
-            for (int x = 0; x < navigator->count; x++) {
+            for (int x = 0; x < (int)navigator->count; x++) {
 
-                for (int y = 0; y < files->end; y++) {
+                for (int y = 0; y < files->end;) {
                     
-                    if (strcmp(navigator->content[x].name, files[y].item) == 0) {
+                    if (strcmp(navigator->content[x].name, files->item[y]) == 0) {
                         //Create a queue with the cursor's contents location and compare from it.
                         //Matches will be merged and the exclusives will be added.
-                        lenght = 0;
-                        buffer = NULL;
-                        placeholder = NULL;
-                        liner = NULL;
+                        length = 0;
 
                         if ((pointer = strstr(navigator->content[x].tab, "\"overrides\"")) != NULL) {
-                            if ((pointer + 13) == '[') {
+                            if (*(pointer + 13) == '[') {
                                 checkpoint = pointer + 13;
                                 checkpoint = strchr(checkpoint, ']');
 
-                                lenght = checkpoint - pointer + 1;
-                                buffer = (char*)calloc(lenght, sizeof(char));
-                                strncpy(buffer, pointer, lenght - 1);
-                                buffer[lenght] = '\0';
+                                length = checkpoint - pointer + 1;
+                                buffer = (char*)calloc(length, sizeof(char));
+                                strncpy(buffer, pointer, length - 1);
+                                buffer[length - 1] = '\0';
 
                             } else {
                                 logger("Invalid \"overrides\" parameter, aborting merging %s\n", cursor->content[files->value[y]].name);
@@ -1198,7 +1194,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
                         //Taking the list of overrides from the override file
                         if ((pointer = strstr(cursor->content[files->value[y]].tab, "\"overrides\"")) != NULL) {
-                            if ((pointer + 13) == '[') {
+                            if (*(pointer + 13) == '[') {
                                 pointer += 13;
                                 pointer = strchr(pointer, '{');
                                 checkpoint = pointer;
@@ -1207,16 +1203,16 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                 
                                 for (int z = (checkpoint - pointer - 1); z > 0; z--) {
                                     if (cursor->content[files->value[y]].tab[z] == '}') {
-                                        checkpoint = cursor->content[files->value[y]].tab[z];
+                                        checkpoint = &cursor->content[files->value[y]].tab[z];
                                         break;
                                     }
                                 }
 
-                                lenght = checkpoint - pointer + 8;
+                                length = checkpoint - pointer + 8;
                                 placeholder = strdup(buffer);
-                                buffer = (char*)realloc(buffer, (lenght + (strlen(placeholder) - 1)) * sizeof(char));
+                                buffer = (char*)realloc(buffer, (length + (strlen(placeholder) - 1)) * sizeof(char));
 
-                                sprintf(buffer, "%.*s,%.*s\n\t]\n}\n", (liner - placeholder - 2), placeholder, lenght, pointer);
+                                sprintf(buffer, "%.*s,%.*s\n\t]\n}\n", (int)(liner - placeholder - 2), placeholder, (int)length, pointer);
                                 free(placeholder); 
 
                             } else {
@@ -1225,28 +1221,29 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                         }
 
                         //Resizing the base file
-                        navigator->content[x].tab = (char*)realloc(navigator->content[x].tab, (cursor->content[files->value[y]].size + lenght) * sizeof(char));
+                        free(navigator->content[x].tab);
+                        navigator->content[x].tab = strdup(cursor->content[files->value[y]].tab);
                         free(navigator->content[x].name);
                         navigator->content[x].name = strdup(cursor->content[files->value[y]].name);
                         navigator->content[x].size = cursor->content[files->value[y]].size;
 
-                        strcpy(navigator->content[x].tab, cursor->content[files->value[y]].tab);
+                        //Continue debugging
 
                         //If there is a merged overrides
                         if (buffer != NULL) {
                             pointer = strstr(navigator->content[x].tab, "\"overrides\"");
                             if (pointer == NULL) {
-                                pointer = navigator->content[x].tab[navigator->content[x].size - 1];
+                                pointer = &navigator->content[x].tab[navigator->content[x].size - 1];
                                 for (int z = (pointer - navigator->content[x].tab - 2); z > 0; z--) {
                                     if (navigator->content[x].tab[z] == '}' || navigator->content[x].tab[z] == ']') {
-                                        pointer = navigator->content[x].tab[z];
+                                        pointer = &navigator->content[x].tab[z];
                                         pointer++;
                                         break;
                                     }
                                 }
                             }
-                            navigator->content[x].size == (pointer - navigator->content[x].tab) + lenght;
-                            navigator->content[x].tab = (char)realloc(navigator->content[x].tab, navigator->content[x].size * sizeof(char));
+                            navigator->content[x].size = (pointer - navigator->content[x].tab) + length;
+                            navigator->content[x].tab = (char*)realloc(navigator->content[x].tab, navigator->content[x].size * sizeof(char));
 
                             strcpy(pointer, buffer);
                             navigator->content[x].tab[navigator->content[x].size - 1] = '\0';
@@ -1254,7 +1251,9 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                         }
                         
                         deQueue(files, y);
-                        y--;
+                        break;
+                    } else {
+                        y++;
                     }
                 }
             }
@@ -1264,32 +1263,30 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         for (int x = 0; x < files->end; x++) {
             addFile(&navigator, &cursor->content[files->value[x]]);
         }
-        if (files->end > 0) {
+        if (files->size > 0) {
             endQueue(files);
         }
 
         //Leaving node
-        if (position[dirNumber] < navigator->parent->subcount || coordinade[dirNumber] < &cursor->parent->subcount) {
-            navigator = &navigator->parent->subdir[position[dirNumber]];
-            cursor = &cursor->parent->subdir[coordinade[dirNumber]];
+        if (position[dirNumber] < (int)navigator->parent->subcount || coordinade[dirNumber] < (int)cursor->parent->subcount) {
+            navigator = navigator->parent;
+            cursor = cursor->parent;
 
-            position[dirNumber]++;
-            coordinade[dirNumber]++;
-        } else if (position[dirNumber] == navigator->parent->subcount - 1 || coordinade[dirNumber] == &cursor->parent->subcount - 1) {
-            navigator = &navigator->parent->subdir[position[dirNumber]];
-            cursor = &cursor->parent->subdir[coordinade[dirNumber]];
+        } else if (position[dirNumber] == (int)navigator->parent->subcount - 1 || coordinade[dirNumber] == (int)cursor->parent->subcount - 1) {
+            navigator = navigator->parent;
+            cursor = cursor->parent;
 
             //Making a queue for optimization
             files = initQueue(cursor->subcount);
-            for (int x = 0; x < cursor->subcount; x++) {
+            for (int x = 0; x < (int)cursor->subcount; x++) {
                 enQueue(files, cursor->subdir[x].name);
-                files[x].value = x;
+                files->value[x] = x;
             }
 
             //Removing the matches
-            for (int x = 0; x < navigator->subcount; x++) {
+            for (int x = 0; x < (int)navigator->subcount; x++) {
                 for (int y = 0; y < files->end; y++) {
-                    if (strcmp(navigator->subdir[x].name, files[y].item) == 0) {
+                    if (strcmp(navigator->subdir[x].name, files->item[y]) == 0) {
                         deQueue(files, y);
                         y--;
                         break;
@@ -1299,7 +1296,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
             //Adding the exclusives
             for (int x = 0; x < files->end; x++) {
-                addFolder(navigator, &cursor->subdir[*files[x].value]);
+                addFolder(&navigator, &cursor->subdir[*files[x].value]);
             }
 
             endQueue(files);
@@ -1487,10 +1484,8 @@ int main () {
                     printLines(miniwin, translated[1], 1, 1, 3);
                     n_entries = 0;
                 } else {
-                    for (int x = 0; x < 2; x++) {
-                        printLines(miniwin, translated[1], x + 1, 1, 11 + x);
-                    }
-                    n_entries = 2;
+                    printLines(miniwin, translated[1], 1, 1, 11);
+                    n_entries = 1;
                 }
                 break;
             case 2:
@@ -1664,7 +1659,7 @@ int main () {
                         mvwprintw(miniwin, 1+x, strlen(entries->item[x]) + 2, "[%c]  ", (entries->value[x] == 1) ? 'X' : ' ');
                     }
                     for (int x = 0; x < query->end; x++) {
-                        mvwprintw(miniwin, 1 + query->value[x], strlen(entries->item[x]) + 6, "%d", x + 1);
+                        mvwprintw(miniwin, 1 + query->value[x], strlen(entries->item[query->value[x]]) + 6, "%d", x + 1);
                     }
                         
                     break;
@@ -1714,7 +1709,7 @@ int main () {
                     } else if (cursor[0] == 0 && targets->subcount > 0) {
                         wclear(action);
 
-                        for (int x = 0; x < targets->subcount - 1; x++) {
+                        for (int x = 0; x < (int)targets->subcount - 1; x++) {
                             overrideFiles(&targets->subdir[x], &targets->subdir[x + 1]);
                         }
                         //Later work on it getting the folders to override from a query
