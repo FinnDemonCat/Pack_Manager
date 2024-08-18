@@ -352,6 +352,8 @@ ARCHIVE* getUnzip(unzFile* file, const char* name) {
     model->size = length;
     model->tab = buffer;
 
+    model->tab[length - 1] = '\0';
+
     returnString(&model->name, "name");
     unzCloseCurrentFile(file);
     return model;
@@ -1111,7 +1113,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
     FOLDER *navigator, *cursor;
     int position[16], coordinade[16], dirNumber = 0, line_number = 0;
     size_t length;
-    char *buffer = NULL, *placeholder = NULL, *pointer, *checkpoint, *liner;
+    char *buffer = NULL, *placeholder = NULL, *pointer, *checkpoint;
     QUEUE *files;
 
     //Navigate override and compare with the base.
@@ -1176,79 +1178,121 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                         //Create a queue with the cursor's contents location and compare from it.
                         //Matches will be merged and the exclusives will be added.
                         length = 0;
+                        buffer = NULL;
 
                         if ((pointer = strstr(navigator->content[x].tab, "\"overrides\"")) != NULL) {
-                            if (*(pointer + 13) == '[') {
+                            checkpoint = pointer + 13;
+                            checkpoint = strchr(checkpoint, ']');
+
+                            length = checkpoint - pointer + 1;
+                            buffer = (char*)calloc(length, sizeof(char));
+                            if (buffer != NULL) {
+                                strncpy(buffer, pointer, length - 1);
+                                buffer[length - 1] = '\0';
+                            } else {
+                                logger("Failed to alocate memory for buffer, %s\n", strerror(errno));
+                                continue;
+                            }
+                        }
+
+                        if ((pointer = strstr(cursor->content[files->value[y]].tab, "\"overrides\"")) != NULL) {
+                            if (buffer != NULL) {
+                                char* temp = strdup(buffer);
+                                int total;
+                                free(buffer);
+                                
+                                pointer = strchr(pointer, '{');
+                                checkpoint = strchr(pointer, ']');
+                                total = (checkpoint - pointer);
+
+                                //Getting the inner contents
+                                for (; total > 0; total--) {
+                                    if (pointer[total] == '}') {
+                                        break;
+                                    }
+                                }
+
+                                placeholder = (char*)calloc(total + 1, sizeof(char));
+                                strncpy(placeholder, pointer, total - 1);
+                                temp[total - 1] = '\0';
+
+                                //Finding the end of the list in the first overrides
+                                for (int z = length - 1; z > 0; z--) {
+                                    if (temp[z] == '}') {
+                                        pointer = &temp[z];
+                                        pointer++;
+                                        break;
+                                    }
+                                }
+
+                                buffer = (char*)calloc(length + total, sizeof(char));
+                                sprintf(buffer, "%.*s%s%s", (int)(pointer - temp), temp, placeholder, pointer);
+                                free(temp);
+                                free(placeholder);
+                                
+                            } else {
                                 checkpoint = pointer + 13;
                                 checkpoint = strchr(checkpoint, ']');
 
                                 length = checkpoint - pointer + 1;
                                 buffer = (char*)calloc(length, sizeof(char));
-                                strncpy(buffer, pointer, length - 1);
-                                buffer[length - 1] = '\0';
-
-                            } else {
-                                logger("Invalid \"overrides\" parameter, aborting merging %s\n", cursor->content[files->value[y]].name);
-                            }
-                        }
-
-                        //Taking the list of overrides from the override file
-                        if ((pointer = strstr(cursor->content[files->value[y]].tab, "\"overrides\"")) != NULL) {
-                            if (*(pointer + 13) == '[') {
-                                pointer += 13;
-                                pointer = strchr(pointer, '{');
-                                checkpoint = pointer;
-                                checkpoint = strchr(checkpoint, ']');
-                                liner = checkpoint;
-                                
-                                for (int z = (checkpoint - pointer - 1); z > 0; z--) {
-                                    if (cursor->content[files->value[y]].tab[z] == '}') {
-                                        checkpoint = &cursor->content[files->value[y]].tab[z];
-                                        break;
-                                    }
+                                if (buffer != NULL) {
+                                    strncpy(buffer, pointer, length - 1);
+                                    buffer[length - 1] = '\0';
+                                } else {
+                                    logger("Failed to alocate memory for buffer, %s\n", strerror(errno));
+                                    continue;
                                 }
-
-                                length = checkpoint - pointer + 8;
-                                placeholder = strdup(buffer);
-                                buffer = (char*)realloc(buffer, (length + (strlen(placeholder) - 1)) * sizeof(char));
-
-                                sprintf(buffer, "%.*s,%.*s\n\t]\n}\n", (int)(liner - placeholder - 2), placeholder, (int)length, pointer);
-                                free(placeholder); 
-
-                            } else {
-                                logger("Invalid \"overrides\" parameter, aborting merging %s\n", cursor->content[files->value[y]].name);
                             }
                         }
 
-                        //Resizing the base file
-                        free(navigator->content[x].tab);
-                        navigator->content[x].tab = strdup(cursor->content[files->value[y]].tab);
-                        free(navigator->content[x].name);
-                        navigator->content[x].name = strdup(cursor->content[files->value[y]].name);
-                        navigator->content[x].size = cursor->content[files->value[y]].size;
-
-                        //Continue debugging
-
-                        //If there is a merged overrides
+                        //Inserting overrides file
                         if (buffer != NULL) {
-                            pointer = strstr(navigator->content[x].tab, "\"overrides\"");
-                            if (pointer == NULL) {
-                                pointer = &navigator->content[x].tab[navigator->content[x].size - 1];
-                                for (int z = (pointer - navigator->content[x].tab - 2); z > 0; z--) {
+                            char* temp;
+
+                            if ((pointer = strstr(navigator->content[x].tab, "\"overrides\"")) != NULL) {
+                                checkpoint = pointer + 13;
+                                checkpoint = strchr(checkpoint, ']');
+                                checkpoint++;
+                            } else {
+                                for (int z = navigator->content[x].size - 1; z > 0; z--) {
                                     if (navigator->content[x].tab[z] == '}' || navigator->content[x].tab[z] == ']') {
                                         pointer = &navigator->content[x].tab[z];
-                                        pointer++;
+                                        checkpoint = pointer + 1;
                                         break;
                                     }
                                 }
                             }
-                            navigator->content[x].size = (pointer - navigator->content[x].tab) + length;
-                            navigator->content[x].tab = (char*)realloc(navigator->content[x].tab, navigator->content[x].size * sizeof(char));
 
-                            strcpy(pointer, buffer);
-                            navigator->content[x].tab[navigator->content[x].size - 1] = '\0';
+                            //Continue debugging, override inserting
+                            //sprintf seems to be working. bow_pulling_0 in the part to stitch the override needs debug
+
+                            length = (pointer - navigator->content[x].tab);
+                            length += (navigator->content[x].size - (checkpoint - navigator->content[x].tab));
+                            length += strlen(buffer);
+                            temp = (char*)calloc(length, sizeof(char));
+                            sprintf(
+                                temp,
+                                "%.*s%s%.*s",
+                                (int)(pointer - navigator->content[x].tab),
+                                navigator->content[x].tab,
+                                buffer,
+                                (int)((checkpoint - navigator->content[x].tab) - navigator->content[x].size),
+                                checkpoint
+                            );
+
                             free(buffer);
+                            navigator->content[x].tab = temp;
+                            navigator->content[x].size = length;
+
+                        } else {
+                            free(navigator->content[x].tab);
+                            navigator->content[x].tab = strdup(cursor->content[files->value[y]].tab);
+                            navigator->content[x].size = cursor->content[files->value[y]].size;
                         }
+
+                        free(navigator->content[x].name);
+                        navigator->content[x].name = strdup(cursor->content[files->value[y]].name);
                         
                         deQueue(files, y);
                         break;
