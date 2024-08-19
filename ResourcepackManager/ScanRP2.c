@@ -101,7 +101,7 @@ void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
 }
 
 void deQueue(QUEUE* queue, int item) {
-    for (int x = item; x < queue->end-1; x++) {
+    for (int x = item; x < queue->end - 1; x++) {
         strncpy(queue->item[x], queue->item[x+1], PATH_MAX);
         queue->value[x] = queue->value[x+1];
     }
@@ -1166,8 +1166,8 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
             //Queuing the contents for optmization
             files = initQueue(navigator->count);
             for (int x = 0; x < (int)cursor->count; x++) {
-                enQueue(files, cursor->content[x].name);
                 files->value[files->end] = x;
+                enQueue(files, cursor->content[x].name);
             }
             
             for (int x = 0; x < (int)navigator->count; x++) {
@@ -1183,6 +1183,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                         if ((pointer = strstr(navigator->content[x].tab, "\"overrides\"")) != NULL) {
                             checkpoint = pointer + 13;
                             checkpoint = strchr(checkpoint, ']');
+                            checkpoint++;
 
                             length = checkpoint - pointer + 1;
                             buffer = (char*)calloc(length, sizeof(char));
@@ -1208,13 +1209,14 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                 //Getting the inner contents
                                 for (; total > 0; total--) {
                                     if (pointer[total] == '}') {
+                                        total++;
                                         break;
                                     }
                                 }
 
-                                placeholder = (char*)calloc(total + 1, sizeof(char));
-                                strncpy(placeholder, pointer, total - 1);
-                                temp[total - 1] = '\0';
+                                placeholder = (char*)calloc(total + 2, sizeof(char));
+                                strncpy(placeholder, pointer, total);
+                                placeholder[total] = '\0';
 
                                 //Finding the end of the list in the first overrides
                                 for (int z = length - 1; z > 0; z--) {
@@ -1225,14 +1227,15 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                     }
                                 }
 
-                                buffer = (char*)calloc(length + total, sizeof(char));
-                                sprintf(buffer, "%.*s%s%s", (int)(pointer - temp), temp, placeholder, pointer);
+                                buffer = (char*)calloc(length + total + 4, sizeof(char));
+                                sprintf(buffer, "%.*s,\n\t\t%s%s", (int)(pointer - temp), temp, placeholder, pointer);
                                 free(temp);
                                 free(placeholder);
                                 
                             } else {
                                 checkpoint = pointer + 13;
                                 checkpoint = strchr(checkpoint, ']');
+                                checkpoint++;
 
                                 length = checkpoint - pointer + 1;
                                 buffer = (char*)calloc(length, sizeof(char));
@@ -1255,7 +1258,9 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                 checkpoint = strchr(checkpoint, ']');
                                 checkpoint++;
                             } else {
-                                for (int z = navigator->content[x].size - 1; z > 0; z--) {
+                                pointer = strrchr(navigator->content[x].tab, '}');
+
+                                for (int z = (pointer - navigator->content[x].tab) - 1; z > 0; z--) {
                                     if (navigator->content[x].tab[z] == '}' || navigator->content[x].tab[z] == ']') {
                                         pointer = &navigator->content[x].tab[z];
                                         checkpoint = pointer + 1;
