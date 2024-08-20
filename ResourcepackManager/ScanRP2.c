@@ -1153,6 +1153,9 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
             for (; coordinade[dirNumber] < (int)cursor->subcount;) {
 
                 if (strcmp(navigator->subdir[position[dirNumber]].name, cursor->subdir[coordinade[dirNumber]].name) == 0) {
+                    logger("> %s\n", navigator->subdir[position[dirNumber]].name);
+                    line_number++;
+
                     navigator = &navigator->subdir[position[dirNumber]];
                     cursor = &cursor->subdir[coordinade[dirNumber]];
                     dirNumber++;
@@ -1177,10 +1180,16 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                     if (strcmp(navigator->content[x].name, files->item[y]) == 0) {
                         //Create a queue with the cursor's contents location and compare from it.
                         //Matches will be merged and the exclusives will be added.
+                        logger("Copying %s, %s -> %s\n", navigator->content[x].name, override->name, base->name);
+                        line_number++;
+                        
                         length = 0;
                         buffer = NULL;
 
                         if ((pointer = strstr(navigator->content[x].tab, "\"overrides\"")) != NULL) {
+                            logger("[%s] %s has overrides, prepare to copy\n", base->name, navigator->content[x].name);
+                            line_number++;
+
                             checkpoint = pointer + 13;
                             checkpoint = strchr(checkpoint, ']');
                             checkpoint++;
@@ -1192,12 +1201,17 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                 buffer[length - 1] = '\0';
                             } else {
                                 logger("Failed to alocate memory for buffer, %s\n", strerror(errno));
+                                line_number++;
+
                                 continue;
                             }
                         }
 
                         if ((pointer = strstr(cursor->content[files->value[y]].tab, "\"overrides\"")) != NULL) {
                             if (buffer != NULL) {
+                                logger("[%s] %s has overrides, prepare to insert in [%s]%s overrides\n", override->name, cursor->content[files->value[y]].name, base->name, navigator->content[x].name);
+                                line_number++;
+
                                 char* temp = strdup(buffer);
                                 int total;
                                 free(buffer);
@@ -1233,6 +1247,9 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                 free(placeholder);
                                 
                             } else {
+                                logger("[%s] %s has overrides, prepare the copy\n", override->name, cursor->content[files->value[y]].name);
+                                line_number++;
+
                                 checkpoint = pointer + 13;
                                 checkpoint = strchr(checkpoint, ']');
                                 checkpoint++;
@@ -1244,6 +1261,8 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                     buffer[length - 1] = '\0';
                                 } else {
                                     logger("Failed to alocate memory for buffer, %s\n", strerror(errno));
+                                    line_number++;
+
                                     continue;
                                 }
                             }
@@ -1269,20 +1288,16 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                 }
                             }
 
-                            //Continue debugging, override inserting
-                            //sprintf seems to be working. bow_pulling_0 in the part to stitch the override needs debug
-
                             length = (pointer - navigator->content[x].tab);
                             length += (navigator->content[x].size - (checkpoint - navigator->content[x].tab));
                             length += strlen(buffer);
                             temp = (char*)calloc(length, sizeof(char));
                             sprintf(
                                 temp,
-                                "%.*s%s%.*s",
+                                "%.*s%s%s",
                                 (int)(pointer - navigator->content[x].tab),
                                 navigator->content[x].tab,
                                 buffer,
-                                (int)((checkpoint - navigator->content[x].tab) - navigator->content[x].size),
                                 checkpoint
                             );
 
@@ -1309,22 +1324,29 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         }
 
         //Adding the rest of the queue to the base
-        for (int x = 0; x < files->end; x++) {
-            addFile(&navigator, &cursor->content[files->value[x]]);
-        }
-        if (files->size > 0) {
+        if (files != NULL) {
+            for (int x = 0; x < files->end && files != NULL; x++) {
+                logger("+ %s\n", cursor->content[files->value[x]].name);
+                line_number++;
+
+                addFile(&navigator, &cursor->content[files->value[x]]);
+            }
             endQueue(files);
+            files = NULL;
         }
 
         //Leaving node
         if (position[dirNumber] < (int)navigator->parent->subcount || coordinade[dirNumber] < (int)cursor->parent->subcount) {
             navigator = navigator->parent;
             cursor = cursor->parent;
+            dirNumber--;
+            position[dirNumber]++;
+            coordinade[dirNumber]++;
 
-        } else if (position[dirNumber] == (int)navigator->parent->subcount - 1 || coordinade[dirNumber] == (int)cursor->parent->subcount - 1) {
-            navigator = navigator->parent;
-            cursor = cursor->parent;
+            logger("< %s\n", navigator->name);
+            line_number++;
 
+        } else if (position[dirNumber] == (int)navigator->subcount || coordinade[dirNumber] == (int)cursor->subcount) {
             //Making a queue for optimization
             files = initQueue(cursor->subcount);
             for (int x = 0; x < (int)cursor->subcount; x++) {
@@ -1345,10 +1367,19 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
             //Adding the exclusives
             for (int x = 0; x < files->end; x++) {
-                addFolder(&navigator, &cursor->subdir[*files[x].value]);
+                logger("++ %s\n", cursor->subdir[files->value[x]].name);
+                line_number++;
+                addFolder(&navigator, &cursor->subdir[files->value[x]]);
             }
 
             endQueue(files);
+            files = NULL;
+
+            navigator = navigator->parent;
+            cursor = cursor->parent;
+            dirNumber--;
+            logger("< %s\n", navigator->name);
+            line_number++;
         }
     }
 
