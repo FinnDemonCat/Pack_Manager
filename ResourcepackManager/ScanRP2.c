@@ -102,7 +102,8 @@ void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
 
 void deQueue(QUEUE* queue, int item) {
     for (int x = item; x < queue->end - 1; x++) {
-        strncpy(queue->item[x], queue->item[x+1], PATH_MAX);
+        free(queue->item[x]);
+        queue->item[x] = queue->item[x+1];
         queue->value[x] = queue->value[x+1];
     }
     queue->end--;
@@ -418,17 +419,53 @@ void addFile(FOLDER** folder, ARCHIVE* model) {
             logger("Error allocating memory for new file, %s\n", strerror(errno));
         }
     }
-    if (folder[0]->count >= (folder[0]->file_capacity-1)) {
+    if (folder[0]->count >= (folder[0]->file_capacity - 1)) {
         folder[0]->file_capacity *= 2;
-        folder[0]->content = (ARCHIVE*)realloc(folder[0]->content, folder[0]->file_capacity*sizeof(ARCHIVE));
-        if (folder[0]->content == NULL) {
+        ARCHIVE* temp = (ARCHIVE*)realloc(folder[0]->content, folder[0]->file_capacity * sizeof(ARCHIVE));
+        // folder[0]->content = (ARCHIVE*)realloc(folder[0]->content, folder[0]->file_capacity * sizeof(ARCHIVE));
+
+        if (temp == NULL) {
             logger("Error reallocating memory for new file, %s\n", strerror(errno));
+        } else {
+            folder[0]->content = temp;
         }
     }
     folder[0]->content[folder[0]->count] = *model;
     folder[0]->count++;
 }
 
+ARCHIVE* dupFile(ARCHIVE* file) {
+    ARCHIVE* dup = (ARCHIVE*)malloc(sizeof(ARCHIVE));
+
+    dup->name = strdup(file->name);
+    dup->tab = strdup(file->tab);
+    dup->size = file->size;
+
+    return dup;
+}
+
+FOLDER* dupFolder (FOLDER* base) {
+    FOLDER* dup = (FOLDER*)malloc(sizeof(FOLDER));
+
+    dup->name = strdup(base->name);
+    dup->capacity = base->capacity;
+    dup->count = base->count;
+    dup->file_capacity = base->file_capacity;
+    dup->parent = NULL;
+    dup->subcount = base->subcount;
+
+    for (int x = 0; x < (int)base->count; x++) {
+        ARCHIVE* mirror = dupFile(&base->content[x]);
+        addFile(&dup, mirror);
+    }
+
+    for (int x = 0; x < (int)base->subcount; x++) {
+        FOLDER* mirror = dupFolder(&base->subdir[x]);
+        addFolder(&dup, mirror);
+    }
+
+    return dup;
+}
 
 char** getLang(FOLDER* lang, int file) {
     char *pointer, *checkpoint, *temp, **translated = (char**)calloc(3, sizeof(char*));
@@ -882,6 +919,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
             while(entry == NULL) {
                 //Reached end of contents
                 if ((dirPosition[dirNumber]-2) == (long)folder->subcount && folder->parent != NULL) {
+                    /* 
                     if (folder->subcount > 0) {
                         FOLDER* temp = (FOLDER*)realloc(folder->subdir, folder->subcount*sizeof(FOLDER));
                         if (temp == NULL) {
@@ -906,7 +944,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
                             temp = NULL;
                         }
                     }
-
+                    */
                     dirPosition[dirNumber] = 2;
                     dirNumber--;
                     returnString(&location, "path");
@@ -1032,6 +1070,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
             returnString(&temp, "path");
             returnString(&temp, "name");
             while (strcmp(folder->name, temp) != 0 && dirNumber > 0) {
+                /* 
                 if (folder->subcount > 0) {
                     folder->subdir = (FOLDER*)realloc(folder->subdir, folder->subcount*sizeof(FOLDER));
                     if (folder->subdir == NULL) {
@@ -1050,7 +1089,8 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
                         return NULL;
                     }
                 }
-                
+                */
+                    
                 folder = folder->parent;
                 dirNumber--;
 
@@ -1191,8 +1231,13 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                         line_number++;
                         
                         length = 0;
-                        buffer = NULL;
-
+                        if (buffer != NULL) {
+                            buffer = NULL;
+                        }
+                        if (placeholder != NULL) {
+                            placeholder = NULL;
+                        }
+                        
                         if ((pointer = strstr(navigator->content[x].tab, "\"overrides\"")) != NULL) {
                             logger("%s has overrides, prepare to copy\n", navigator->content[x].name);
                             line_number++;
@@ -1219,7 +1264,8 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                 logger("%s has overrides, prepare to insert in %s overrides\n", cursor->content[files->value[y]].name, navigator->content[x].name);
                                 line_number++;
 
-                                char* temp = strdup(buffer);
+                                char* temp = NULL;
+                                temp = strdup(buffer);
                                 int total;
                                 free(buffer);
                                 
@@ -1237,7 +1283,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
                                 placeholder = (char*)calloc(total + 2, sizeof(char));
                                 strncpy(placeholder, pointer, total);
-                                placeholder[total] = '\0';
+                                placeholder[total - 1] = '\0';
 
                                 //Finding the end of the list in the first overrides
                                 for (int z = length - 1; z > 0; z--) {
@@ -1249,7 +1295,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                                 }
 
                                 buffer = (char*)calloc(length + total + 4, sizeof(char));
-                                sprintf(buffer, "%.*s,\n\t\t%s%s", (int)(pointer - temp), temp, placeholder, pointer);
+                                snprintf(buffer, (length + total + 4), "%.*s,\n\t\t%s%s", (int)(pointer - temp), temp, placeholder, pointer);
                                 free(temp);
                                 free(placeholder);
                                 
@@ -1277,7 +1323,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
                         //Inserting overrides file
                         if (buffer != NULL) {
-                            char* temp;
+                            char* temp = NULL;
 
                             if ((pointer = strstr(navigator->content[x].tab, "\"overrides\"")) != NULL) {
                                 checkpoint = pointer + 13;
@@ -1299,8 +1345,9 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                             length += (navigator->content[x].size - (checkpoint - navigator->content[x].tab));
                             length += strlen(buffer);
                             temp = (char*)calloc(length, sizeof(char));
-                            sprintf(
+                            snprintf(
                                 temp,
+                                length,
                                 "%.*s%s%s",
                                 (int)(pointer - navigator->content[x].tab),
                                 navigator->content[x].tab,
@@ -1310,18 +1357,17 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
                             free(buffer);
                             free(navigator->content[x].tab);
-                            free(cursor->content[files->value[y]].tab);
                             navigator->content[x].tab = temp;
                             navigator->content[x].size = length;
 
                         } else {
                             free(navigator->content[x].tab);
-                            navigator->content[x].tab = cursor->content[files->value[y]].tab;
+                            navigator->content[x].tab = strdup(cursor->content[files->value[y]].tab);
                             navigator->content[x].size = cursor->content[files->value[y]].size;
                         }
 
                         free(navigator->content[x].name);
-                        navigator->content[x].name = cursor->content[files->value[y]].name;
+                        navigator->content[x].name = strdup(cursor->content[files->value[y]].name);
                         
                         deQueue(files, y);
                         break;
@@ -1335,11 +1381,12 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         //Adding the rest of the queue to the base
         if (files != NULL) {
             for (int x = 0; x < files->end && files != NULL; x++) {
-                logger("+ %s\n", cursor->content[files->value[x]].name);
+                ARCHIVE* mirror = dupFile(&cursor->content[files->value[x]]);
+                logger("+ %s\n", mirror->name);
                 line_number++;
 
-                addFile(&navigator, &cursor->content[files->value[x]]);
-                //addFile is failing to reallocate large sizes
+                addFile(&navigator, mirror);
+                mirror = NULL;
             }
             endQueue(files);
             files = NULL;
@@ -1393,9 +1440,11 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
             //Adding the exclusives
             for (int x = 0; x < files->end; x++) {
-                logger("++ %s\n", cursor->subdir[files->value[x]].name);
+                FOLDER* mirror = dupFolder(&cursor->subdir[files->value[x]]);
+                logger("++ %s\n", mirror);
                 line_number++;
-                addFolder(&navigator, &cursor->subdir[files->value[x]]);
+                addFolder(&navigator, mirror);
+                mirror = NULL;
             }
 
             endQueue(files);
@@ -1406,7 +1455,6 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         }
     }
 
-    override = NULL;
     logger("Finished targets linking, starting the override process\n");
 }
 
