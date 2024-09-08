@@ -78,7 +78,7 @@ QUEUE* initQueue(size_t size) {
     
     queue->item = (char**)calloc(size, sizeof(char*));
     for (int x = 0; x < (int)size; x++) {
-        queue->item[x] = (char*)calloc(PATH_MAX+1, sizeof(char));
+        queue->item[x] = NULL;
         queue->value[x] = 0;
     }
     queue->end = 0;
@@ -90,8 +90,8 @@ void enQueue(QUEUE* queue, char* item) {
     if (queue->end == (int)queue->size) {
         return;
     }
-    strncpy(queue->item[queue->end], item, PATH_MAX);
-    queue->end++;
+    queue->item[queue->end] = strdup(item);
+        queue->end++;
 }
 
 void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
@@ -103,7 +103,7 @@ void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
 void deQueue(QUEUE* queue, int item) {
     for (int x = item; x < queue->end - 1; x++) {
         free(queue->item[x]);
-        queue->item[x] = queue->item[x+1];
+        queue->item[x] = strdup(queue->item[x+1]);
         queue->value[x] = queue->value[x+1];
     }
     queue->end--;
@@ -203,7 +203,7 @@ void printLog(char* path) {
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
 
-    sprintf(date, "%s\\log\\log_%02d-%02d_%02d-%02d.txt", path, tm.tm_mon, tm.tm_mday, tm.tm_hour, tm.tm_min);
+    sprintf(date, "%s\\log\\log_%02d-%02d_%02d-%02d.txt", path, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min);
     
     FILE* reporting = fopen(date, "w+");
     fprintf(reporting, report);
@@ -1151,7 +1151,7 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
 
 void overrideFiles(FOLDER* base, FOLDER* override) {
     FOLDER *navigator, *cursor;
-    int position[16], coordinade[16], dirNumber = 0, line_number = 0;
+    int position[16], coordinade[16], dirNumber = 0, line_number = -1;
     size_t length;
     char *buffer = NULL, *placeholder = NULL, *pointer, *checkpoint;
     QUEUE *files;
