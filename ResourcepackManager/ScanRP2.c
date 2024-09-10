@@ -292,6 +292,7 @@ void addFolder(FOLDER** parent, FOLDER* subdir) {
         }
     }
 
+    subdir->parent = parent[0];
     parent[0]->subdir[parent[0]->subcount] = *subdir;
     parent[0]->subcount++;
 }
@@ -445,23 +446,25 @@ ARCHIVE* dupFile(ARCHIVE* file) {
 }
 
 FOLDER* dupFolder (FOLDER* base) {
-    FOLDER* dup = (FOLDER*)malloc(sizeof(FOLDER));
+    FOLDER* dup = createFolder(NULL, base->name);
 
-    dup->name = strdup(base->name);
     dup->capacity = base->capacity;
-    dup->count = base->count;
     dup->file_capacity = base->file_capacity;
-    dup->parent = NULL;
-    dup->subcount = base->subcount;
+    dup->content = (ARCHIVE*)calloc(dup->file_capacity, sizeof(ARCHIVE));
+    dup->subdir = (FOLDER*)calloc(dup->capacity, sizeof(FOLDER));
 
     for (int x = 0; x < (int)base->count; x++) {
         ARCHIVE* mirror = dupFile(&base->content[x]);
+        logger("- %s\n", base->content[x].name);
         addFile(&dup, mirror);
+        mirror = NULL;
     }
 
     for (int x = 0; x < (int)base->subcount; x++) {
         FOLDER* mirror = dupFolder(&base->subdir[x]);
+        logger("++ %s\n", base->subdir[x].name);
         addFolder(&dup, mirror);
+        mirror = NULL;
     }
 
     return dup;
@@ -1227,7 +1230,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                     if (strcmp(navigator->content[x].name, files->item[y]) == 0) {
                         //Create a queue with the cursor's contents location and compare from it.
                         //Matches will be merged and the exclusives will be added.
-                        logger("Copying %s, %s -> %s\n", navigator->content[x].name, override->name, base->name);
+                        logger("*%s\n", navigator->content[x].name);
                         line_number++;
                         
                         length = 0;
@@ -1411,14 +1414,6 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
             line_number++;
 
         } else if (position[dirNumber] == (int)navigator->subcount || coordinade[dirNumber] == (int)cursor->subcount) {
-            navigator = navigator->parent;
-            cursor = cursor->parent;
-
-            position[dirNumber] = coordinade[dirNumber] = 0;
-
-            dirNumber--;
-            position[dirNumber]++;
-            coordinade[dirNumber]++;
 
             //Making a queue for optimization
             files = initQueue(cursor->subcount);
@@ -1449,6 +1444,18 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
             endQueue(files);
             files = NULL;
+
+            logger("< %s\n", navigator->name);
+            line_number++;
+
+            navigator = navigator->parent;
+            cursor = cursor->parent;
+
+            position[dirNumber] = coordinade[dirNumber] = 0;
+
+            dirNumber--;
+            position[dirNumber]++;
+            coordinade[dirNumber]++;
 
             logger("< %s\n", navigator->name);
             line_number++;
