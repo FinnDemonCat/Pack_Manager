@@ -101,9 +101,9 @@ void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
 }
 
 void deQueue(QUEUE* queue, int item) {
+    free(queue->item[item]);
     for (int x = item; x < queue->end - 1; x++) {
-        free(queue->item[x]);
-        queue->item[x] = strdup(queue->item[x+1]);
+        queue->item[x] = queue->item[x+1];
         queue->value[x] = queue->value[x+1];
     }
     queue->end--;
@@ -203,7 +203,7 @@ void printLog(char* path) {
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
 
-    sprintf(date, "%s\\log\\log_%02d-%02d_%02d-%02d.txt", path, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min);
+    sprintf(date, "%s\\log\\log_%02d-%02d_%02d-%02d.txt", path, tm.tm_mday, tm.tm_mon + 1, tm.tm_hour, tm.tm_min);
     
     FILE* reporting = fopen(date, "w+");
     fprintf(reporting, report);
@@ -462,7 +462,7 @@ FOLDER* dupFolder (FOLDER* base) {
 
     for (int x = 0; x < (int)base->subcount; x++) {
         FOLDER* mirror = dupFolder(&base->subdir[x]);
-        logger("++ %s\n", base->subdir[x].name);
+        logger("- /%s\n", base->subdir[x].name);
         addFolder(&dup, mirror);
         mirror = NULL;
     }
@@ -1379,27 +1379,81 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                     }
                 }
             }
-        }
 
-        //Adding the rest of the queue to the base
-        if (files != NULL) {
-            for (int x = 0; x < files->end && files != NULL; x++) {
-                ARCHIVE* mirror = dupFile(&cursor->content[files->value[x]]);
-                logger("+ %s\n", mirror->name);
-                line_number++;
+            //Adding the rest of the queue to the base
+            if (files != NULL) {
+                for (int x = 0; x < files->end; x++) {
+                    ARCHIVE* mirror = dupFile(&cursor->content[files->value[x]]);
+                    logger("+ %s\n", mirror->name);
+                    line_number++;
 
-                addFile(&navigator, mirror);
-                mirror = NULL;
+                    addFile(&navigator, mirror);
+                    mirror = NULL;
+                }
+
+                endQueue(files);
+                files = NULL;
             }
-            endQueue(files);
-            files = NULL;
         }
 
         if (dirNumber == 0) {
             break;
         }
 
-        //Leaving node
+        //Adding the exclusive folders
+        if (cursor->subcount > 0) {
+            //Queuing the folders for optmization
+            files = initQueue(cursor->subcount);
+            for (int x = 0; x < (int)cursor->subcount; x++) {
+                files->value[files->end] = x;
+                enQueue(files, cursor->subdir[x].name);
+            }
+
+            for (int x = 0; x < (int)navigator->subcount; x++) {
+                
+                for (int y = 0; y < (int)files->end;) {
+                    
+                    if (strcmp(navigator->subdir[x].name, files->item[y]) == 0) {
+                        deQueue(files, y);
+                        break;
+                    } else {
+                        y++;
+                    }
+                }
+            }
+
+            if (files != NULL) {
+                for (int x = 0; x < files->end; x++) {
+                    FOLDER* mirror = dupFolder(&cursor->subdir[files->value[x]]);
+                    logger("++ /%s\n", mirror->name);
+                    line_number++;
+
+                    addFolder(&navigator, mirror);
+                    mirror = NULL;
+                }
+
+                endQueue(files);
+                files = NULL;
+            }
+        }
+
+        //Leaving the node
+        if (navigator->parent != NULL || cursor->parent != NULL) {
+            navigator = navigator->parent;
+            cursor = cursor->parent;
+
+            position[dirNumber] = coordinade[dirNumber] = 0;
+
+            dirNumber--;
+            position[dirNumber]++;
+            coordinade[dirNumber]++;
+
+            logger("< %s\n", navigator->name);
+            line_number++;
+        }
+
+        //!! It isn't adding the exclusives when it doesn't reach the end of the node due to no more exclusives.
+        /* 
         if (position[dirNumber] < (int)navigator->parent->subcount || coordinade[dirNumber] < (int)cursor->parent->subcount) {
             navigator = navigator->parent;
             cursor = cursor->parent;
@@ -1460,6 +1514,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
             logger("< %s\n", navigator->name);
             line_number++;
         }
+        */
     }
 
     logger("Finished targets linking, starting the override process\n");
