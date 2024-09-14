@@ -197,6 +197,16 @@ void returnString (char** path, const char* argument) {
     }
 }
 
+char* strchrr (char* string, char x, size_t limit) {
+    for (int y = 0; y < (int)limit; y++) {
+        if (string[y] == x) {
+            return &string[y];
+        }
+    }
+
+    return NULL;
+}
+
 void printLog(char* path) {
     char date[1024];
 
@@ -413,7 +423,7 @@ ARCHIVE* getFile(const char* path) {
     return model;
 }
 
-void addFile(FOLDER** folder, ARCHIVE* model) {
+void addFile (FOLDER** folder, ARCHIVE* model) {
     if (folder[0]->count == 0) {
         folder[0]->content = (ARCHIVE*)calloc(folder[0]->file_capacity, sizeof(ARCHIVE));
         if (folder[0]->content == NULL) {
@@ -435,6 +445,21 @@ void addFile(FOLDER** folder, ARCHIVE* model) {
     folder[0]->count++;
 }
 
+void delFile (FOLDER** folder, int target) {
+    free(&folder[0]->content[target]);
+    for (int x = target; x < (int)folder[0]->count; x++) {
+        folder[0]->content[x] = folder[0]->content[x + 1];
+    }
+
+    ARCHIVE* backup = (ARCHIVE*)realloc(folder[0]->content, (folder[0]->count - 1) * sizeof(ARCHIVE));
+    if (backup == NULL) {
+        logger("Couldn't trim %s content size\n", folder[0]->name);
+    } else {
+        folder[0]->content = backup;
+        folder[0]->count--;
+    }
+}
+
 ARCHIVE* dupFile(ARCHIVE* file) {
     ARCHIVE* dup = (ARCHIVE*)malloc(sizeof(ARCHIVE));
 
@@ -443,6 +468,124 @@ ARCHIVE* dupFile(ARCHIVE* file) {
     dup->size = file->size;
 
     return dup;
+}
+
+void mergeFile(ARCHIVE* source, ARCHIVE* target) {
+    char *pointer, *checkpoint, *temp, *buffer, *placeholder;
+    size_t length, total;
+
+    if ((pointer = strstr(source->tab, "\"overrides\"")) != NULL) {
+        logger("%s has overrides, prepare to copy\n", target->name);
+        buffer = NULL;
+
+        checkpoint = pointer + 13;
+        checkpoint = strchr(checkpoint, ']');
+        length = checkpoint - pointer + 1;
+
+        buffer = (char*)calloc(length, sizeof(char));
+        if (buffer != NULL) {
+            strncpy(buffer, pointer, length - 1);
+        } else {
+            logger("Failed to alocate memory for buffer, %s\n", strerror(errno));
+        }
+    }
+
+    if ((pointer = strstr(target->tab, "\"overrides\"")) != NULL && buffer != NULL) {
+        logger("%s has overrides, prepare to insert in %s overrides\n", source->name, target->name);
+        temp = buffer;
+        buffer = NULL;
+
+        //Getting the inner contents
+        pointer = strchr(pointer, '{');
+        checkpoint = strchr(pointer, ']');
+        total = (checkpoint - pointer);
+        
+        for (; total > 0; total--) {
+            if (pointer[total] == '}') {
+                total++;
+                break;
+            }
+        }
+
+        placeholder = (char*)calloc(total, sizeof(char));
+        strncpy(placeholder, pointer, total);
+        placeholder[total - 1] = '\0';
+
+        //Finding the end of the list in the first overrides
+        for (int x = length - 1; x > 0; x--) {
+            if (temp[x] == '}') {
+                pointer = &temp[x];
+                pointer++;
+                break;
+            }
+        }
+
+        buffer = (char*)calloc(length + total + 4, sizeof(char));
+        snprintf(buffer, (length + total + 4), "%.*s,\n\t\t%s%s", (int)(pointer - temp), temp, placeholder, pointer);
+        free(temp);
+        free(placeholder);
+
+    } else if (buffer == NULL) {
+        logger("%s has overrides, prepare the copy\n", target->name);
+
+        checkpoint = pointer + 13;
+        checkpoint = strchr(checkpoint, ']');
+        checkpoint++;
+
+        length = checkpoint - pointer + 1;
+        buffer = (char*)calloc(length, sizeof(char));
+        if (buffer != NULL) {
+            strncpy(buffer, pointer, length - 1);
+            buffer[length - 1] = '\0';
+        } else {
+            logger("Failed to alocate memory for buffer, %s\n", strerror(errno));
+        }
+    }
+
+    if (buffer != NULL) {
+        temp = NULL;
+
+        if ((pointer = strstr(target->tab, "\"overrides\"")) != NULL) {
+            checkpoint = pointer + 13;
+            checkpoint = strchr(checkpoint, ']');
+            checkpoint++;
+        } else {
+            pointer = strrchr(target->tab, '}');
+
+            for (int x = (pointer - target->tab) - 1; x > 0; x--) {
+                if (target->tab[x] == '}' || target->tab[x] == ']') {
+                    pointer = &target->tab[x];
+                    checkpoint = pointer + 1;
+                    break;
+                }
+            }
+        }
+
+        length = (pointer - target->tab);
+        length += (target->size - (checkpoint - target->tab));
+        length += strlen(buffer);
+        temp = (char*)calloc(length, sizeof(char));
+        snprintf(
+            temp,
+            length,
+            "%.*s%s%s",
+            (int)(pointer - target->tab),
+            target->tab,
+            buffer,
+            checkpoint
+        );
+
+        free(buffer);
+        free(target->tab);
+        target->tab = temp;
+        target->size = length;
+    } else {
+        free(target->tab);
+        free(target->name);
+        free(target);
+
+        target = dupFile(source);
+    }
 }
 
 FOLDER* dupFolder (FOLDER* base) {
@@ -1159,10 +1302,6 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
     char *buffer = NULL, *placeholder = NULL, *pointer, *checkpoint;
     QUEUE *files;
 
-    //Navigate override and compare with the base.
-    //Get to the end of a branch, compare the matching nodes for their contents.
-    //When at the end of the node list, check for exclusives on override and copy them.
-
     for (int x = 0; x < 16; x++) {
         position[x] = 0;
         coordinade[x] = 0;
@@ -1171,9 +1310,10 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
     navigator = base;
     cursor = override;
-    logger("[%s] -> [%s]\n", override->name, base->name);
+    logger("[%s] * [%s]\n", override->name, base->name);
     line_number++;
 
+    //Tree merging
     while (true) {
         wclear(miniwin);
         if (line_number < (getmaxy(miniwin) - 2)) {
@@ -1452,72 +1592,118 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
             line_number++;
         }
 
-        //!! It isn't adding the exclusives when it doesn't reach the end of the node due to no more exclusives.
-        /* 
-        if (position[dirNumber] < (int)navigator->parent->subcount || coordinade[dirNumber] < (int)cursor->parent->subcount) {
-            navigator = navigator->parent;
-            cursor = cursor->parent;
-
-            position[dirNumber] = coordinade[dirNumber] = 0;
-
-            dirNumber--;
-            position[dirNumber]++;
-            coordinade[dirNumber]++;
-
-            logger("< %s\n", navigator->name);
-            line_number++;
-
-        } else if (position[dirNumber] == (int)navigator->subcount || coordinade[dirNumber] == (int)cursor->subcount) {
-
-            //Making a queue for optimization
-            files = initQueue(cursor->subcount);
-            for (int x = 0; x < (int)cursor->subcount; x++) {
-                enQueue(files, cursor->subdir[x].name);
-                files->value[x] = x;
-            }
-
-            //Removing the matches
-            for (int x = 0; x < (int)navigator->subcount; x++) {
-                for (int y = 0; y < files->end; y++) {
-                    if (strcmp(navigator->subdir[x].name, files->item[y]) == 0) {
-                        deQueue(files, y);
-                        y--;
-                        break;
-                    }
-                }
-            }
-
-            //Adding the exclusives
-            for (int x = 0; x < files->end; x++) {
-                FOLDER* mirror = dupFolder(&cursor->subdir[files->value[x]]);
-                logger("++ %s\n", mirror);
-                line_number++;
-                addFolder(&navigator, mirror);
-                mirror = NULL;
-            }
-
-            endQueue(files);
-            files = NULL;
-
-            logger("< %s\n", navigator->name);
-            line_number++;
-
-            navigator = navigator->parent;
-            cursor = cursor->parent;
-
-            position[dirNumber] = coordinade[dirNumber] = 0;
-
-            dirNumber--;
-            position[dirNumber]++;
-            coordinade[dirNumber]++;
-
-            logger("< %s\n", navigator->name);
-            line_number++;
-        }
-        */
     }
 
     logger("Finished targets linking, starting the override process\n");
+}
+
+FOLDER* localizeFile(FOLDER* folder, char* path) {
+    
+}
+
+void executeCommand(FOLDER* override, FOLDER* target) {
+    FOLDER* navigator = target;
+    FOLDER* cursor = override;
+    size_t tag[2];
+    char *pointer, *checkpoint, *save, *point, namespace[512], folder[512];
+
+    for (int x = 0; x < (int)cursor->count; x++) {
+        if (strstr(cursor->content[x].name, ".instruct") != NULL) {
+            tag[0] = x;
+            break;
+        }
+    }
+    /* 
+    while ((pointer = strchr(cursor->content[tag[0]].tab, '[')) != NULL) {
+        cursor = override;
+        navigator = target;
+        pointer++;
+        checkpoint = strchr(pointer, ']');
+
+        //Preentering the source namespace
+        if ((save = strchrr(pointer, ':', (checkpoint - pointer))) != NULL) {
+            strncpy(namespace, pointer, (save - pointer - 1));
+
+            for (int x = 0; x < (int)cursor->subcount; x++) {
+                if (strcmp(cursor->name, "assets") != 0 && strcmp(cursor->subdir[x].name, "assets") == 0) {
+                    cursor = &cursor->subdir[x];
+                    x = 0;
+                } else if (strcmp(cursor->subdir[x].name, namespace) == 0) {
+                    cursor = &cursor->subdir[x];
+                    break;
+                }
+            }
+
+            memset(folder, '0', sizeof(folder));
+        } else {
+            save = pointer;
+        }
+
+        //Navigating the listed folders to the file
+        while ((point = strchrr(save, '/', (checkpoint - save))) != NULL) {
+            strncpy(folder, save, (point - save));
+
+            for (int x = 0; x < (int)cursor->subcount; x++) {
+                if (strcmp(cursor->subdir[x].name, folder) == 0) {
+                    cursor = &cursor->subdir[x];
+                    break;
+                }
+            }
+
+            point++;
+            save = point;
+        }
+
+        memset(folder, '0', sizeof(folder));
+        strncpy(folder, save, (checkpoint - save));
+
+        //Executing the diretrix
+        for (int x = 0; x < (int)cursor->count; x++) {
+            char com;
+            
+            //Locating the file
+            if (strcmp(cursor->content[x].name, folder) == 0) {
+                checkpoint += 3;
+                pointer = checkpoint;
+                checkpoint = strchr(checkpoint, '[');
+                
+                com = *pointer;
+
+                if (com == 'x') {
+                    save = pointer + 3;
+                    sscanf(save, "%[^:]", namespace);
+
+                    //Navigate to the target location
+                    for (int y = 0; y < (int)navigator->subcount; y++) {
+                        if (strcmp(navigator->name, "assets") != 0&& strcmp(navigator->subdir[y].name, "assets") == 0) {
+                            navigator = &navigator->subdir[y];
+                        } else if (strcmp(navigator->subdir[y].name, namespace) == 0) {
+                            navigator = &navigator->subdir[y];
+                        }
+                    }
+
+                    //Merging or Adding the file
+                    for (int y = 0; y < (int)navigator->count + 1; y++) {
+                        if (y == (int)navigator->count + 1) {
+                            ARCHIVE* mirror = dupFile(&cursor->content[y]);
+                            addFile(&navigator, mirror);
+                            mirror = NULL;
+
+                        }
+                        if (strcmp(navigator->content[y].name, folder) == 0) {
+                            mergeFile(&navigator->content[y], &cursor->content[y]);
+                        }
+                    }
+
+                    delFile(&cursor, x);
+
+                    //Continue diretrix reading
+
+                }
+            }
+        }
+    }
+    */
 }
 
 int main () {
@@ -1653,7 +1839,9 @@ int main () {
             case 2:
                 for (int x = 0; x < (int)lang->count; x++) {
                     mvwprintw(miniwin, x + 1, 1, lang->content[x].name);
-                }   
+                }
+
+                n_entries = lang->count;
                 break;
             }
             update = false;
@@ -1739,7 +1927,7 @@ int main () {
                 cursor[0] = 0;
                 cursor[1]++;
                 update = true;
-            } else if (cursor[2] == 1 && cursor[0] < n_entries-1) {
+            } else if (cursor[2] == 1 && cursor[0] < n_entries - 1) {
                 cursor[0]++;
             }
             break;
@@ -1872,9 +2060,8 @@ int main () {
                         wclear(action);
 
                         for (int x = 0; x < (int)targets->subcount - 1; x++) {
-                            overrideFiles(&targets->subdir[x], &targets->subdir[x + 1]);
+                            overrideFiles(&targets->subdir[0], &targets->subdir[x + 1]);
                         }
-                        //Later work on it getting the folders to override from a query
 
                         type = 1;
                         relay_message = 12;
