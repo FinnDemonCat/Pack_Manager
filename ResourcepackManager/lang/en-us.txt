@@ -10,7 +10,7 @@ ______          _     ___  ___
 [Options]:
 Main Menu
 Scan Resourcepacks
-Merge Resourcepacks
+Execute Edit
 Language
 Quit
 [Messages]:
