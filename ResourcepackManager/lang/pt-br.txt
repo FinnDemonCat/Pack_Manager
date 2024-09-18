@@ -21,6 +21,8 @@ Terminado a xerox dos pacotes
 [Sim]
 [Nao]
 [Oky]
-Ja foram escaneados pacotes
+Executar Edições?
 Mesclar e Empilhar
+Executar Diretrix
 Modificações finalizadas!
+Não Há Diretrix Selecionada

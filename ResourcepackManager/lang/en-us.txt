@@ -23,6 +23,8 @@ Finished targets scan
 [Yes]
 [No]
 [Got it]
-There are scanned resourcepacks already
+Execute Edits?
 Merge and Stack
+Run Diretrix
 Finished Query!
+No Diretrix Selected
