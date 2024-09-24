@@ -472,7 +472,7 @@ ARCHIVE* dupFile(ARCHIVE* file) {
 }
 
 void mergeFile(ARCHIVE* source, ARCHIVE* target) {
-    char *pointer, *checkpoint, *temp, *buffer, *placeholder;
+    char *pointer, *checkpoint, *temp, *buffer = NULL, *placeholder = NULL;
     size_t length, total;
 
     if ((pointer = strstr(source->tab, "\"overrides\"")) != NULL) {
@@ -492,54 +492,55 @@ void mergeFile(ARCHIVE* source, ARCHIVE* target) {
     }
 
     if ((pointer = strstr(target->tab, "\"overrides\"")) != NULL && buffer != NULL) {
-        logger("%s has overrides, prepare to insert in %s overrides\n", source->name, target->name);
-        temp = buffer;
-        buffer = NULL;
-
-        //Getting the inner contents
-        pointer = strchr(pointer, '{');
-        checkpoint = strchr(pointer, ']');
-        total = (checkpoint - pointer);
-        
-        for (; total > 0; total--) {
-            if (pointer[total] == '}') {
-                total++;
-                break;
-            }
-        }
-
-        placeholder = (char*)calloc(total, sizeof(char));
-        strncpy(placeholder, pointer, total);
-        placeholder[total - 1] = '\0';
-
-        //Finding the end of the list in the first overrides
-        for (int x = length - 1; x > 0; x--) {
-            if (temp[x] == '}') {
-                pointer = &temp[x];
-                pointer++;
-                break;
-            }
-        }
-
-        buffer = (char*)calloc(length + total + 4, sizeof(char));
-        snprintf(buffer, (length + total + 4), "%.*s,\n\t\t%s%s", (int)(pointer - temp), temp, placeholder, pointer);
-        free(temp);
-        free(placeholder);
-
-    } else if (buffer == NULL) {
-        logger("%s has overrides, prepare the copy\n", target->name);
-
-        checkpoint = pointer + 13;
-        checkpoint = strchr(checkpoint, ']');
-        checkpoint++;
-
-        length = checkpoint - pointer + 1;
-        buffer = (char*)calloc(length, sizeof(char));
         if (buffer != NULL) {
-            strncpy(buffer, pointer, length - 1);
-            buffer[length - 1] = '\0';
+            logger("%s has overrides, prepare to insert in %s overrides\n", source->name, target->name);
+            temp = buffer;
+            buffer = NULL;
+
+            //Getting the inner contents
+            pointer = strchr(pointer, '{');
+            checkpoint = strchr(pointer, ']');
+            total = (checkpoint - pointer);
+            
+            for (; total > 0; total--) {
+                if (pointer[total] == '}') {
+                    total++;
+                    break;
+                }
+            }
+
+            placeholder = (char*)calloc(total, sizeof(char));
+            strncpy(placeholder, pointer, total);
+            placeholder[total - 1] = '\0';
+
+            //Finding the end of the list in the first overrides
+            for (int x = length - 1; x > 0; x--) {
+                if (temp[x] == '}') {
+                    pointer = &temp[x];
+                    pointer++;
+                    break;
+                }
+            }
+
+            buffer = (char*)calloc(length + total + 4, sizeof(char));
+            snprintf(buffer, (length + total + 4), "%.*s,\n\t\t%s%s", (int)(pointer - temp), temp, placeholder, pointer);
+            free(temp);
+            free(placeholder);
         } else {
-            logger("Failed to alocate memory for buffer, %s\n", strerror(errno));
+            logger("%s has overrides, prepare the copy\n", target->name);
+
+            checkpoint = pointer + 13;
+            checkpoint = strchr(checkpoint, ']');
+            checkpoint++;
+
+            length = checkpoint - pointer + 1;
+            buffer = (char*)calloc(length, sizeof(char));
+            if (buffer != NULL) {
+                strncpy(buffer, pointer, length - 1);
+                buffer[length - 1] = '\0';
+            } else {
+                logger("Failed to alocate memory for buffer, %s\n", strerror(errno));
+            }
         }
     }
 
@@ -583,9 +584,10 @@ void mergeFile(ARCHIVE* source, ARCHIVE* target) {
     } else {
         free(target->tab);
         free(target->name);
-        free(target);
 
-        target = dupFile(source);
+        target->tab = strdup(source->tab);
+        target->name = strdup(source->name);
+        target->size = source->size;
     }
 }
 
@@ -1329,17 +1331,6 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         } else {
             mvwprintLines(miniwin, report, 1, 1, (report_end - (getmaxy(miniwin) - 2)), report_end);
         }
-        /* 
-        if (line_number < (getmaxy(miniwin) - 2)) {
-            for (int x = report_end - line_number, y = 1; x < (int)report_end && x > -1; x++, y++) {
-                mvwprintLines(miniwin, report, y, 1, (x + 1));
-            }
-        } else {
-            for (int x = report_end - (getmaxy(miniwin) - 2), y = 1; x < (int)report_end && x > -1 && y < (getmaxy(miniwin) - 1); x++, y++) {
-                mvwprintLines(miniwin, report, y, 1, (x + 1));
-            }
-        }
-        */
 
         if (wgetch(window) == KEY_RESIZE) {
             updateWindows();
@@ -1476,25 +1467,65 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 }
 
 FOLDER* localizeFolder(FOLDER* folder, char* path) {
-    char namespace[512], dir[512], name[256], *pointer, *checkpoint;
+    char namespace[512], dir[512], *pointer = NULL, *checkpoint = NULL;
     FOLDER* navigator = folder;
 
-    sscanf(path + 1, "%512[^:]:%512[^\"]", namespace, dir);
+    memset(namespace, '0', sizeof(namespace));
+    memset(dir, '0', sizeof(dir));
+    sscanf(path, "%512[^:]:%512[^\"]", namespace, dir);
+
+    //If there is a path
+    if (strchr(path, ':') != NULL) {
+        for (int x = 0; x < (int)navigator->subcount;) {
+            if (strcmp(navigator->name, "assets") != 0 && strcmp(navigator->subdir[x].name, "assets") == 0) {
+                navigator = &navigator->subdir[x];
+                x = 0;
+            } else if (strcmp(navigator->name, namespace) != 0 && strcmp(navigator->subdir[x].name, namespace) == 0) {
+                navigator = &navigator->subdir[x];
+                x = 0;
+            } else if (strstr(dir, "atlases") == NULL) {
+                if (strstr(dir, ".png") != NULL && strcmp(navigator->subdir[x].name, "textures") == 0) {
+                    navigator = &navigator->subdir[x];
+                    x = 0;
+                    break;
+                } else if (strstr(dir, ".png") == NULL && strcmp(navigator->subdir[x].name, "models") == 0) {
+                    navigator = &navigator->subdir[x];
+                    x = 0;
+                    break;
+                } else {
+                    x++;
+                }
+            } else if (strstr(dir, "atlases") != NULL) {
+                if (strcmp(navigator->subdir[x].name, "atlases") == 0) {
+                    navigator = &navigator->subdir[x];
+                    x = 0;
+                    break;
+                }
+            } else {
+                x++;
+            }
+        }
+    }
+
+    if ((pointer = strrchr(dir, '/')) != NULL) {
+        *(pointer + 1) = '\0';
+    }
     checkpoint = &dir[0];
 
     while ((pointer = strchr(checkpoint, '/')) != NULL) {
-        strncpy(name, pointer, (checkpoint - pointer));
-        checkpoint = strchr(pointer, '/');
-        checkpoint++;
+        memset(namespace, '0', sizeof(namespace));
+        strncpy(namespace, checkpoint, (pointer - checkpoint));
+        namespace[(pointer - checkpoint)] = '\0';
 
         for (int x = 0; x < (int)navigator->subcount; x++) {
-            if (strcmp(navigator->subdir[x].name, name) == 0) {
+            if (strcmp(navigator->subdir[x].name, namespace) == 0) {
                 navigator = &navigator->subdir[x];
                 break;
             }
         }
 
-        memset(name, '0', sizeof(name));
+        pointer++;
+        checkpoint = pointer;
     }
 
     return navigator;
@@ -1503,89 +1534,88 @@ FOLDER* localizeFolder(FOLDER* folder, char* path) {
 void executeCommand(FOLDER* override, FOLDER* target) {
     FOLDER* navigator = target;
     FOLDER* cursor = override;
-    ARCHIVE *src, *dest, *mirror;
-    char *pointer, *checkpoint, folder[512], command;
+    ARCHIVE *src, *dest, *mirror, *instruct;
+    char *pointer, *checkpoint, *save, *backup, name[256], command[256], namespace[512], buffer[2056];
 
     for (int x = 0; x < (int)cursor->count; x++) {
         if (strstr(cursor->content[x].name, ".instruct") != NULL) {
-            pointer = cursor->content[x].tab;
+            instruct = &cursor->content[x];
             break;
         }
     }
-    
+    if (strstr(instruct->name, ".instruct") == NULL) {
+        logger("Couldn't find a instruct file, make sure it's in the same folder as the mcmeta file\n");
+        return;
+    }
+
+    pointer = instruct->tab;
     while ((pointer = strchr(pointer, '[')) != NULL) {
-        mirror = dest = src = NULL;
-        pointer ++;
-        checkpoint = pointer;
-        pointer = strchr(pointer, ']');
-
-        //Localizing src folder
-        sscanf(pointer, "%512[^]]", folder);
-        cursor = localizeFolder(cursor, folder);
-
-
-        //linking the src file
-        if ((pointer = strrchr(folder, '/')) == NULL) {
-            pointer = checkpoint;
-        }
-
-        sscanf(pointer, "%[^\"]", folder);
-        for (int x = 0; x < (int)cursor->count; x++) {
-            if (strcmp(folder, cursor->content[x].name) == 0) {
-                src = &cursor->content[x];
-                logger("Found %s\n", folder);
-                break;
-            }
-        }
-
-        if (src == NULL) {
-            logger("Error! Couldn't find %s, Aborting", folder);
-            continue;
-        }
-        
-        pointer = strchr(pointer, '\t');
         pointer++;
-        command = *pointer;
-        pointer += 2;
-        checkpoint = pointer;
-        
-        //Localizing dest folder
-        memset(folder, '0', sizeof(folder));
-        sscanf(pointer, "%512[^\"]", folder);
-        navigator = localizeFolder(navigator, folder);
+        dest = src = NULL;
+        memset(buffer, '0', sizeof(buffer));
+        memset(namespace, '0', sizeof(namespace));
+        memset(command, '0', sizeof(command));
+        memset(name, '0', sizeof(name));
 
-        //Localizing dest file
-        if ((pointer = strrchr(folder, '/')) == NULL) {
-            pointer = checkpoint;
+        sscanf(pointer, "%2056[^[]", buffer);
+        sscanf(buffer, "%512[^]]", namespace);
+
+        cursor = localizeFolder(cursor, namespace);
+        if ((checkpoint = strrchr(namespace, '/')) == NULL) {
+            checkpoint = namespace;
         }
+        sscanf(checkpoint, "%256[^]]", name);
 
-        sscanf(pointer, "%512[^\"]", folder);
-        for (int x = 0; x < (int)navigator->count; x++) {
-            if (strcmp(navigator->content[x].name, folder) == 0) {
-                dest = &navigator->content[x];
-                logger("Found %s", folder);
+        for (int x = 0; x < (int)cursor->count; x++) {
+            if (strcmp(cursor->content[x].name, name) == 0) {
+                src = &cursor->content[x];
                 break;
             }
         }
 
-        //Executing diretrix
-        switch (command)
-        {
-        case 'x':
-            if (dest != NULL) {
-                mergeFile(src, dest);
-            } else {
-                mirror = dupFile(src);
-                addFile(&navigator, mirror);
-                mirror = NULL;
+        checkpoint = &buffer[0];
+        checkpoint = strchr(checkpoint, '\n');
+        while ((checkpoint - buffer) != (int)strlen(buffer) - 1) {
+            checkpoint += 5;
+            memset(namespace, '0', sizeof(namespace));
+            memset(command, '0', sizeof(command));
+            memset(name, '0', sizeof(name));
+            sscanf(checkpoint, "%256s \"%512[^\"]\"", command, namespace);
+            
+            navigator = localizeFolder(navigator, namespace);
+
+            if ((save = strrchr(namespace, '/')) == NULL) {
+                save = namespace;
             }
-            break;
-        
-        default:
-            break;
+            sscanf(save + 1, "%256s", name);
+
+            for (int x = 0; x < (int)navigator->count; x++) {
+                if (strcmp(navigator->content[x].name, name) == 0) {
+                    dest = &navigator->content[x];
+                    break;
+                }
+            }
+
+            //Command
+            if (strcmp(command, "x") == 0) {
+                if (dest == NULL) {
+                    mirror = dupFile(src);
+                    free(mirror->name);
+                    mirror->name = strdup(name);
+                    addFile(&navigator, mirror);
+                    mirror = NULL;
+                } else {
+                    mergeFile(src, dest);
+                }
+            } else if (strcmp(command, "texture_path") == 0) {
+
+            }
+            
+            navigator = target;
+            cursor = override;
+            checkpoint = strchr(checkpoint, '\n');
         }
     }
-   
 }
 
 int main () {
@@ -1717,7 +1747,7 @@ int main () {
                 } else {
                     for (int x = 0; x < 2; x++) {
                         optLenght = mvwprintLines(miniwin, translated[1], (1 + x), 1, (11 + x), (11 + x));
-                        mvwprintw(miniwin, (x + 1), (optLenght + 2), "[%c]", (diretrix[x] == 1) ? 'X' : (diretrix[x] == 2) ? '#' : ' ');
+                        mvwprintw(miniwin, (x + 1), (optLenght + 2), "[%c]", (diretrix[x] == 1) ? 'X' : ' ');
                     }
                     n_entries = 2;
                 }
@@ -1747,7 +1777,7 @@ int main () {
                 break;
             case 1:
                 optLenght = mvwprintLines(NULL, translated[1], (1 + cursor[0]), 1, (11 + cursor[0]), (11 + cursor[0]));
-                mvwchgat(miniwin, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
+                mvwchgat(miniwin, cursor[0]+1, 1, optLenght + 4, A_STANDOUT, 0, NULL);
                 break;
             case 2:
                 mvwchgat(miniwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name) + 1, A_STANDOUT, 0, NULL);
@@ -1787,7 +1817,7 @@ int main () {
                 mvwchgat(miniwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]]) + 4, A_NORMAL, 0, NULL);
                 break;
             case 1:
-                mvwchgat(miniwin, cursor[0]+1, 1, optLenght + 1, A_NORMAL, 0, NULL);
+                mvwchgat(miniwin, cursor[0]+1, 1, optLenght + 4, A_NORMAL, 0, NULL);
                 break;
             case 2:
                 mvwchgat(miniwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name) + 1, A_NORMAL, 0, NULL);
@@ -1901,7 +1931,7 @@ int main () {
                         
                     break;
                 case 1:
-                    switch (cursor[0])
+                        switch (cursor[0])
                     {
                     case 0:
                         if (query->value[0] != 2) {
@@ -1966,11 +1996,25 @@ int main () {
                     } else if (cursor[0] == 0) {
                         //Merge and Override
                         if (diretrix[0] == 1) {
+                            for (int x = 0; x < (int)targets->subcount - 1; x++) {
+                                overrideFiles(&targets->subdir[0], &targets->subdir[x + 1]);
+                            }
 
+                            wclear(action);
+                            type = 1;
+                            relay_message = 12;
+                            confirmationDialog(translated[1], relay_message, actionLenght, 1);
                         }
                         //Diretrix execution
                         if (diretrix[1] == 1) {
+                            for (int x = 0; x < (int)targets->subcount - 1; x++) {
+                                executeCommand(&targets->subdir[0], &targets->subdir[x + 1]);
+                            }
 
+                            wclear(action);
+                            type = 1;
+                            relay_message = 12;
+                            confirmationDialog(translated[1], relay_message, actionLenght, 1);
                         }
 
                         wclear(action);
@@ -1981,7 +2025,6 @@ int main () {
                         wclear(action);
                         cursor[2] = 0;
                         update = true;
-
                     } else {
                         wclear(action);
                         type = 1;
