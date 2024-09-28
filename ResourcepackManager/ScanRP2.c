@@ -1532,10 +1532,20 @@ FOLDER* localizeFolder(FOLDER* folder, char* path) {
 }
 
 void executeCommand(FOLDER* override, FOLDER* target) {
+    char *pointer, *checkpoint, *save, *backup, name[256], command[256], namespace[512], buffer[2056], *path;
+    path = (char*)calloc(PATH_MAX, sizeof(char));
+    getcwd(path, PATH_MAX);
+    returnString(&path, "templates");
+
+    //Program is failing to free at "golden_apple_glint", last item to be added. Maybe an null item is beeing added.
+
     FOLDER* navigator = target;
     FOLDER* cursor = override;
-    ARCHIVE *src, *dest, *mirror, *instruct;
-    char *pointer, *checkpoint, *save, *backup, name[256], command[256], namespace[512], buffer[2056];
+    FOLDER* templates = scanFolder(NULL, path, -1);
+    ARCHIVE *src, *dest, *mirror, *instruct, *model;
+    int line_number = 0, char_count = 0;
+    
+    nodelay(window, true);
 
     for (int x = 0; x < (int)cursor->count; x++) {
         if (strstr(cursor->content[x].name, ".instruct") != NULL) {
@@ -1550,6 +1560,19 @@ void executeCommand(FOLDER* override, FOLDER* target) {
 
     pointer = instruct->tab;
     while ((pointer = strchr(pointer, '[')) != NULL) {
+        wclear(miniwin);
+        if (line_number < (getmaxy(miniwin) - 2)) {
+            mvwprintLines(miniwin, report, 1, 1, (report_end - line_number), report_end);
+        } else {
+            mvwprintLines(miniwin, report, 1, 1, (report_end - (getmaxy(miniwin) - 2)), report_end);
+        }
+
+        if (wgetch(window) == KEY_RESIZE) {
+            updateWindows();
+        }
+        box(miniwin, 0, 0);
+        wrefresh(miniwin);
+
         pointer++;
         dest = src = NULL;
         memset(buffer, '0', sizeof(buffer));
@@ -1557,7 +1580,8 @@ void executeCommand(FOLDER* override, FOLDER* target) {
         memset(command, '0', sizeof(command));
         memset(name, '0', sizeof(name));
 
-        sscanf(pointer, "%2056[^[]", buffer);
+        sscanf(pointer, "%2056[^[]%n", buffer, &char_count);
+        buffer[char_count] = '\0';
         sscanf(buffer, "%512[^]]", namespace);
 
         cursor = localizeFolder(cursor, namespace);
@@ -1572,49 +1596,139 @@ void executeCommand(FOLDER* override, FOLDER* target) {
                 break;
             }
         }
+        if (src == NULL) {
+            logger("Error! %s is invalid\n", namespace);
+            line_number++;
+            continue;
+        } else {
+            logger("Executing instruction for %s\n", name);
+            line_number++;
+        }
 
         checkpoint = &buffer[0];
         checkpoint = strchr(checkpoint, '\n');
-        while ((checkpoint - buffer) != (int)strlen(buffer) - 1) {
+        while ((checkpoint - buffer) != (int)strlen(buffer) - 1 && checkpoint != NULL) {
             checkpoint += 5;
             memset(namespace, '0', sizeof(namespace));
             memset(command, '0', sizeof(command));
             memset(name, '0', sizeof(name));
-            sscanf(checkpoint, "%256s \"%512[^\"]\"", command, namespace);
-            
-            navigator = localizeFolder(navigator, namespace);
-
-            if ((save = strrchr(namespace, '/')) == NULL) {
-                save = namespace;
-            }
-            sscanf(save + 1, "%256s", name);
-
-            for (int x = 0; x < (int)navigator->count; x++) {
-                if (strcmp(navigator->content[x].name, name) == 0) {
-                    dest = &navigator->content[x];
-                    break;
-                }
-            }
+            sscanf(checkpoint, "%256s \"%512[^\"]\"", command, namespace); //when there is no argument, it swallows the namespace
 
             //Command
-            if (strcmp(command, "x") == 0) {
+            if (command[0] == 'x') {
+                navigator = localizeFolder(navigator, namespace);
+
+                if ((save = strrchr(namespace, '/')) == NULL) {
+                    save = namespace;
+                }
+                sscanf(save + 1, "%256s", name);
+
+                for (int x = 0; x < (int)navigator->count; x++) {
+                    if (strcmp(navigator->content[x].name, name) == 0) {
+                        dest = &navigator->content[x];
+                        break;
+                    }
+                }
+
+                mirror = NULL;
                 if (dest == NULL) {
                     mirror = dupFile(src);
                     free(mirror->name);
                     mirror->name = strdup(name);
                     addFile(&navigator, mirror);
-                    mirror = NULL;
+
+                    logger("Moved %s to %s\n", src->name, namespace);
+                    line_number++;
                 } else {
                     mergeFile(src, dest);
-                }
-            } else if (strcmp(command, "texture_path") == 0) {
 
+                    logger("Merged %s with %s\n", src->name, namespace);
+                    line_number++;
+                }
+                
+            } else if (strstr(command, "texture_path") != NULL) {
+                size_t length, count = 0;
+                char *temp, *scratch, *start, *end;
+                dest = &navigator->content[navigator->count - 1];
+
+                for (int x = 0; x < (int)templates->count; x++) {
+                    if (strcmp(templates->content[x].name, "model.txt") == 0) {
+                        model = &templates->content[x];
+                        break;
+                    }
+                }
+
+                if (model == NULL) {
+                    logger("Error! ./templates/model.txt is missing!\n");
+                    line_number++;
+                    continue;
+                }
+                if ((start = strstr(model->tab, "\"textures\"")) == NULL) {
+                    logger("\"textures\" section is missing from model template!\n");
+                    line_number++;
+                    continue;
+                }
+
+                end = strchr(start, '}');
+                end++;
+
+                if (strstr(command, "append") != NULL && strstr(dest->tab, "\"textures\"") != NULL) {
+                    end = &start[(end - start) - 1];
+                    start += 13;
+
+                    for (int x = (start - model->tab); x < (end - model->tab); x++) {
+                        if (model->tab[x] == ',') {
+                            count++;
+                        }
+                    }
+                }
+
+                length = (end - start) + 1;
+                scratch = (char*)calloc(length, sizeof(char));
+                strncpy(scratch, start, length - 1);
+
+                length += strlen(namespace);
+                if (count > 10) {
+                    length += 2;
+                } else {
+                    length++;
+                }
+                temp = (char*)calloc(length + 1, sizeof(char));
+                sprintf(temp, scratch, count, namespace);
+
+                free(scratch);
+                scratch = NULL;
+
+                if ((start = strstr(dest->tab, "\"textures\"")) == NULL) {
+                    start = strchr(dest->tab, '{');
+                    end = start + 1;
+
+                    length += 3;
+                    scratch = (char*)calloc(length, sizeof(char));
+                    sprintf(scratch, "\t%s\n\t", temp);
+
+                    free(temp);
+                    temp = scratch;
+                    scratch = NULL;
+                } else {
+                    end = strchr(start, '}');
+                    end++;
+                }
+
+                length = (start - dest->tab) + (dest->size - (end - dest->tab)) + strlen(temp);
+                scratch = (char*)calloc(length, sizeof(char));
+                sprintf(scratch, "%.*s%s%s", (int)(start - dest->tab), dest->tab, temp, end);
+                free(temp);
+                free(navigator->content[navigator->count - 1].tab);
+                navigator->content[navigator->count - 1].tab = scratch;
+                scratch = NULL;
             }
-            
-            navigator = target;
-            cursor = override;
+
             checkpoint = strchr(checkpoint, '\n');
         }
+
+        navigator = target;
+        cursor = override;
     }
 }
 

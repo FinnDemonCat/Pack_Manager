@@ -2,10 +2,8 @@
 {
     "credit": "[definition]",
     "textures": {
-        "layer[x]": "[definition]",
-        "[variable]": "[definition]",
-        "particle": "[definition]"
-    },
+		"%d": "%s"
+	},
     "elements": [
         {
 			"from": [x, y, z],
