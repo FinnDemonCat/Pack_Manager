@@ -261,6 +261,7 @@ void freeFolder(FOLDER* folder) {
         ARCHIVE* file = &folder->content[folder->count-1];
         free(file->name);
         free(file->tab);
+        free(&folder->content[folder->count-1]);
     }
     for (;folder->subcount > 0; folder->subcount--) {
         freeFolder(&folder->subdir[folder->subcount-1]);
@@ -447,7 +448,8 @@ void addFile (FOLDER** folder, ARCHIVE* model) {
 }
 
 void delFile (FOLDER** folder, int target) {
-    free(&folder[0]->content[target]);
+    free(folder[0]->content[target].name);
+    free(folder[0]->content[target].tab);
     for (int x = target; x < (int)folder[0]->count; x++) {
         folder[0]->content[x] = folder[0]->content[x + 1];
     }
@@ -1466,66 +1468,82 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
     logger("Finished targets linking, starting the override process\n");
 }
 
-FOLDER* localizeFolder(FOLDER* folder, char* path) {
-    char namespace[512], dir[512], *pointer = NULL, *checkpoint = NULL;
+FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
+    char namespace[512], dir[512], buffer[256], *pointer = NULL, *checkpoint = NULL;
     FOLDER* navigator = folder;
 
     memset(namespace, '0', sizeof(namespace));
     memset(dir, '0', sizeof(dir));
     sscanf(path, "%512[^:]:%512[^\"]", namespace, dir);
 
-    //If there is a path
     if (strchr(path, ':') != NULL) {
-        for (int x = 0; x < (int)navigator->subcount;) {
-            if (strcmp(navigator->name, "assets") != 0 && strcmp(navigator->subdir[x].name, "assets") == 0) {
-                navigator = &navigator->subdir[x];
-                x = 0;
-            } else if (strcmp(navigator->name, namespace) != 0 && strcmp(navigator->subdir[x].name, namespace) == 0) {
-                navigator = &navigator->subdir[x];
-                x = 0;
-            } else if (strstr(dir, "atlases") == NULL) {
-                if (strstr(dir, ".png") != NULL && strcmp(navigator->subdir[x].name, "textures") == 0) {
-                    navigator = &navigator->subdir[x];
-                    x = 0;
-                    break;
-                } else if (strstr(dir, ".png") == NULL && strcmp(navigator->subdir[x].name, "models") == 0) {
-                    navigator = &navigator->subdir[x];
-                    x = 0;
-                    break;
-                } else {
-                    x++;
-                }
-            } else if (strstr(dir, "atlases") != NULL) {
-                if (strcmp(navigator->subdir[x].name, "atlases") == 0) {
-                    navigator = &navigator->subdir[x];
-                    x = 0;
-                    break;
-                }
-            } else {
-                x++;
-            }
-        }
-    }
+        for (int x = 0; x < (int)navigator->subcount + 1; x++) {
+            if (x == (int)navigator->subcount) {
+                FOLDER* dummy = createFolder(NULL, "assets");
+                addFolder(&navigator, dummy);
+                dummy = NULL;
+                x = -1;
 
-    if ((pointer = strrchr(dir, '/')) != NULL) {
-        *(pointer + 1) = '\0';
-    }
-    checkpoint = &dir[0];
-
-    while ((pointer = strchr(checkpoint, '/')) != NULL) {
-        memset(namespace, '0', sizeof(namespace));
-        strncpy(namespace, checkpoint, (pointer - checkpoint));
-        namespace[(pointer - checkpoint)] = '\0';
-
-        for (int x = 0; x < (int)navigator->subcount; x++) {
-            if (strcmp(navigator->subdir[x].name, namespace) == 0) {
+                logger("Created folder \"assets\" originaly missing\n");
+            } else if (strcmp(navigator->subdir[x].name, "assets") == 0) {
                 navigator = &navigator->subdir[x];
                 break;
             }
         }
 
-        pointer++;
-        checkpoint = pointer;
+        for (int x = 0; x < (int)navigator->subcount + 1; x++) {
+            if (x == (int)navigator->subcount) {
+                FOLDER* dummy = createFolder(NULL, namespace);
+                addFolder(&navigator, dummy);
+                dummy = NULL;
+                x = -1;
+
+                logger("Created folder \"%s\" originaly missing\n", namespace);
+            } else if (strcmp(navigator->subdir[x].name, namespace) == 0) {
+                navigator = &navigator->subdir[x];
+                break;
+            }
+        }
+
+        if (strstr(dir, ".png") != NULL) {
+            for (int x = 0; x < (int)navigator->subcount; x++) {
+                if (strcmp(navigator->subdir[x].name, "textures") == 0) {
+                    navigator = &navigator->subdir[x];
+                    break;
+                }
+            }
+        } else {
+            for (int x = 0; x < (int)navigator->subcount; x++) {
+                if (strcmp(navigator->subdir[x].name, "models") == 0) {
+                    navigator = &navigator->subdir[x];
+                    break;
+                }
+            }
+        }
+
+        for (pointer = checkpoint = dir, pointer = strchr(pointer + 1, '/'); pointer && *pointer != '\0'; pointer = strchr(pointer + 1, '/')) {
+            memset(buffer, '0', sizeof(buffer));
+            sprintf(buffer, "%.*s", (int)(pointer - checkpoint), checkpoint);
+
+            for (int x = 0; x < (int)navigator->subcount + 1; x++) {
+                if (x == (int)navigator->subcount && !recreate_path) {
+                    logger("Couldn't find %s! aborting\n", buffer);
+                    return folder;
+                } else if (x == (int)navigator->subcount && recreate_path) {
+                    FOLDER* dummy = createFolder(NULL, buffer);
+                    addFolder(&navigator, dummy);
+                    dummy = NULL;
+                    x = - 1;
+
+                    logger("Created folder \"%s\" originaly missing\n", buffer);
+                } else if (strcmp(navigator->subdir[x].name, buffer) == 0) {
+                    navigator = &navigator->subdir[x];
+                    break;
+                }
+            }
+
+            checkpoint = pointer + 1;
+        }
     }
 
     return navigator;
@@ -1542,7 +1560,7 @@ void executeCommand(FOLDER* override, FOLDER* target) {
     FOLDER* navigator = target;
     FOLDER* cursor = override;
     FOLDER* templates = scanFolder(NULL, path, -1);
-    ARCHIVE *src, *dest, *mirror, *instruct, *model;
+    ARCHIVE *src, *dest, *instruct, *model;
     int line_number = 0, char_count = 0;
     
     nodelay(window, true);
@@ -1584,7 +1602,12 @@ void executeCommand(FOLDER* override, FOLDER* target) {
         buffer[char_count] = '\0';
         sscanf(buffer, "%512[^]]", namespace);
 
-        cursor = localizeFolder(cursor, namespace);
+        if (strchr(command, '+') != NULL) {
+            cursor = localizeFolder(cursor, namespace, true);
+        } else {
+            cursor = localizeFolder(cursor, namespace, false);
+        }
+
         if ((checkpoint = strrchr(namespace, '/')) == NULL) {
             checkpoint = namespace;
         }
@@ -1592,7 +1615,8 @@ void executeCommand(FOLDER* override, FOLDER* target) {
 
         for (int x = 0; x < (int)cursor->count; x++) {
             if (strcmp(cursor->content[x].name, name) == 0) {
-                src = &cursor->content[x];
+                src = dupFile(&cursor->content[x]);
+                delFile(&cursor, x);
                 break;
             }
         }
@@ -1616,7 +1640,11 @@ void executeCommand(FOLDER* override, FOLDER* target) {
 
             //Command
             if (command[0] == 'x') {
-                navigator = localizeFolder(navigator, namespace);
+                if (strchr(command, '+') != NULL) {
+                    navigator = localizeFolder(navigator, namespace, true);
+                } else {
+                    navigator = localizeFolder(navigator, namespace, false);
+                }
 
                 if ((save = strrchr(namespace, '/')) == NULL) {
                     save = namespace;
@@ -1630,20 +1658,22 @@ void executeCommand(FOLDER* override, FOLDER* target) {
                     }
                 }
 
-                mirror = NULL;
                 if (dest == NULL) {
-                    mirror = dupFile(src);
-                    free(mirror->name);
-                    mirror->name = strdup(name);
-                    addFile(&navigator, mirror);
-
+                    free(src->name);
+                    src->name = strdup(name);
+                    addFile(&navigator, src);
                     logger("Moved %s to %s\n", src->name, namespace);
                     line_number++;
+
+                    src = NULL;
                 } else {
                     mergeFile(src, dest);
-
+                    free(src->name);
+                    free(src->tab);
                     logger("Merged %s with %s\n", src->name, namespace);
                     line_number++;
+
+                    src = NULL;
                 }
                 
             } else if (strstr(command, "texture_path") != NULL) {
