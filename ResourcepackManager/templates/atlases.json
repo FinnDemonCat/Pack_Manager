@@ -1,0 +1,23 @@
+{
+    "sources": [
+        {
+            "type": "directory",
+            "source": "%s",
+            "prefix": "%s/"
+        },
+        {
+            "type": "single",
+            "resource": "%s"
+        },
+        {
+            "type": "paletted_permutations",
+            "textures": [
+                "%s"
+            ],
+            "palette_key": "%s",
+            "permutations": {
+                "%s": "%s"
+            }
+        }
+    ]
+}
