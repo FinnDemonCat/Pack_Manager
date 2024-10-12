@@ -202,6 +202,50 @@ void returnString (char** path, const char* argument) {
     }
 }
 
+char* returnPath (FOLDER* folder) {
+    QUEUE* list = initQueue(16);
+    char* path, *temp;
+    size_t length = 0, capacity = 1024;
+
+    path = (char*)calloc(capacity, sizeof(char));
+
+    while (strcmp(folder->parent->parent->name, "assets") != 0 && folder->parent != NULL) {
+        enQueue(list, folder->name);
+        folder = folder->parent;
+    }
+
+    for (size_t x = list->end; x > 0; x--) {
+        if (length + strlen(list->item[x - 1]) >= capacity) {
+            capacity *= 2;
+
+            temp = realloc(path, capacity * sizeof(char));
+            if (temp != NULL) {
+                path = temp;
+                temp = NULL;
+            } else {
+                logger("Failed to reallocate path string when concatenating the path\n");
+                return NULL;
+            }
+        }
+
+        if (x == 0) {
+            strcat(path, list->item[x]);
+        } else {
+            sprintf(path + strlen(path), "%s/", list->item[x - 1]);
+        }
+    }
+
+    temp = realloc(path, (strlen(path) + 1) * sizeof(char));
+    if (temp != NULL) {
+        path = temp;
+        temp = NULL;
+    } else {
+        logger("Failed to reallocate path string when trimming the path\n");
+    }
+
+    return path;
+}
+
 void printLog(char* path) {
     char date[1024];
 
@@ -280,21 +324,42 @@ void addOBJ (OBJECT** file, OBJECT* value) {
 }
 
 void delOBJ (OBJECT** file, size_t key) {
+    OBJECT* compass = &file[0]->value[key];
     free(file[0]->value[key].declaration);
 
-    for (; key < (file[0]->count - 1); key++) {
-        file[0]->value[key] = file[0]->value[key + 1];
+    for (; compass->count > 0; compass->count--) {
+        delOBJ(&compass, compass->count);
+    }
+    free(file[0]->value[key].value);
+
+    for (size_t x = key; x < (file[0]->count - 1); x++) {
+        file[0]->value[x] = file[0]->value[x + 1];
     }
 
     file[0]->count--;
-    OBJECT* temp = (OBJECT*)realloc(file[0]->value, file[0]->count * sizeof(OBJECT));
+    if (file[0]->count == file[0]->capacity/2 && file[0]->capacity/2 > 0) {
+        file[0]->capacity /= 2;
 
-    if (temp == NULL) {
-        logger("Error reallocating memory for %s while removing a key\n", file[0]->value);
-        return;
-    } else {
-        file[0]->value = temp;
+        OBJECT* temp = (OBJECT*)realloc(file[0]->value, file[0]->capacity * sizeof(OBJECT));
+        if (temp == NULL) {
+            logger("Shrank %s due to file removal\n", temp->declaration);
+            file[0]->value = temp;
+        } else {
+            logger("Failed to shrink %s!\n", file[0]->declaration);
+        }
     }
+}
+
+OBJECT* dupOBJ (OBJECT* target) {
+    OBJECT* mirror = createOBJ(target->declaration);
+    OBJECT* temp;
+    for (int x = 0; x < (int) target->count; x++) {
+        temp = dupOBJ(&mirror->value[x]);
+        addOBJ(&mirror, temp);
+        temp = NULL;
+    }
+
+    return mirror;
 }
 
 void freeOBJ (OBJECT* file) {
@@ -313,88 +378,14 @@ OBJECT* processOBJ (char* obj) {
 
     file = createOBJ("obj");
 
-    for (pointer = strchr(obj, '\"'); pointer != NULL; pointer = strchr(pointer + 1, ',')) {
-        pointer = strchr(pointer, '\"');
-        sscanf(pointer, "\"%128[^\"]\"", key);
-        entry = createOBJ(key);
+    return file;
+}
 
-        checkpoint = strchr(pointer, ':');
-        checkpoint += 2;
+char* printJSON (OBJECT* json) {
+    char *temp, *object, *placeholder, *file, buffer[1024], *scratch, *pointer, *checkpoint;
+    size_t lenght, capacity = 1024, limit = 1024;
+    OBJECT* navigator = json, *cursor;
 
-        switch (*checkpoint)
-        {
-        case '[':
-            result = createOBJ("array");
-            save = strchr(checkpoint, '{');
-            save++;
-
-            while (save != NULL) {
-                for (int x = 1, y = 0; x != 0 && y < (int)strlen(obj) - 1; y++) {
-                    if (save[y] == '{') {
-                        x++;
-                    } else if (save[y] == '}') {
-                        x--;
-                    }
-                    if (x == 0) {
-                        backup = &save[y];
-                    }
-                }
-                
-                length = (backup - save);
-                temp = (char*)calloc(length + 1, sizeof(char));
-                strncpy(temp, save, length);
-
-                OBJECT* placeholder = processOBJ(temp);
-                addOBJ(&result, placeholder);
-
-                free(temp);
-                save = backup;
-
-                for (int x = 0; x < (int)strlen(obj) - 1; x++) {
-                    if (save[x] == '{') {
-                        save = &save[x + 1];
-                        break;
-                    } else if (save[x] == ']') {
-                        pointer = &save[x];
-                        save = NULL;
-                        break;
-                    }
-                }
-            }
-
-            break;
-        case '{':
-            save = checkpoint;
-
-            for (int x = 1; x != 0;) {
-                if (save[x] == '{') {
-                    x++;
-                } else if (save[x] == '}') {
-                    x--;
-                }
-                if (x == 0) {
-                    save = &save[x];
-                }
-            }
-
-            length = (save - checkpoint);
-            temp = (char*)calloc(length + 1, sizeof(char));
-            strncpy(temp, checkpoint, length);
-            
-            result = processOBJ(temp);
-            free(temp);
-            break;
-        default:
-            sscanf(checkpoint, "\"%128[^\"]\"", value);
-            result = createOBJ(value);
-            break;
-        }
-
-        addOBJ(&entry, result);
-        addOBJ(&file, entry);
-
-        entry = result = NULL;
-    }
 
     return file;
 }
@@ -596,13 +587,15 @@ void delFile (FOLDER** folder, int target) {
     for (int x = target; x < (int)folder[0]->count; x++) {
         folder[0]->content[x] = folder[0]->content[x + 1];
     }
-
-    ARCHIVE* backup = (ARCHIVE*)realloc(folder[0]->content, (folder[0]->count - 1) * sizeof(ARCHIVE));
-    if (backup == NULL) {
-        logger("Couldn't trim %s content size\n", folder[0]->name);
-    } else {
-        folder[0]->content = backup;
-        folder[0]->count--;
+    
+    if (folder[0]->count == folder[0]->file_capacity/2 && folder[0]->file_capacity/2 > 0) {
+        ARCHIVE* backup = (ARCHIVE*)realloc(folder[0]->content, folder[0]->capacity * sizeof(ARCHIVE));
+        if (backup == NULL) {
+            logger("Couldn't trim %s content size\n", folder[0]->name);
+        } else {
+            folder[0]->content = backup;
+            folder[0]->count--;
+        }
     }
 }
 
@@ -1455,59 +1448,61 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
     memset(namespace, '0', sizeof(namespace));
     memset(dir, '0', sizeof(dir));
     sscanf(path, "%512[^:]:%512[^\"]", namespace, dir);
+    if (strchr(path, ':') == NULL) {
+        strcpy(dir, namespace);
+        strcpy(namespace, "minecraft");
+    }
 
-    if (strchr(path, ':') != NULL) {
+    for (int x = 0; x < (int)navigator->subcount + 1; x++) {
+        if (x == (int)navigator->subcount) {
+            FOLDER* dummy = createFolder(NULL, "assets");
+            addFolder(&navigator, dummy);
+            dummy = NULL;
+            x = -1;
+
+            logger("Created folder \"assets\" originaly missing\n");
+        } else if (strcmp(navigator->subdir[x].name, "assets") == 0) {
+            navigator = &navigator->subdir[x];
+            break;
+        }
+    }
+
+    for (int x = 0; x < (int)navigator->subcount + 1; x++) {
+        if (x == (int)navigator->subcount) {
+            FOLDER* dummy = createFolder(NULL, namespace);
+            addFolder(&navigator, dummy);
+            dummy = NULL;
+            x = -1;
+
+            logger("Created folder \"%s\" originaly missing\n", namespace);
+        } else if (strcmp(navigator->subdir[x].name, namespace) == 0) {
+            navigator = &navigator->subdir[x];
+            break;
+        }
+    }
+
+    for (pointer = checkpoint = dir, pointer = strchr(pointer + 1, '/'); pointer && *pointer != '\0'; pointer = strchr(pointer + 1, '/')) {
+        memset(buffer, '0', sizeof(buffer));
+        sprintf(buffer, "%.*s", (int)(pointer - checkpoint), checkpoint);
+
         for (int x = 0; x < (int)navigator->subcount + 1; x++) {
-            if (x == (int)navigator->subcount) {
-                FOLDER* dummy = createFolder(NULL, "assets");
+            if (x == (int)navigator->subcount && !recreate_path) {
+                logger("Couldn't find %s! aborting\n", buffer);
+                return NULL;
+            } else if (x == (int)navigator->subcount && recreate_path) {
+                FOLDER* dummy = createFolder(NULL, buffer);
                 addFolder(&navigator, dummy);
                 dummy = NULL;
-                x = -1;
+                x = - 1;
 
-                logger("Created folder \"assets\" originaly missing\n");
-            } else if (strcmp(navigator->subdir[x].name, "assets") == 0) {
+                logger("Created folder \"%s\" originaly missing\n", buffer);
+            } else if (strcmp(navigator->subdir[x].name, buffer) == 0) {
                 navigator = &navigator->subdir[x];
                 break;
             }
         }
 
-        for (int x = 0; x < (int)navigator->subcount + 1; x++) {
-            if (x == (int)navigator->subcount) {
-                FOLDER* dummy = createFolder(NULL, namespace);
-                addFolder(&navigator, dummy);
-                dummy = NULL;
-                x = -1;
-
-                logger("Created folder \"%s\" originaly missing\n", namespace);
-            } else if (strcmp(navigator->subdir[x].name, namespace) == 0) {
-                navigator = &navigator->subdir[x];
-                break;
-            }
-        }
-
-        for (pointer = checkpoint = dir, pointer = strchr(pointer + 1, '/'); pointer && *pointer != '\0'; pointer = strchr(pointer + 1, '/')) {
-            memset(buffer, '0', sizeof(buffer));
-            sprintf(buffer, "%.*s", (int)(pointer - checkpoint), checkpoint);
-
-            for (int x = 0; x < (int)navigator->subcount + 1; x++) {
-                if (x == (int)navigator->subcount && !recreate_path) {
-                    logger("Couldn't find %s! aborting\n", buffer);
-                    return folder;
-                } else if (x == (int)navigator->subcount && recreate_path) {
-                    FOLDER* dummy = createFolder(NULL, buffer);
-                    addFolder(&navigator, dummy);
-                    dummy = NULL;
-                    x = - 1;
-
-                    logger("Created folder \"%s\" originaly missing\n", buffer);
-                } else if (strcmp(navigator->subdir[x].name, buffer) == 0) {
-                    navigator = &navigator->subdir[x];
-                    break;
-                }
-            }
-
-            checkpoint = pointer + 1;
-        }
+        checkpoint = pointer + 1;
     }
 
     return navigator;
@@ -1673,7 +1668,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 }
 
 void executeCommand(FOLDER* target, FOLDER* override) {
-    char *pointer, *checkpoint, *save, *backup, name[256], command[256], namespace[512], buffer[2056], *path;
+    char *pointer, *checkpoint, *save, *eco, backup[1024], name[256], command[256], namespace[512], buffer[2056], *path;
     path = (char*)calloc(PATH_MAX, sizeof(char));
     getcwd(path, PATH_MAX);
     returnString(&path, "templates");
@@ -1681,8 +1676,10 @@ void executeCommand(FOLDER* target, FOLDER* override) {
     FOLDER* navigator = target;
     FOLDER* cursor = override;
     FOLDER* templates = scanFolder(NULL, path, -1);
-    ARCHIVE *src, *dest, *instruct, *model;
+    ARCHIVE *src, *instruct, *model;
+    OBJECT *pattern, *compass, *mirror, *dest_json;
     int line_number = 0, char_count = 0;
+    pattern = compass = mirror= dest_json = NULL;
     
     nodelay(window, true);
     free(path);
@@ -1693,7 +1690,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
             break;
         }
     }
-    if (strstr(instruct->name, ".instruct") == NULL) {
+    if (instruct == NULL) {
         logger("Couldn't find a instruct file, make sure it's in the same folder as the mcmeta file\n");
         return;
     }
@@ -1714,7 +1711,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
         wrefresh(miniwin);
 
         pointer++;
-        dest = src = NULL;
+        src = NULL;
         memset(buffer, '0', sizeof(buffer));
         memset(namespace, '0', sizeof(namespace));
         memset(command, '0', sizeof(command));
@@ -1725,31 +1722,49 @@ void executeCommand(FOLDER* target, FOLDER* override) {
         sscanf(buffer, "%512[^]]", namespace);
 
         if (strchr(command, '+') != NULL) {
-            cursor = localizeFolder(cursor, namespace, true);
+            if (namespace[0] == '.') {
+                logger("Source path refers to itself\n");
+                cursor = localizeFolder(navigator, namespace + 2, true);
+            } else {
+                cursor = localizeFolder(cursor, namespace, true);
+            }
         } else {
-            cursor = localizeFolder(cursor, namespace, false);
+            if (namespace[0] == '.') {
+                logger("Source path refers to itself\n");
+                cursor = localizeFolder(navigator, namespace + 2, false);
+            } else {
+                cursor = localizeFolder(cursor, namespace, false);
+            }
         }
 
         if ((checkpoint = strrchr(namespace, '/')) == NULL) {
             checkpoint = namespace;
         }
+        checkpoint++;
         sscanf(checkpoint, "%256[^]]", name);
 
         for (int x = 0; x < (int)cursor->count; x++) {
             if (strcmp(cursor->content[x].name, name) == 0) {
                 src = dupFile(&cursor->content[x]);
-                delFile(&cursor, x);
+
+                if (command[0] == 'x') {
+                    delFile(&cursor, x);
+                } 
                 break;
             }
         }
 
-        if (src == NULL && strstr(namespace, "atlases") == NULL) {
+        if (src == NULL) {
             logger("Error! %s is invalid\n", namespace);
             line_number++;
             continue;
         } else {
             logger("Executing instruction for %s\n", name);
             line_number++;
+
+            compass = createOBJ(src->name);
+            compass->value = processOBJ(src->tab);
+            compass->count++;
         }
 
         checkpoint = buffer;
@@ -1762,302 +1777,188 @@ void executeCommand(FOLDER* target, FOLDER* override) {
             sscanf(checkpoint, "%256s \"%512[^\"]\"", command, namespace);
 
             //Command
-            if (command[0] == 'x') {
-
-                //When failed it should return null
-                if (strchr(command, '+') != NULL) {
-                    navigator = localizeFolder(navigator, namespace, true);
+            if (command[0] == 'x' || command[0] == 'c') {
+                if (command[1] == '+') {
+                    navigator = localizeFolder(navigator, namespace, true); 
                 } else {
                     navigator = localizeFolder(navigator, namespace, false);
                 }
 
-                if ((save = strrchr(namespace, '/')) == NULL) {
-                    save = namespace;
-                }
-                sscanf(save + 1, "%256s", name);
+                logger("Adding %s to %s", src->name, namespace);
+                line_number++;
 
-                for (int x = 0; x < (int)navigator->count; x++) {
-                    if (strcmp(navigator->content[x].name, name) == 0) {
-                        dest = &navigator->content[x];
-                        break;
-                    }
-                }
-
-                if (dest == NULL) {
-                    free(src->name);
-                    src->name = strdup(name);
-                    addFile(&navigator, src);
-                    logger("Moved %s to %s\n", src->name, namespace);
-                    line_number++;
-
-                    src = NULL;
-                } else {
-                    mergeFile(src, dest);
-                    free(src->name);
-                    free(src->tab);
-                    logger("Merged %s with %s\n", src->name, namespace);
-                    line_number++;
-
-                    src = NULL;
-                }
-                
-            } else if (strstr(command, "texture_path") != NULL) {
-                size_t length, count = 0;
-                OBJECT* file;
-                char *temp, *scratch, *start, *end;
-                dest = &navigator->content[navigator->count - 1];
-
-                for (int x = 0; x < (int)templates->count; x++) {
-                    if (strcmp(templates->content[x].name, "model.txt") == 0) {
-                        model = &templates->content[x];
-                        break;
-                    }
-                }
-
-                if (model == NULL) {
-                    logger("Error! ./templates/model.txt is missing!\n");
-                    line_number++;
-                    continue;
-                }
-
-                file = processOBJ(model->tab);
-
-                /*
-                if ((start = strstr(model->tab, "\"textures\"")) == NULL) {
-                    logger("\"textures\" section is missing from model template!\n");
-                    line_number++;
-                    continue;
-                }
-                 
-                end = strchr(start, '}');
-                end++;
-
-                if (strstr(command, "append") != NULL && strstr(dest->tab, "\"textures\"") != NULL) {
-                    end = &start[(end - start) - 1];
-                    start += 13;
-
-                    for (int x = (start - model->tab); x < (end - model->tab); x++) {
-                        if (model->tab[x] == ',') {
-                            count++;
-                        }
-                    }
-                }
-
-                length = (end - start) + 1;
-                scratch = (char*)calloc(length, sizeof(char));
-                strncpy(scratch, start, length - 1);
-
-                length += snprintf(NULL, 0, temp, scratch, count, namespace);
-                temp = (char*)calloc(length + 1, sizeof(char));
-                sprintf(temp, scratch, count, namespace);
-
-                free(scratch);
-                scratch = NULL;
-
-                if ((start = strstr(dest->tab, "\"textures\"")) == NULL) {
-                    start = strchr(dest->tab, '{');
-                    end = start + 1;
-
-                    length += 3;
-                    scratch = (char*)calloc(length, sizeof(char));
-                    sprintf(scratch, "\t%s\n\t", temp);
-
-                    free(temp);
-                    temp = scratch;
-                    scratch = NULL;
-                } else {
-                    end = strchr(start, '}');
-                    end++;
-                }
-
-                length = (start - dest->tab) + (dest->size - (end - dest->tab)) + strlen(temp);
-                scratch = (char*)calloc(length, sizeof(char));
-                sprintf(scratch, "%.*s%s%s", (int)(start - dest->tab), dest->tab, temp, end);
-                free(temp);
-                free(navigator->content[navigator->count - 1].tab);
-                navigator->content[navigator->count - 1].tab = scratch;
-                scratch = NULL;
-                 */
+                addFile(&navigator, src);
+                src = NULL;
 
             } else if (strstr(command, "remove") != NULL) {
-                for (int x = 0; x < (int)navigator->count; x++) {
-                    if (strcmp(navigator->content[x].name, src->name) == 0) {
-                        delFile(&navigator, x);
+                navigator = localizeFolder(navigator, namespace, false);
+                if (navigator == NULL) {
+                    logger("File path is invalid\n");
+                    line_number++;
+
+                    break;
+                }
+
+                for (int x = 0; x < (int)cursor->count; x++) {
+                    if (strcmp(cursor->content[x].name, src->name) == 0) {
+                        delFile(&cursor, x);
                         break;
                     }
                 }
-            } else if (strstr(namespace, "atlases") != NULL) {
-                QUEUE* folders;
-                FOLDER* locate;
-                OBJECT* file;
-                size_t length;
-                char *temp, *scratch, *start, *end;
-                int position[16], dirnumber;
 
-                for (int x = 0; x < 16; x++) {
-                    position[x] = 0;
+            } if (strstr(command, "texture_path") != NULL) {
+                //Linking textures key
+                for (int x = 0; x < (int)compass->count; x++) {
+                    if (strcmp(compass->value[x].declaration, "textures") == 0) {
+                        dest_json = &compass->value[x];
+                        break;
+                    }
                 }
 
-                //Linking template file
+                if (dest_json == NULL) {
+                    logger("No textures key was found in %s. A textures key will be added manually\n");
+                    line_number++;
+
+                    pattern = createOBJ("textures");
+                    addOBJ(&pattern, createOBJ("obj"));
+                    addOBJ(&dest_json, pattern);
+
+                    dest_json = pattern;
+                    pattern = NULL;
+                }
+
+                if (strstr(command, "set") != NULL) {
+                    for (int x = 0; x < (int)dest_json->count; x++) {
+                        delOBJ(&dest_json, x);
+                    }
+                }
+
+                snprintf(backup, 1023, "\"%lld\": \"%s\"", dest_json->count, namespace);
+                pattern = processOBJ(backup);
+                addOBJ(&dest_json->value[0].value, pattern);
+                pattern = NULL;
+
+            } if (strstr(command, "autofill") != NULL) {
+                // continue debugging of atlases fill
+                for (int x = 0; x < (int)compass->count; x++) {
+                    if (strcmp(compass->value[0].value[x].declaration, "sources") == 0) {
+                        dest_json = &compass->value[0].value[x];
+                        break;
+                    }
+                }
+
+                navigator = localizeFolder(navigator, "minecraft:textures/", false);
+                navigator = navigator->parent->parent;
+
+                int dirnumber = 0, position[16];
+                char* temp, *scratch, *burn, *single;
+                size_t length;
+
+                // Linking model template
                 for (int x = 0; x < (int)templates->count; x++) {
                     if (strcmp(templates->content[x].name, "atlases.json") == 0) {
                         model = &templates->content[x];
                         break;
                     }
                 }
-                if (model == NULL) {
-                    logger("Error! ./templates/atlases.json is missing!\n");
-                    line_number++;
-                    continue;
-                } else {
-                    //Preparing from base atlas template
-                    // start = strchr(model->tab, '[');
-                    // start = strchr(start, '{');
-                    // end = strchr(start, '}');
-                    // end++;
 
-                    // backup = (char*)calloc((end - start) + 1, sizeof(char));
-                    // sprintf(backup, "%.*s", (int)(end - start), start);
+                // Copying directory obj
+                save = strchr(model->tab, '[');
+                save = strchr(save, '{');
+                eco = save + 1;
+                save = strchr(save, '}');
+                save = &eco[(save - eco) - 1];
+
+                length = (save - eco);
+                scratch = (char*)calloc(length + 1, sizeof(char));
+                strncpy(scratch, eco, length);
+
+                save = strchr(save + 1, '{');
+                save++;
+                eco = strchr(save, '}');
+                length = (eco - save);
+                single = (char*)calloc(length + 1, sizeof(char)); //Presave single preset
+                strncpy(single, save, length);
+
+                for (int x = 0; x < 16; x++) {
+                    position[x] = 0;
                 }
 
-                //Linking destination path
-                if (strchr(command, '+') != NULL) {
-                    navigator = localizeFolder(navigator, namespace, true);
-                } else {
-                    navigator = localizeFolder(navigator, namespace, false);
-                }
+                // Getting the namespaces's names
+                QUEUE* namespaces = initQueue(navigator->subcount - 1);
 
-                //Linking destination file
-                if ((start = strrchr(namespace, '/')) == NULL) {
-                    if ((start = strchr(namespace, ':')) == NULL) {
-                        start = &namespace[1];
-                    }
-                }
-                sscanf(start + 1, "%s", name);
-
-                for (int x = 0; x < (int)navigator->count; x++) {
-                    if (strcmp(navigator->content[x].name, name) == 0) {
-                        dest = &navigator->content[x];
-                        break;
+                for (int x = 0; x < (int)navigator->subcount; x++) {
+                    if (strcmp(navigator->subdir[x].name, "minecraft") != 0) {
+                        enQueue(namespaces, navigator->subdir[x].name);
                     }
                 }
 
-                file = processOBJ(dest->tab);
-                
-                /* 
-                if (dest == NULL) {
-                    if (strchr(command, '+') != NULL) {
-                        logger("The atlases file was not found, creating one from template named as %s\n", name);
+                // Starting to travel through all namespaces
+                for (int x = 0; x < namespaces->end; x++) {
+                    memset(backup, '0', sizeof(backup));
+                    sprintf(backup, "%s:textures/", namespaces->item[x]);
 
-                        for (int x = 0; x < (int)templates->count; x++) {
-                            if (strcmp(templates->content[x].name, "atlases.json") == 0) {
-                                //Preparing and cleaning template file
-                                ARCHIVE* mirror = dupFile(&templates->content[x]);
+                    navigator = localizeFolder(target, backup, false);
+                    memset(backup, '0', sizeof(backup));
 
-                                start = strchr(mirror->tab, '[');
-                                start++;
-                                end = strrchr(mirror->tab, ']');
+                    while (dirnumber >= 0) {
+                        while (position[dirnumber] < (int)navigator->subcount) {
+                            navigator = &navigator->subdir[position[dirnumber]];
 
-                                length = snprintf(NULL, 0, "%.*s\n\t%s", (int)(start - mirror->tab), mirror->tab, end);;
-                                temp = (char*)calloc(length + 1, sizeof(char));
-                                sprintf(temp, "%.*s\n\t%s", (int)(start - mirror->tab), mirror->tab, end);
-
-                                free(mirror->tab);
-                                mirror->tab = temp;
-                                temp = NULL;
-
-                                free(mirror->name);
-                                mirror->name = strdup(namespace);
-                                returnString(&mirror->name, "name");
-
-                                //Linking the destination of base file
-                                path = (char*)calloc(512, sizeof(char));
-                                sprintf(path, "minecraft:atlases/%s", mirror->name);
-                                path = realloc(path, (strlen(path) + 1) * sizeof(char));
-
-                                //Copying file to destination
-                                navigator = localizeFolder(target, path, true);
-                                addFile(&navigator, mirror);
-                                dest = &navigator->content[navigator->count - 1];
-
-                                mirror = NULL;
-                                free(path);
-                                path = NULL;
-                                
-                                break;
-                            }
+                            position[dirnumber]++;
+                            dirnumber++;
                         }
-                    } else {
-                        logger("the atlases file %s doesn't exist\n", namespace);
-                        continue;
-                    }
-                }
-                */
 
-                //Parameters
-                if (strstr(command, "autofill") != NULL) {
-                    locate = localizeFolder(target, "minecraft:textures/", false);
-                    locate = locate->parent->parent;
-                    folders = initQueue(locate->subcount - 1);
+                        temp = returnPath(navigator);
+                        temp[strlen(temp) - 1] = '\0';
 
-                    for (int x = 0; x < (int)locate->subcount; x++) {
-                        if (strcmp(locate->subdir[x].name, "minecraft") != 0) {
-                            enQueue(folders, locate->subdir[x].name);
+                        if (navigator->count > 1) {
+                            length = snprintf(NULL, 0, scratch, temp, temp);
+
+                            burn = (char*)calloc(length + 1, sizeof(char));
+                            sprintf(burn, scratch, temp, temp);
+
+                        } else if (navigator->count == 1) {
+                            length = strlen(temp) + strlen(navigator->content->name);
+                            char* moment = realloc(temp, (length + 2) * sizeof(char));
+                            temp = moment;
+                            moment = NULL;
+                            sprintf(temp + strlen(temp), "/%s", navigator->content->name);
+
+                            length = snprintf(NULL, 0, single, temp);
+                            burn = (char*)calloc(length + 1, sizeof(char));
+                            sprintf(burn, single, temp);
                         }
-                    }
 
-                    for (int x = 0; x < folders->end; x++) {
-                        //Finding end of list to append
-                        start = strrchr(dest->tab, '[');
-                        start++;
+                        mirror = processOBJ(burn);
+                        free(burn);
 
-                        //Preparing path name
-                        length = snprintf(NULL, 0, "%s:textures/", folders->item[x]);
-                        path = (char*)calloc(length + 1, sizeof(char));
-                        sprintf(path, "%s:textures/", folders->item[x]);
+                        addOBJ(&dest_json->value, mirror);
+                        mirror = NULL;
 
-                        locate = localizeFolder(target, path, false);
-
-                        //Transversing through all folders
-                        while (dirnumber >= 0) {
-                            for (; position[dirnumber] < (int)locate->subcount;) {
-                                if (locate->subcount > 0) {
-                                    locate = &locate->subdir[position[dirnumber]];
-
-                                    position[dirnumber]++;
-                                    dirnumber++;
-                                }
-                            }
-
-                            if (locate->count > 0) {
-
-                            }
-
-                            returnString(&path, "path");
-                            locate = locate->parent;
+                        while (position[dirnumber] == (int)navigator->subcount && dirnumber > -1) {
+                            navigator = navigator->parent;
+                            position[dirnumber] = 0;
                             dirnumber--;
                         }
-                        
-                        for (int x = 0; x < 16; x++) {
-                            position[x] = 0;
+                        if (dirnumber < 0) {
+                            dirnumber = 0;
+                            break;
                         }
-                        dirnumber = 0;
-                        free(path);
                     }
-                } else if (strstr(command, "set") != NULL) {
-
-                } else if (strstr(command, "append") != NULL) {
-                    
                 }
-
-
             }
-
             checkpoint = strchr(checkpoint, '\n');
         }
 
+
+        //Print ready dest json
+        free(src->tab);
+        src->tab = printJSON(compass);
+
         navigator = target;
         cursor = override;
+        freeOBJ(compass);
     }
 }
 
