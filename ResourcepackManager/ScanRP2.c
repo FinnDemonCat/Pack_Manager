@@ -372,22 +372,191 @@ void freeOBJ (OBJECT* file) {
 }
 
 OBJECT* processOBJ (char* obj) {
-    char *pointer, *checkpoint, *save, *backup, *temp, key[128], value[128];
+    char *pointer, *checkpoint, *save, *backup, *temp, *placeholder, key[128], value[128];
     OBJECT *file, *entry, *result;
     size_t length;
 
     file = createOBJ("obj");
+    for (pointer = strchr(obj, '\"'); pointer != NULL; pointer = strchr(pointer + 1, ',')) {
+        pointer = strchr(pointer, '\"');
 
+        sscanf(pointer, "\"%128[^\"]\"", key);
+        entry = createOBJ(key);
+
+        checkpoint = strchr(pointer, ':');
+        checkpoint += 2;
+
+        switch (*checkpoint) {
+        case '{':
+            save = checkpoint;
+            for (size_t x = 1, y = 0; x > 0 && y < strlen(temp); y++) {
+                    if (save[y] == '{') {
+                    x++;
+                } else if (save[y] == '}') {
+                    x--;
+                }
+
+                if (x == 0) {
+                    save = &save[y];
+                }
+            }
+
+            length = (save - checkpoint);
+            placeholder = (char*)calloc(length + 1, sizeof(char));
+            strncpy(placeholder, checkpoint, length);
+
+            result = processOBJ(placeholder);
+            addOBJ(&entry, result);
+            free(placeholder);
+
+            break;
+        case '[':
+            save = strchr(checkpoint, ']');
+            length = (save - checkpoint);
+            temp = (char*)calloc(length + 1, sizeof(char));
+            strncpy(temp, checkpoint + 1, length - 1);
+            
+            save = strchr(temp, '{');
+
+            while (save != NULL) {
+                backup = save;
+                for (size_t x = 1, y = 1; x > 0 && y < strlen(temp); y++) {
+                    if (save[y] == '{') {
+                        x++;
+                    } else if (save[y] == '}') {
+                        x--;
+                    }
+
+                    if (x == 0) {
+                        save = &save[y];
+                    }
+                }
+
+                length = (save - backup);
+                placeholder = (char*)calloc(length + 1, sizeof(char));
+                strncpy(placeholder, backup, length);
+
+                result = processOBJ(placeholder);
+                addOBJ(&entry, result);
+                free(placeholder);
+                
+                save = strchr(save, '{');
+            }
+
+            pointer = strchr(checkpoint, ']');
+            break;
+        default:
+            sscanf(checkpoint, "\"%128[^\"]\"", value);
+            result = createOBJ(value);
+            addOBJ(&entry, result);
+            break;
+        }
+
+        addOBJ(&file, entry);
+        entry = result = NULL;
+    }
     return file;
 }
 
+void addTab (char** file) {
+    char *pointer, *checkpoint, *save, *placeholder;
+    size_t count = 0, length;
+
+    for (pointer = strchr(*file, '\n'); pointer != NULL; pointer = strchr(pointer + 1, '\n')) {
+        count++;
+    }
+
+    placeholder = strdup(*file);
+
+    length = strlen(*file) + count;
+    save = (char*)realloc(*file, (length + 1) * sizeof(char));
+
+    if (save != NULL) {
+        *file = save;
+    } else {
+        return;
+    }
+
+    *file[0] = '\0';
+
+    for (
+        pointer = checkpoint = placeholder, pointer = strchr(pointer + 1, '\n');
+        pointer != NULL;
+        checkpoint = pointer, pointer = strchr(pointer + 1, '\n')
+    ) {
+        pointer++;
+        sprintf(*file + strlen(*file), "%.*s\t", (int)(pointer - checkpoint), checkpoint);
+    }
+
+    strcat(*file, "}");
+    free(placeholder);
+}
+
 char* printJSON (OBJECT* json) {
-    char *temp, *object, *placeholder, *file, buffer[1024], *scratch, *pointer, *checkpoint;
-    size_t lenght, capacity = 1024, limit = 1024;
-    OBJECT* navigator = json, *cursor;
+    char *pointer, *checkpoint, *temp, *buffer = NULL, *placeholder, *backup, *obj = "{\n\t%s}", *array = "[\n\t%s]";
+    OBJECT *navigator;
+    size_t length, size = 0;
 
+    for (size_t x = 0; x < json->count; x++) {
+        navigator = &json->value[x];
 
-    return file;
+        if (strcmp(navigator->value->declaration, "obj") == 0) {
+
+            if (navigator->count > 1) {
+                length = 0;
+                for (size_t y = 0; y < navigator->count; y++) {
+                    pointer = printJSON(&navigator->value[y]);
+                    addTab(&pointer);
+
+                    size = snprintf(NULL, 0, "%s%s", pointer, (y == navigator->count - 1) ? "\n\t" : ",\n\t");
+                    temp = (char*)realloc(placeholder, (size + length + 2) * sizeof(char));
+                    if (temp == NULL) {
+                        logger("Failed to realloc memory when expanding key string: %s\n", strerror(errno));
+                        break;
+                    } else {
+                        placeholder = temp;
+                        temp = NULL;
+
+                        sprintf(placeholder + length, "%s%s", pointer, (y == navigator->count - 1) ? "\n\t" : ",\n\t");
+                        length += size;
+                        free(pointer);
+                    }
+                }
+                size = 0;
+                length = snprintf(NULL, 0, array, placeholder);
+                pointer = (char*)calloc(length + 1, sizeof(char));
+                sprintf(pointer, array, placeholder);
+                free(placeholder);
+            } else {
+                pointer = printJSON(navigator->value);
+            }
+        } else {
+            length = snprintf(NULL, 0, "\"%s\"", navigator->value->declaration);
+            pointer = (char*)calloc(length + 1, sizeof(char));
+            sprintf(pointer, "\"%s\"", navigator->value->declaration);
+        }
+        
+        length = snprintf(NULL, 0, "\"%s\": %s%s", navigator->declaration, pointer, (x == json->count - 1) ? "\n" : ",\n\t");
+        temp = (char*)realloc(buffer, (length + size + 1) * sizeof(char));
+        
+        if (temp == NULL) {
+            logger("Failed to realloc memory when expanding key string: %s\n", strerror(errno));
+            break;
+        } else {
+            buffer = temp;
+            temp = NULL;
+        }
+
+        sprintf(buffer + size, "\"%s\": %s%s", navigator->declaration, pointer, (x == json->count - 1) ? "\n" : ",\n\t");
+        free(pointer);
+        size += length;
+    }
+
+    length = snprintf(NULL, 0, obj, buffer);
+    placeholder = (char*)calloc(length + 1, sizeof(char));
+    sprintf(placeholder, obj, buffer);
+    free(buffer);
+    return placeholder;
 }
 
 void freeFolder(FOLDER* folder) {
@@ -1669,7 +1838,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
 void executeCommand(FOLDER* target, FOLDER* override) {
     char *pointer, *checkpoint, *save, *eco, backup[1024], name[256], command[256], namespace[512], buffer[2056], *path;
-    path = (char*)calloc(PATH_MAX, sizeof(char));
+    path = (char*)calloc(PATH_MAX + 1, sizeof(char));
     getcwd(path, PATH_MAX);
     returnString(&path, "templates");
 
@@ -1677,9 +1846,8 @@ void executeCommand(FOLDER* target, FOLDER* override) {
     FOLDER* cursor = override;
     FOLDER* templates = scanFolder(NULL, path, -1);
     ARCHIVE *src, *instruct, *model;
-    OBJECT *pattern, *compass, *mirror, *dest_json;
+    OBJECT *pattern, *compass;
     int line_number = 0, char_count = 0;
-    pattern = compass = mirror= dest_json = NULL;
     
     nodelay(window, true);
     free(path);
@@ -1745,11 +1913,12 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
         for (int x = 0; x < (int)cursor->count; x++) {
             if (strcmp(cursor->content[x].name, name) == 0) {
-                src = dupFile(&cursor->content[x]);
-
                 if (command[0] == 'x') {
+                    src = dupFile(&cursor->content[x]);
                     delFile(&cursor, x);
-                } 
+                } else {
+                    src = &cursor->content[x];
+                }
                 break;
             }
         }
@@ -1762,9 +1931,9 @@ void executeCommand(FOLDER* target, FOLDER* override) {
             logger("Executing instruction for %s\n", name);
             line_number++;
 
-            compass = createOBJ(src->name);
-            compass->value = processOBJ(src->tab);
-            compass->count++;
+            compass = processOBJ(src->tab);
+            //Debug line
+            printJSON(compass);
         }
 
         checkpoint = buffer;
@@ -1808,44 +1977,17 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
             } if (strstr(command, "texture_path") != NULL) {
                 //Linking textures key
-                for (int x = 0; x < (int)compass->count; x++) {
-                    if (strcmp(compass->value[x].declaration, "textures") == 0) {
-                        dest_json = &compass->value[x];
-                        break;
-                    }
-                }
-
-                if (dest_json == NULL) {
-                    logger("No textures key was found in %s. A textures key will be added manually\n");
-                    line_number++;
-
-                    pattern = createOBJ("textures");
-                    addOBJ(&pattern, createOBJ("obj"));
-                    addOBJ(&dest_json, pattern);
-
-                    dest_json = pattern;
-                    pattern = NULL;
-                }
-
-                if (strstr(command, "set") != NULL) {
-                    for (int x = 0; x < (int)dest_json->count; x++) {
-                        delOBJ(&dest_json, x);
-                    }
-                }
-
-                snprintf(backup, 1023, "\"%lld\": \"%s\"", dest_json->count, namespace);
-                pattern = processOBJ(backup);
-                addOBJ(&dest_json->value[0].value, pattern);
-                pattern = NULL;
 
             } if (strstr(command, "autofill") != NULL) {
                 // continue debugging of atlases fill
+                /*
                 for (int x = 0; x < (int)compass->count; x++) {
                     if (strcmp(compass->value[0].value[x].declaration, "sources") == 0) {
                         dest_json = &compass->value[0].value[x];
                         break;
                     }
                 }
+                */
 
                 navigator = localizeFolder(navigator, "minecraft:textures/", false);
                 navigator = navigator->parent->parent;
@@ -1911,7 +2053,8 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
                         temp = returnPath(navigator);
                         temp[strlen(temp) - 1] = '\0';
-
+                        
+                        /* 
                         if (navigator->count > 1) {
                             length = snprintf(NULL, 0, scratch, temp, temp);
 
@@ -1929,12 +2072,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                             burn = (char*)calloc(length + 1, sizeof(char));
                             sprintf(burn, single, temp);
                         }
-
-                        mirror = processOBJ(burn);
-                        free(burn);
-
-                        addOBJ(&dest_json->value, mirror);
-                        mirror = NULL;
+                        */
 
                         while (position[dirnumber] == (int)navigator->subcount && dirnumber > -1) {
                             navigator = navigator->parent;
@@ -1953,12 +2091,8 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
 
         //Print ready dest json
-        free(src->tab);
-        src->tab = printJSON(compass);
-
         navigator = target;
         cursor = override;
-        freeOBJ(compass);
     }
 }
 
