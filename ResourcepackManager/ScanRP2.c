@@ -363,12 +363,21 @@ OBJECT* dupOBJ (OBJECT* target) {
 }
 
 void freeOBJ (OBJECT* file) {
-    for (;file[0].count > 0; file[0].count--) {
-        freeOBJ(&file[0].value[file[0].count]);
+    if (file == NULL) {
+        return;
     }
 
-    free(file[0].declaration);
-    free(file[0].value);
+    while (file[0].count > 0) {
+        freeOBJ(&file[0].value[file[0].count - 1]);
+        file[0].count--;
+    }
+
+    if (file[0].declaration != NULL) {
+        free(file[0].declaration);
+    }
+    if (file[0].value != NULL) {
+        free(file[0].value);
+    }
 }
 
 OBJECT* processOBJ (char* obj) {
@@ -493,7 +502,7 @@ void addTab (char** file) {
 }
 
 char* printJSON (OBJECT* json) {
-    char *pointer, *checkpoint, *temp, *buffer = NULL, *placeholder, *backup, *obj = "{\n\t%s}", *array = "[\n\t%s]";
+    char *pointer, *checkpoint, *temp, *buffer = NULL, *placeholder = NULL, *backup, *obj = "{\n\t%s}", *array = "[\n\t%s]";
     OBJECT *navigator;
     size_t length, size = 0;
 
@@ -1846,7 +1855,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
     FOLDER* cursor = override;
     FOLDER* templates = scanFolder(NULL, path, -1);
     ARCHIVE *src, *instruct, *model;
-    OBJECT *pattern, *compass;
+    OBJECT *pattern, *compass, *placeholder;
     int line_number = 0, char_count = 0;
     
     nodelay(window, true);
@@ -1932,8 +1941,6 @@ void executeCommand(FOLDER* target, FOLDER* override) {
             line_number++;
 
             compass = processOBJ(src->tab);
-            //Debug line
-            printJSON(compass);
         }
 
         checkpoint = buffer;
@@ -1957,8 +1964,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 line_number++;
 
                 addFile(&navigator, src);
-                src = NULL;
-
+                src = &navigator->content[navigator->count];
             } else if (strstr(command, "remove") != NULL) {
                 navigator = localizeFolder(navigator, namespace, false);
                 if (navigator == NULL) {
@@ -1977,17 +1983,33 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
             } if (strstr(command, "texture_path") != NULL) {
                 //Linking textures key
-
-            } if (strstr(command, "autofill") != NULL) {
-                // continue debugging of atlases fill
-                /*
                 for (int x = 0; x < (int)compass->count; x++) {
-                    if (strcmp(compass->value[0].value[x].declaration, "sources") == 0) {
-                        dest_json = &compass->value[0].value[x];
+                    if (strcmp(compass->value[x].declaration, "textures") == 0) {
+                        placeholder = &compass->value[x];
                         break;
                     }
                 }
-                */
+
+                if (strcmp(pattern->declaration, "textures") != 0) {
+                    logger("\"textures\" key was not found in %s. Adding manually\n", src->name);
+
+                    pattern = createOBJ("textures");
+                    addOBJ(&compass, pattern);
+                    pattern = NULL;
+                    placeholder = &compass->value[compass->count];
+                }
+
+                pattern = processOBJ(namespace);
+                addOBJ(&placeholder->value, pattern);
+                pattern = NULL;
+            } if (strstr(command, "autofill") != NULL) {
+                // continue debugging of atlases fill
+                for (int x = 0; x < (int)compass->count; x++) {
+                    if (strcmp(compass->value[x].declaration, "sources") == 0) {
+                        placeholder = &compass->value[x];
+                        break;
+                    }
+                }
 
                 navigator = localizeFolder(navigator, "minecraft:textures/", false);
                 navigator = navigator->parent->parent;
@@ -2004,7 +2026,6 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                     }
                 }
 
-                // Copying directory obj
                 save = strchr(model->tab, '[');
                 save = strchr(save, '{');
                 eco = save + 1;
@@ -2019,7 +2040,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 save++;
                 eco = strchr(save, '}');
                 length = (eco - save);
-                single = (char*)calloc(length + 1, sizeof(char)); //Presave single preset
+                single = (char*)calloc(length + 1, sizeof(char));
                 strncpy(single, save, length);
 
                 for (int x = 0; x < 16; x++) {
@@ -2053,13 +2074,22 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
                         temp = returnPath(navigator);
                         temp[strlen(temp) - 1] = '\0';
+
+                        //scratch = dir
+                        //single = single file
+                        //OBJ pattern
+                        //dest OBJ placeholder
                         
-                        /* 
                         if (navigator->count > 1) {
                             length = snprintf(NULL, 0, scratch, temp, temp);
 
                             burn = (char*)calloc(length + 1, sizeof(char));
                             sprintf(burn, scratch, temp, temp);
+
+                            pattern = processOBJ(burn);
+                            free(burn);
+                            addOBJ(&placeholder, pattern);
+                            pattern = NULL;
 
                         } else if (navigator->count == 1) {
                             length = strlen(temp) + strlen(navigator->content->name);
@@ -2071,9 +2101,13 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                             length = snprintf(NULL, 0, single, temp);
                             burn = (char*)calloc(length + 1, sizeof(char));
                             sprintf(burn, single, temp);
-                        }
-                        */
 
+                            pattern = processOBJ(burn);
+                            free(burn);
+                            addOBJ(&placeholder, pattern);
+                            pattern = NULL;
+                        }
+                       
                         while (position[dirnumber] == (int)navigator->subcount && dirnumber > -1) {
                             navigator = navigator->parent;
                             position[dirnumber] = 0;
@@ -2089,8 +2123,10 @@ void executeCommand(FOLDER* target, FOLDER* override) {
             checkpoint = strchr(checkpoint, '\n');
         }
 
-
         //Print ready dest json
+        free(src->tab);
+        src->tab = printJSON(compass);
+        freeOBJ(compass);
         navigator = target;
         cursor = override;
     }
