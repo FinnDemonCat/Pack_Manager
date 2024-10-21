@@ -209,7 +209,7 @@ char* returnPath (FOLDER* folder) {
 
     path = (char*)calloc(capacity, sizeof(char));
 
-    while (strcmp(folder->parent->parent->name, "assets") != 0 && folder->parent != NULL) {
+    while (strcmp(folder->parent->name, "assets") != 0 && folder->parent != NULL) {
         enQueue(list, folder->name);
         folder = folder->parent;
     }
@@ -380,91 +380,146 @@ void freeOBJ (OBJECT* file) {
     }
 }
 
-OBJECT* processOBJ (char* obj) {
-    char *pointer, *checkpoint, *save, *backup, *temp, *placeholder, key[128], value[128];
-    OBJECT *file, *entry, *result;
-    size_t length;
+char* strnotchr(const char* str, int count, ...) {
+    char* chars = (char*)calloc(count, sizeof(char));
+    va_list list;
+    va_start(list, count);
+    bool found = false;
 
-    file = createOBJ("obj");
-    for (pointer = strchr(obj, '\"'); pointer != NULL; pointer = strchr(pointer + 1, ',')) {
-        pointer = strchr(pointer, '\"');
+    for (int x = 0; x < count; x++) {
+        chars[x] = va_arg(list, int);
+    }
 
-        sscanf(pointer, "\"%128[^\"]\"", key);
-        entry = createOBJ(key);
-
-        checkpoint = strchr(pointer, ':');
-        checkpoint += 2;
-
-        switch (*checkpoint) {
-        case '{':
-            save = checkpoint;
-            for (size_t x = 1, y = 0; x > 0 && y < strlen(temp); y++) {
-                    if (save[y] == '{') {
-                    x++;
-                } else if (save[y] == '}') {
-                    x--;
-                }
-
-                if (x == 0) {
-                    save = &save[y];
-                }
+    while (*str != '\0') {
+        for (int x = 0, y = 0; x < count && y == 0; x++) {
+            if (*str == chars[x]) {
+                y++;
             }
-
-            length = (save - checkpoint);
-            placeholder = (char*)calloc(length + 1, sizeof(char));
-            strncpy(placeholder, checkpoint, length);
-
-            result = processOBJ(placeholder);
-            addOBJ(&entry, result);
-            free(placeholder);
-
-            break;
-        case '[':
-            save = strchr(checkpoint, ']');
-            length = (save - checkpoint);
-            temp = (char*)calloc(length + 1, sizeof(char));
-            strncpy(temp, checkpoint + 1, length - 1);
-            
-            save = strchr(temp, '{');
-
-            while (save != NULL) {
-                backup = save;
-                for (size_t x = 1, y = 1; x > 0 && y < strlen(temp); y++) {
-                    if (save[y] == '{') {
-                        x++;
-                    } else if (save[y] == '}') {
-                        x--;
-                    }
-
-                    if (x == 0) {
-                        save = &save[y];
-                    }
-                }
-
-                length = (save - backup);
-                placeholder = (char*)calloc(length + 1, sizeof(char));
-                strncpy(placeholder, backup, length);
-
-                result = processOBJ(placeholder);
-                addOBJ(&entry, result);
-                free(placeholder);
-                
-                save = strchr(save, '{');
+            if (x == count - 1 && y == 0) {
+                found = true;
+                break;
             }
-
-            pointer = strchr(checkpoint, ']');
-            break;
-        default:
-            sscanf(checkpoint, "\"%128[^\"]\"", value);
-            result = createOBJ(value);
-            addOBJ(&entry, result);
+        }
+        if (found) {
             break;
         }
-
-        addOBJ(&file, entry);
-        entry = result = NULL;
+        str++;
     }
-    return file;
+
+    free(chars);
+    va_end(list);
+    if (found) {
+        return (char*)str;
+    } else {
+        return NULL;
+    }
+}
+
+char* strchrs (const char* str, int count, ...) {
+    char* chars = (char*)calloc(count, sizeof(char));
+    va_list list;
+    va_start(list, count);
+    bool found = false;
+
+    for (int x = 0; x < count; x++) {
+        chars[x] = va_arg(list, int);
+    }
+
+    while (*str != '\0') {
+        if (*str == chars[0] || *str == chars[1] || *str == chars[2]) {
+            found = true;
+            break;
+        }
+        str++;
+    }
+
+    free(chars);
+    va_end(list);
+    if (found) {
+        return (char*)str;
+    } else {
+        return NULL;
+    }
+}
+
+OBJECT* processOBJ (char* obj) {
+    char *pointer, buffer[512];
+    OBJECT *compass, *entry;
+    size_t length;
+    bool array = false;
+
+    //An obj contains key-value. The value *can* be another object
+    //An array can contain objects
+
+    //continue debugging. The value scan jump fixed, now it's leaving to parent key after finished current object
+    compass = createOBJ("file");
+    for (int x = 0; x < (int)strlen(obj); x++) {
+        switch (obj[x])
+        {
+        case '{':
+            entry = createOBJ("obj");
+            addOBJ(&compass, entry);
+            entry = NULL;
+            compass = &compass->value[compass->count - 1];
+            break;
+        case '}':
+            compass = compass->parent;
+            break;
+        case ']':
+            compass = compass->parent;
+            break;
+        case '\"':
+            pointer = strchr(obj + x + 1, '\"');
+            pointer++;
+
+            length = (pointer - (obj + x));
+            sprintf(buffer, "%.*s", (int)length, obj + x);
+            entry = createOBJ(buffer);
+            addOBJ(&compass, entry);
+            entry = NULL;
+
+            x += length - 1;
+            break;
+        case ':':
+            compass = &compass->value[compass->count - 1];
+            pointer = &obj[x + 1];
+
+            if (obj[x + 2] == '[') {
+                array = true;
+            }
+
+            for (; x < (int)strlen(obj); x++) {
+                pointer = strnotchr(pointer + 1, 4, ' ', '\n', '\t', '[');
+                x = (pointer - obj);
+
+                if (obj[x] == '{') {
+                    x--;
+                    break;
+                } else if (obj[x] == '\"'){
+                    pointer = strchr(pointer + 1, '\"');
+                    pointer++;
+                } else {
+                    pointer = strchrs(pointer + 1, 4, '\n', ' ', ',', ']');
+                }
+
+                length = (pointer - (obj + x));
+                sprintf(buffer, "%.*s", (int)length, obj + x);
+                entry = createOBJ(buffer);
+                addOBJ(&compass, entry);
+                entry = NULL;
+
+                x += length;
+
+                if (!array || *pointer == ']') {
+                    compass = compass->parent; //Functioning for the most part. I though I had organized it, but it's a mess again.
+                    break;
+                }
+            }
+            array = false;
+            break;
+        }
+    }
+    return compass;
 }
 
 void addTab (char** file) {
@@ -573,8 +628,8 @@ void freeFolder(FOLDER* folder) {
         ARCHIVE* file = &folder->content[folder->count-1];
         free(file->name);
         free(file->tab);
-        free(&folder->content[folder->count-1]);
     }
+    free(folder->content);
     for (;folder->subcount > 0; folder->subcount--) {
         freeFolder(&folder->subdir[folder->subcount-1]);
     }
@@ -1020,31 +1075,6 @@ size_t mvwprintLines(WINDOW* window, char* list, int y, int x, int from, int to)
         }
 
     }
-    /* 
-    if (line > 0) {
-        for (int x = 1; x < line && pointer != NULL; x++) {
-            pointer = strchr(pointer, '\n');
-            pointer += 1;
-        }
-        checkpoint = pointer;
-        pointer = strchr(pointer, '\n');
-        pointer += 1;
-        lenght = pointer - checkpoint;
-        mvwprintw(window, y, x, "%.*s", lenght-1, checkpoint);
-
-    } else {
-        while ((pointer = strchr(pointer, '\n')) != NULL && line == 0) {
-            pointer += 1;
-            lenght = pointer - checkpoint;
-            mvwprintw(window, y, x, "%.*s", lenght-1, checkpoint);
-            y++;
-            checkpoint = pointer;
-            if (big < lenght) {
-                big = lenght;
-            }
-        }
-    }
-    */
     return big;
 }
 
@@ -1339,7 +1369,7 @@ void updateWindows() {
 
 //Read from a target file into the memory
 //pack is the parent folder, path is the path to loop for and position is the file position. -1 Will take the path as target.
-FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
+FOLDER* scanFolder(char* path, int position) {
     int dirNumber = 0, result = 0, type = 0, folderCursor = FOLDERCHUNK, line_number = 0, input, folder_count = 0, file_count = 0;
     long *dirPosition = (long*)calloc(folderCursor, sizeof(long));
     struct dirent *entry;
@@ -1495,7 +1525,6 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
         nodelay(window, false);
 
         free(location);
-        pack->subcount++;
         logger("%s File Count: %d\n%s Folders Count: %d\n", name, file_count, name, folder_count);
         return folder;
         
@@ -1599,7 +1628,6 @@ FOLDER* scanFolder(FOLDER* pack, char* path, int position) {
         nodelay(window, false);
 
 
-        pack->subcount++;
         free(location);
         logger("%s File Count: %d\n%s Folders Count: %d\n", name, file_count, name, folder_count);
         return folder;
@@ -1627,8 +1655,9 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
     memset(dir, '0', sizeof(dir));
     sscanf(path, "%512[^:]:%512[^\"]", namespace, dir);
     if (strchr(path, ':') == NULL) {
-        strcpy(dir, namespace);
-        strcpy(namespace, "minecraft");
+        // strcpy(dir, namespace);
+        // strcpy(namespace, "minecraft");
+        return folder;
     }
 
     for (int x = 0; x < (int)navigator->subcount + 1; x++) {
@@ -1853,7 +1882,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
     FOLDER* navigator = target;
     FOLDER* cursor = override;
-    FOLDER* templates = scanFolder(NULL, path, -1);
+    FOLDER* templates = scanFolder(path, -1);
     ARCHIVE *src, *instruct, *model;
     OBJECT *pattern, *compass, *placeholder;
     int line_number = 0, char_count = 0;
@@ -1916,8 +1945,9 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
         if ((checkpoint = strrchr(namespace, '/')) == NULL) {
             checkpoint = namespace;
+        } else {
+            checkpoint++;
         }
-        checkpoint++;
         sscanf(checkpoint, "%256[^]]", name);
 
         for (int x = 0; x < (int)cursor->count; x++) {
@@ -1941,6 +1971,8 @@ void executeCommand(FOLDER* target, FOLDER* override) {
             line_number++;
 
             compass = processOBJ(src->tab);
+            printJSON(compass);
+            
         }
 
         checkpoint = buffer;
@@ -1983,6 +2015,8 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
             } if (strstr(command, "texture_path") != NULL) {
                 //Linking textures key
+                compass = processOBJ(src->tab);
+
                 for (int x = 0; x < (int)compass->count; x++) {
                     if (strcmp(compass->value[x].declaration, "textures") == 0) {
                         placeholder = &compass->value[x];
@@ -1990,7 +2024,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                     }
                 }
 
-                if (strcmp(pattern->declaration, "textures") != 0) {
+                if (pattern == NULL) {
                     logger("\"textures\" key was not found in %s. Adding manually\n", src->name);
 
                     pattern = createOBJ("textures");
@@ -1998,12 +2032,25 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                     pattern = NULL;
                     placeholder = &compass->value[compass->count];
                 }
+                if (strstr(command, "set") != NULL) {
+                    for (int x = 0; x < (int)placeholder->count; x++) {
+                        delOBJ(&placeholder, 0);
+                    }
+                }
 
                 pattern = processOBJ(namespace);
                 addOBJ(&placeholder->value, pattern);
                 pattern = NULL;
+
+                free(src->tab);
+                src->tab = printJSON(compass);
+                freeOBJ(compass);
+
             } if (strstr(command, "autofill") != NULL) {
                 // continue debugging of atlases fill
+
+                compass = processOBJ(src->tab);
+
                 for (int x = 0; x < (int)compass->count; x++) {
                     if (strcmp(compass->value[x].declaration, "sources") == 0) {
                         placeholder = &compass->value[x];
@@ -2119,17 +2166,49 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                         }
                     }
                 }
+
+                free(src->tab);
+                src->tab = printJSON(compass);
+                freeOBJ(compass);
+
             }
             checkpoint = strchr(checkpoint, '\n');
         }
-
-        //Print ready dest json
-        free(src->tab);
-        src->tab = printJSON(compass);
-        freeOBJ(compass);
         navigator = target;
         cursor = override;
     }
+}
+
+void createZip(FOLDER* folder) {
+    char* path, location;
+    path = calloc(PATH_MAX, sizeof(char));
+    report = (char*)calloc(report_size, sizeof(char));
+
+    if (path == NULL) {
+        logger("Error allocating memory for start path, %s\n", strerror(errno));
+        return;
+    }
+    if ((getcwd(path, PATH_MAX)) == NULL) {
+        logger("getwcd() error, %s\n", strerror(errno));
+        return;
+    }
+    if (path != NULL) {
+        logger("Location Path <%s>\n", path);
+    } else {
+        logger("Invalid Path <%s>, %s\n", path, strerror(errno));
+        return;
+    }
+
+    returnString(&path, "path");
+    returnString(&path, folder->name);
+    zipFile pack = zipOpen(folder->name, 0);
+
+    if (pack == NULL) {
+        logger("Failed to open a zip file for %s! %d", folder->name, ZIP_ERRNO);
+        return;
+    }
+
+    //Loop through every content and print it
 }
 
 int main () {
@@ -2161,7 +2240,7 @@ int main () {
 
     //Scanning the lang folder
     returnString(&path, "lang");
-    lang = scanFolder(NULL, path, -1);
+    lang = scanFolder(path, -1);
     returnString(&path, "path");
     returnString(&path, "resourcepacks");
 
@@ -2486,10 +2565,13 @@ int main () {
                     wclear(action);
                     if (cursor[0] == 0 && query->end > 0) {
                         type = 1;
+                        FOLDER* temp;
 
-                        for (int x = targets->subcount; x < query->end; x++) {
-                            targets->subdir[x] = *scanFolder(targets, path, query->value[x]);
+                        for (int x = 0; x < query->end; x++) {
+                            temp = scanFolder(path, query->value[x]);
+                            addFolder(&targets, temp);
                             entries->value[query->value[x]] = 2;
+                            temp = NULL;
                         }
                         
                         relay_message = 6;

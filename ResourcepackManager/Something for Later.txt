@@ -2,7 +2,7 @@ Features:
 - Override: when one of the targets isn't a resourcepack, search for the file model in the other resourcepack to override. [X]
 - Merge: merge resourcepack predicate files. [X]
 - File check: check if the file model's texture path is valid, if not search for a texture file in the same name. [#]
-- Atlas generator: check if, within the textures folder, the folder is in the atlas directory file. [ ]
+- Atlas generator: check if, within the textures folder, the folder is in the atlas directory file. [X]
 - Editor: edit/create predicates or blockstates files. Delete files linked inside the file. [ ]
 - Template: set of actions to perform on a resourcepack [X]
 
