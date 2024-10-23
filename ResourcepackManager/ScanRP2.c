@@ -426,8 +426,16 @@ char* strchrs (const char* str, int count, ...) {
     }
 
     while (*str != '\0') {
-        if (*str == chars[0] || *str == chars[1] || *str == chars[2]) {
-            found = true;
+        for (int x = 0, y = 0; x < count && y == 0; x++) {
+            if (*str == chars[x]) {
+                y++;
+            }
+            if (x == count - 1 && y == 0) {
+                found = true;
+                break;
+            }
+        }
+        if (found) {
             break;
         }
         str++;
@@ -443,7 +451,7 @@ char* strchrs (const char* str, int count, ...) {
 }
 
 OBJECT* processOBJ (char* obj) {
-    char *pointer, buffer[512];
+    char *pointer, *checkpoint, buffer[512];
     OBJECT *compass, *entry;
     size_t length;
     bool array = false;
@@ -452,7 +460,113 @@ OBJECT* processOBJ (char* obj) {
     //An array can contain objects
 
     //continue debugging. The value scan jump fixed, now it's leaving to parent key after finished current object
-    compass = createOBJ("file");
+    compass = createOBJ("obj");
+    for (int x = 1; x < (int)strlen(obj); x++) {
+        switch (obj[x])
+        {
+        case '{':
+            entry = createOBJ("obj");
+            addOBJ(&compass, entry);
+            entry = NULL;
+            compass = &compass->value[compass->count - 1];
+            break;
+        case '}':
+            break;
+        case '\"':
+            pointer = strchr(obj + x + 1, '\"');
+            pointer++;
+
+            length = (pointer - (obj + x));
+            sprintf(buffer, "%.*s", (int)length, obj + x);
+            entry = createOBJ(buffer);
+            addOBJ(&compass, entry);
+            entry = NULL;
+
+            x += length - 1;
+            break;
+        case ':':
+            compass = &compass->value[compass->count - 1];
+            x += 2;
+            array = false;
+
+            while (*pointer != ']') {
+                pointer = strnotchr((obj + x), 3, ' ', '\n', '\t');
+
+                switch (*pointer)
+                {
+                case '[':
+                    entry = createOBJ("array");
+                    addOBJ(&compass, entry);
+                    entry = NULL;
+                    compass = &compass->value[compass->count - 1];
+
+                    x++;
+                    array = true;
+
+                    break;
+                case '{':
+                    for (int alpha = 1, beta = 1; alpha < strlen(obj); alpha++) {
+                        if (pointer[alpha] == '{') {
+                            beta++;
+                        } else if (pointer[alpha] == '}') {
+                            beta--;
+                        }
+                        if (beta == 0) {
+                            checkpoint = &pointer[alpha + 1];
+                            x = (checkpoint - obj);
+                            break;
+                        }
+                    }
+
+                    length = (checkpoint - pointer);
+                    checkpoint = NULL;
+                    checkpoint = (char*)calloc(length + 1, sizeof(char));
+                    sprintf(checkpoint, "%.*s", (int)length, pointer);
+
+                    entry = processOBJ(checkpoint);
+                    addOBJ(&compass, entry);
+                    entry = NULL;
+                    free(checkpoint);
+                    checkpoint = NULL;
+
+                    break;
+                case ']':
+                case '}':
+                    x = (pointer - obj);
+                    array = false;
+
+                    break;
+                default:
+                    x = (pointer - obj);
+
+                    if (*pointer == '\"') {
+                        pointer = strchr(obj + x + 1, '\"');
+                        pointer++;
+                    } else {
+                        pointer = strchrs(pointer, 5, ' ', ',', '\n', '\t', ']');
+                    }
+
+                    length = (pointer - (obj + x));
+                    sprintf(buffer, "%.*s", (int)length, obj + x);
+
+                    entry = createOBJ(buffer);
+                    addOBJ(&compass, entry);
+                    entry = NULL;
+
+                    x += length + 1;
+
+                    break;
+                }
+                // Failing at nested array in the nested object, leaving to parent when shouldn't and copying 3 plus the closing ']', strchrs is failing somehow
+                if (!array || *pointer == ']') {
+                    compass = compass->parent;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    /* 
     for (int x = 0; x < (int)strlen(obj); x++) {
         switch (obj[x])
         {
@@ -519,6 +633,7 @@ OBJECT* processOBJ (char* obj) {
             break;
         }
     }
+    */
     return compass;
 }
 
