@@ -56,6 +56,7 @@ typedef struct OBJECT {
     struct OBJECT* parent;
     size_t count;
     size_t capacity;
+    bool indent;
 } OBJECT;
 
 WINDOW* sidebar;
@@ -301,6 +302,7 @@ OBJECT* createOBJ (char* key) {
     file->parent = NULL;
 
     file->value = (OBJECT*)malloc(sizeof(OBJECT));
+    file->indent = false;
     return file;
 }
 
@@ -426,17 +428,14 @@ char* strchrs (const char* str, int count, ...) {
     }
 
     while (*str != '\0') {
-        for (int x = 0, y = 0; x < count && y == 0; x++) {
+        for (int x = 0; x < count; x++) {
             if (*str == chars[x]) {
-                y++;
-            }
-            if (x == count - 1 && y == 0) {
                 found = true;
                 break;
             }
         }
         if (found) {
-            break;
+            break;  
         }
         str++;
     }
@@ -489,8 +488,8 @@ OBJECT* processOBJ (char* obj) {
             x += 2;
             array = false;
 
-            while (*pointer != ']') {
-                pointer = strnotchr((obj + x), 3, ' ', '\n', '\t');
+            while (true) {
+                pointer = strnotchr((obj + x), 4, ',',' ', '\n', '\t');
 
                 switch (*pointer)
                 {
@@ -531,6 +530,8 @@ OBJECT* processOBJ (char* obj) {
 
                     break;
                 case ']':
+                    compass = compass->parent;
+                    /* fallthrough */
                 case '}':
                     x = (pointer - obj);
                     array = false;
@@ -553,12 +554,12 @@ OBJECT* processOBJ (char* obj) {
                     addOBJ(&compass, entry);
                     entry = NULL;
 
-                    x += length + 1;
-
+                    x += length;
+                    //indentation check
                     break;
                 }
-                // Failing at nested array in the nested object, leaving to parent when shouldn't and copying 3 plus the closing ']', strchrs is failing somehow
-                if (!array || *pointer == ']') {
+                
+                if (!array) {
                     compass = compass->parent;
                     break;
                 }
@@ -566,74 +567,7 @@ OBJECT* processOBJ (char* obj) {
             break;
         }
     }
-    /* 
-    for (int x = 0; x < (int)strlen(obj); x++) {
-        switch (obj[x])
-        {
-        case '{':
-            entry = createOBJ("obj");
-            addOBJ(&compass, entry);
-            entry = NULL;
-            compass = &compass->value[compass->count - 1];
-            break;
-        case '}':
-            compass = compass->parent;
-            break;
-        case ']':
-            compass = compass->parent;
-            break;
-        case '\"':
-            pointer = strchr(obj + x + 1, '\"');
-            pointer++;
-
-            length = (pointer - (obj + x));
-            sprintf(buffer, "%.*s", (int)length, obj + x);
-            entry = createOBJ(buffer);
-            addOBJ(&compass, entry);
-            entry = NULL;
-
-            x += length - 1;
-            break;
-        case ':':
-            compass = &compass->value[compass->count - 1];
-            pointer = &obj[x + 1];
-
-            if (obj[x + 2] == '[') {
-                array = true;
-            }
-
-            for (; x < (int)strlen(obj); x++) {
-                pointer = strnotchr(pointer + 1, 4, ' ', '\n', '\t', '[');
-                x = (pointer - obj);
-
-                if (obj[x] == '{') {
-                    x--;
-                    break;
-                } else if (obj[x] == '\"'){
-                    pointer = strchr(pointer + 1, '\"');
-                    pointer++;
-                } else {
-                    pointer = strchrs(pointer + 1, 4, '\n', ' ', ',', ']');
-                }
-
-                length = (pointer - (obj + x));
-                sprintf(buffer, "%.*s", (int)length, obj + x);
-                entry = createOBJ(buffer);
-                addOBJ(&compass, entry);
-                entry = NULL;
-
-                x += length;
-
-                if (!array || *pointer == ']') {
-                    compass = compass->parent; //Functioning for the most part. I though I had organized it, but it's a mess again.
-                    break;
-                }
-            }
-            array = false;
-            break;
-        }
-    }
-    */
+    
     return compass;
 }
 
