@@ -483,13 +483,16 @@ OBJECT* processOBJ (char* obj) {
 
             x += length - 1;
             break;
+        case '\t':
+            compass->indent = true;
+            break;
         case ':':
             compass = &compass->value[compass->count - 1];
             x += 2;
             array = false;
 
             while (true) {
-                pointer = strnotchr((obj + x), 4, ',',' ', '\n', '\t');
+                pointer = strnotchr((obj + x), 3, ',', ' ', '\n');
 
                 switch (*pointer)
                 {
@@ -537,6 +540,11 @@ OBJECT* processOBJ (char* obj) {
                     array = false;
 
                     break;
+                case '\t':
+                    compass->indent = true;
+                    pointer = strnotchr((obj + x), 4, ',', '\t', ' ', '\n');
+                    x = (pointer - obj);
+                    break;
                 default:
                     x = (pointer - obj);
 
@@ -571,7 +579,7 @@ OBJECT* processOBJ (char* obj) {
     return compass;
 }
 
-void addTab (char** file) {
+void indentJSON (char** file) {
     char *pointer, *checkpoint, *save, *placeholder;
     size_t count = 0, length;
 
@@ -606,70 +614,52 @@ void addTab (char** file) {
 }
 
 char* printJSON (OBJECT* json) {
-    char *pointer, *checkpoint, *temp, *buffer = NULL, *placeholder = NULL, *backup, *obj = "{\n\t%s}", *array = "[\n\t%s]";
-    OBJECT *navigator;
-    size_t length, size = 0;
+    char *pointer, *checkpoint, *buffer, *placeholder, *temp = NULL;
+    OBJECT* navigator;
+    size_t length, size = 1024;
+    buffer = (char*)calloc(size, sizeof(char));
 
-    for (size_t x = 0; x < json->count; x++) {
-        navigator = &json->value[x];
+    for (int x = 0; x < json->count; x++) {
 
-        if (strcmp(navigator->value->declaration, "obj") == 0) {
+        if (json->count > 0) {
+            if (strcmp(json->value[x].declaration, "obj") == 0) {
+                pointer = printJSON(&json->value[x]);
+                length = snprintf(NULL, 0, "{%s%s%s}", (json->indent == true) ? "\n\t" : "", pointer, (json->indent == true) ? "\n\t" : "");
+                sprintf(placeholder, "{%s%s%s}", (json->indent == true) ? "\n\t" : "", pointer, (json->indent == true) ? "\n\t" : "");
 
-            if (navigator->count > 1) {
-                length = 0;
-                for (size_t y = 0; y < navigator->count; y++) {
-                    pointer = printJSON(&navigator->value[y]);
-                    addTab(&pointer);
+            } else if (strcmp(json->value[x].declaration, "array") == 0) {
+                pointer = printJSON(&json->value[x]);
+                length = snprintf(NULL, 0, "[%s%s%s]", (json->indent == true) ? "\n\t" : "", pointer, (json->indent == true) ? "\n\t" : "");
+                sprintf(placeholder, "[%s%s%s]", (json->indent == true) ? "\n\t" : "", pointer, (json->indent == true) ? "\n\t" : "");
 
-                    size = snprintf(NULL, 0, "%s%s", pointer, (y == navigator->count - 1) ? "\n\t" : ",\n\t");
-                    temp = (char*)realloc(placeholder, (size + length + 2) * sizeof(char));
-                    if (temp == NULL) {
-                        logger("Failed to realloc memory when expanding key string: %s\n", strerror(errno));
-                        break;
-                    } else {
-                        placeholder = temp;
-                        temp = NULL;
-
-                        sprintf(placeholder + length, "%s%s", pointer, (y == navigator->count - 1) ? "\n\t" : ",\n\t");
-                        length += size;
-                        free(pointer);
-                    }
-                }
-                size = 0;
-                length = snprintf(NULL, 0, array, placeholder);
-                pointer = (char*)calloc(length + 1, sizeof(char));
-                sprintf(pointer, array, placeholder);
-                free(placeholder);
             } else {
-                pointer = printJSON(navigator->value);
+                free(placeholder);
+                placeholder = strdup(json->value[x].declaration);
             }
         } else {
-            length = snprintf(NULL, 0, "\"%s\"", navigator->value->declaration);
-            pointer = (char*)calloc(length + 1, sizeof(char));
-            sprintf(pointer, "\"%s\"", navigator->value->declaration);
-        }
-        
-        length = snprintf(NULL, 0, "\"%s\": %s%s", navigator->declaration, pointer, (x == json->count - 1) ? "\n" : ",\n\t");
-        temp = (char*)realloc(buffer, (length + size + 1) * sizeof(char));
-        
-        if (temp == NULL) {
-            logger("Failed to realloc memory when expanding key string: %s\n", strerror(errno));
-            break;
-        } else {
-            buffer = temp;
-            temp = NULL;
+            free(placeholder);
+            placeholder = strdup("");
         }
 
-        sprintf(buffer + size, "\"%s\": %s%s", navigator->declaration, pointer, (x == json->count - 1) ? "\n" : ",\n\t");
-        free(pointer);
-        size += length;
+        if (strlen(buffer) + strlen(placeholder) >= size - 1) {
+            size *= 2;
+
+            temp = realloc(buffer, (size + 1) * sizeof(char));
+
+            if (temp != NULL) {
+                logger("Error reallocating memory while printing the json file: %s\n", strerror(errno));
+                free(placeholder);
+                return NULL;
+            } else {
+                buffer = temp;
+                temp = NULL;
+            }
+        }
+
+        sprintf(buffer + strlen(buffer), "%s%s%s", placeholder, (x == json->count - 1) ? "" : ",", (json->indent == true) ? "\n\t" : " ");
     }
 
-    length = snprintf(NULL, 0, obj, buffer);
-    placeholder = (char*)calloc(length + 1, sizeof(char));
-    sprintf(placeholder, obj, buffer);
-    free(buffer);
-    return placeholder;
+    return buffer;
 }
 
 void freeFolder(FOLDER* folder) {
