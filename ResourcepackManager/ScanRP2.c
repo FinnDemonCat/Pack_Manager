@@ -300,13 +300,19 @@ OBJECT* createOBJ (char* key) {
     file->count = 0;
     file->declaration = strdup(key);
     file->parent = NULL;
-
-    file->value = (OBJECT*)malloc(sizeof(OBJECT));
+    file->value = NULL;
     file->indent = false;
+
     return file;
 }
 
 void addOBJ (OBJECT** file, OBJECT* value) {
+    if (file[0]->count == 0) {
+        file[0]->value = (OBJECT*)calloc(file[0]->capacity, sizeof(OBJECT));
+        if (file[0] == NULL) {
+            logger("Error allocating memory for new obj, %s\n", strerror(errno));
+        }
+    }
     if (file[0]->count == file[0]->capacity) {
         file[0]->capacity *= 2;
 
@@ -507,7 +513,7 @@ OBJECT* processOBJ (char* obj) {
 
                     break;
                 case '{':
-                    for (int alpha = 1, beta = 1; alpha < strlen(obj); alpha++) {
+                    for (int alpha = 1, beta = 1; alpha < (int)strlen(obj); alpha++) {
                         if (pointer[alpha] == '{') {
                             beta++;
                         } else if (pointer[alpha] == '}') {
@@ -580,84 +586,117 @@ OBJECT* processOBJ (char* obj) {
 }
 
 void indentJSON (char** file) {
-    char *pointer, *checkpoint, *save, *placeholder;
-    size_t count = 0, length;
+    char *pointer = *file, *temp;
+    size_t count = 0;
 
-    for (pointer = strchr(*file, '\n'); pointer != NULL; pointer = strchr(pointer + 1, '\n')) {
+    while ((pointer = strchr(pointer, '\n')) != NULL) {
         count++;
+        pointer = strnotchr(pointer, 1, '\n');
     }
 
-    placeholder = strdup(*file);
-
-    length = strlen(*file) + count;
-    save = (char*)realloc(*file, (length + 1) * sizeof(char));
-
-    if (save != NULL) {
-        *file = save;
-    } else {
+    if (count == 0) {
         return;
     }
 
-    *file[0] = '\0';
-
-    for (
-        pointer = checkpoint = placeholder, pointer = strchr(pointer + 1, '\n');
-        pointer != NULL;
-        checkpoint = pointer, pointer = strchr(pointer + 1, '\n')
-    ) {
-        pointer++;
-        sprintf(*file + strlen(*file), "%.*s\t", (int)(pointer - checkpoint), checkpoint);
+    temp = (char*)realloc(*file, (strlen(*file) + count)* sizeof(char));
+    if (temp != NULL) {
+        *file = temp;
+        temp = NULL;
+    } else {
+        logger("Error while reallocating memory when indenting file: %s\n", strerror(errno));
     }
 
-    strcat(*file, "}");
-    free(placeholder);
+    for (pointer = strchr(*file, '\n'); pointer != NULL && count > 1; pointer = strnotchr(pointer + 1, 1, '\t'), pointer = strchr(pointer, '\n'), count--) {
+        memmove(pointer + 1, pointer, strlen(pointer) + 1);
+        pointer[1] = '\t';
+    }
 }
 
 char* printJSON (OBJECT* json) {
     char *pointer, *checkpoint, *buffer, *placeholder, *temp = NULL;
-    OBJECT* navigator;
     size_t length, size = 1024;
-    buffer = (char*)calloc(size, sizeof(char));
+    OBJECT* navigator;
+    temp = (char*)calloc(size, sizeof(char));
+    *temp = '\0';
+    
+    //Printing current obj in placeholder
+    navigator = json;
+    if (strcmp(navigator->declaration, "obj") == 0 || strcmp(navigator->declaration, "array") == 0) {
+        length = snprintf (NULL, 0,
+            "%c%s%s%s%c",
+            (strcmp(navigator->declaration, "obj") == 0) ? '{' : '[',
+            (navigator->indent == true) ? "\n" : "", 
+            "%s",
+            (navigator->indent == true) ? "\n" : "",
+            (strcmp(navigator->declaration, "obj") == 0) ? '}' : ']'
+        );
 
-    for (int x = 0; x < json->count; x++) {
-
-        if (json->count > 0) {
-            if (strcmp(json->value[x].declaration, "obj") == 0) {
-                pointer = printJSON(&json->value[x]);
-                length = snprintf(NULL, 0, "{%s%s%s}", (json->indent == true) ? "\n\t" : "", pointer, (json->indent == true) ? "\n\t" : "");
-                sprintf(placeholder, "{%s%s%s}", (json->indent == true) ? "\n\t" : "", pointer, (json->indent == true) ? "\n\t" : "");
-
-            } else if (strcmp(json->value[x].declaration, "array") == 0) {
-                pointer = printJSON(&json->value[x]);
-                length = snprintf(NULL, 0, "[%s%s%s]", (json->indent == true) ? "\n\t" : "", pointer, (json->indent == true) ? "\n\t" : "");
-                sprintf(placeholder, "[%s%s%s]", (json->indent == true) ? "\n\t" : "", pointer, (json->indent == true) ? "\n\t" : "");
-
-            } else {
-                free(placeholder);
-                placeholder = strdup(json->value[x].declaration);
-            }
+        placeholder = (char*)calloc(length + 1, sizeof(char));
+        
+        sprintf (
+            placeholder, 
+            "%c%s%s%s%c",
+            (strcmp(navigator->declaration, "obj") == 0) ? '{' : '[',
+            (navigator->indent == true) ? "\n" : "", 
+            "%s",
+            (navigator->indent == true) ? "\n" : "",
+            (strcmp(navigator->declaration, "obj") == 0) ? '}' : ']'
+        );
+    } else {
+        if (navigator->count == 1) {
+            length = snprintf(NULL, 0, "%s: %s", navigator->declaration, "%s");
+            placeholder = (char*)calloc(length + 1, sizeof(char));
+            sprintf(placeholder, "%s: %s", navigator->declaration, "%s");
         } else {
-            free(placeholder);
-            placeholder = strdup("");
+            placeholder = strdup(navigator->declaration);
+        }
+    }
+
+    //Printing current obj values into temp
+    for (int x = 0; x < (int)json->count; x++) {
+        navigator = &json->value[x];
+        pointer = printJSON(navigator);
+
+        if (navigator->indent == true) {
+            indentJSON(&pointer);
         }
 
-        if (strlen(buffer) + strlen(placeholder) >= size - 1) {
+        length = snprintf (
+            NULL, 0,
+            "%s%s",
+            pointer,
+            ((size_t)x == json->count - 1) ? "" : (json->indent == true) ? ",\n" : ", "
+        );
+
+        if (strlen(temp) + length >= size - 1) {
             size *= 2;
+            checkpoint = realloc(temp, (size + 1) * sizeof(char));
 
-            temp = realloc(buffer, (size + 1) * sizeof(char));
-
-            if (temp != NULL) {
+            if (checkpoint == NULL) {
                 logger("Error reallocating memory while printing the json file: %s\n", strerror(errno));
                 free(placeholder);
                 return NULL;
             } else {
-                buffer = temp;
-                temp = NULL;
+                temp = checkpoint;
+                checkpoint = NULL;
             }
         }
 
-        sprintf(buffer + strlen(buffer), "%s%s%s", placeholder, (x == json->count - 1) ? "" : ",", (json->indent == true) ? "\n\t" : " ");
+        sprintf (
+            temp + strlen(temp),
+            "%s%s",
+            pointer,
+            ((size_t)x == json->count - 1) ? "" : (json->indent == true) ? ",\n" : ", "
+        );
+
+        free(pointer);
     }
+    
+    length = snprintf(NULL, 0, placeholder, temp);
+    buffer = (char*)calloc(length + 1, sizeof(char));
+    sprintf(buffer, placeholder, temp);
+    free(temp);
+    free(placeholder);
 
     return buffer;
 }
@@ -2010,8 +2049,9 @@ void executeCommand(FOLDER* target, FOLDER* override) {
             line_number++;
 
             compass = processOBJ(src->tab);
-            printJSON(compass);
-            
+            char* temp = printJSON(compass);
+            indentJSON(&temp);
+            free(temp);
         }
 
         checkpoint = buffer;
