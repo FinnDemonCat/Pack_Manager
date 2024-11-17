@@ -1,23 +1,23 @@
 {
-    "sources": [
-        {
-            "type": "directory",
-            "source": "%s",
-            "prefix": "%s/"
-        },
-        {
-            "type": "single",
-            "resource": "%s"
-        },
-        {
-            "type": "paletted_permutations",
-            "textures": [
-                "%s"
-            ],
-            "palette_key": "%s",
-            "permutations": {
-                "%s": "%s"
-            }
-        }
-    ]
+	"sources": [
+		{
+			"type": "directory",
+			"source": null,
+			"prefix": null
+		},
+		{
+			"type": "single",
+			"resource": null
+		},
+		{
+			"type": "paletted_permutations",
+			"textures": [
+				null
+			],
+			"palette_key": "%s",
+			"permutations": {
+				"null": null
+			}
+		}
+	]
 }

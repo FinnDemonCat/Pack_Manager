@@ -5,6 +5,7 @@ Features:
 - Atlas generator: check if, within the textures folder, the folder is in the atlas directory file. [X]
 - Editor: edit/create predicates or blockstates files. Delete files linked inside the file. [ ]
 - Template: set of actions to perform on a resourcepack [X]
+- Permutation: permutate models based on their groups and a default group. Permutate textures based on a color pallet and a texture [ ]
 
 Update returnString to work with more functions to modify string
 

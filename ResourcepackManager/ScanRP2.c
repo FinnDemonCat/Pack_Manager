@@ -209,14 +209,15 @@ char* returnPath (FOLDER* folder) {
     size_t length = 0, capacity = 1024;
 
     path = (char*)calloc(capacity, sizeof(char));
+    path[0] = '\0';
 
-    while (strcmp(folder->parent->name, "assets") != 0 && folder->parent != NULL) {
+    while (strcmp(folder->name, "assets") != 0 && folder->parent != NULL) {
         enQueue(list, folder->name);
         folder = folder->parent;
     }
 
     for (size_t x = list->end; x > 0; x--) {
-        if (length + strlen(list->item[x - 1]) >= capacity) {
+        if (length + strlen(list->item[x - 1]) >= (capacity - 1)) {
             capacity *= 2;
 
             temp = realloc(path, capacity * sizeof(char));
@@ -229,11 +230,7 @@ char* returnPath (FOLDER* folder) {
             }
         }
 
-        if (x == 0) {
-            strcat(path, list->item[x]);
-        } else {
-            sprintf(path + strlen(path), "%s/", list->item[x - 1]);
-        }
+        sprintf(path + strlen(path), "%s/", list->item[x - 1]);
     }
 
     temp = realloc(path, (strlen(path) + 1) * sizeof(char));
@@ -361,9 +358,10 @@ void delOBJ (OBJECT** file, size_t key) {
 
 OBJECT* dupOBJ (OBJECT* target) {
     OBJECT* mirror = createOBJ(target->declaration);
+	mirror->indent = target->indent;
     OBJECT* temp;
     for (int x = 0; x < (int) target->count; x++) {
-        temp = dupOBJ(&mirror->value[x]);
+        temp = dupOBJ(&target->value[x]);
         addOBJ(&mirror, temp);
         temp = NULL;
     }
@@ -493,13 +491,18 @@ OBJECT* processOBJ (char* obj) {
         case '\t':
             compass->indent = true;
             break;
+		case ' ':
+			if (obj[x + 1] == ' ') {
+				compass->indent = true;
+			}
+			break;
         case ':':
             compass = &compass->value[compass->count - 1];
             x += 2;
             array = false;
 
             while (true) {
-                pointer = strnotchr((obj + x), 3, ',', ' ', '\n');
+                pointer = strnotchr((obj + x), 2, ',', '\n');
 
                 switch (*pointer)
                 {
@@ -552,6 +555,13 @@ OBJECT* processOBJ (char* obj) {
                     pointer = strnotchr((obj + x), 4, ',', '\t', ' ', '\n');
                     x = (pointer - obj);
                     break;
+				case ' ':
+					if (obj[x + 1] == ' ') {
+						compass->indent = true;
+					}
+					pointer = strnotchr((obj + x), 4, ',', '\t', ' ', '\n');
+                    x = (pointer - obj);
+					break;
                 default:
                     x = (pointer - obj);
 
@@ -570,7 +580,6 @@ OBJECT* processOBJ (char* obj) {
                     entry = NULL;
 
                     x += length;
-                    //indentation check
                     break;
                 }
                 
@@ -615,7 +624,7 @@ void indentJSON (char** file) {
 
 char* printJSON (OBJECT* json) {
     char *pointer, *checkpoint, *buffer, *placeholder, *temp = NULL;
-    size_t length, size = 1024;
+    size_t length = 0, size = 1024;
     OBJECT* navigator;
     temp = (char*)calloc(size, sizeof(char));
     *temp = '\0';
@@ -670,7 +679,9 @@ char* printJSON (OBJECT* json) {
         );
 
         if (strlen(temp) + length >= size - 1) {
-            size *= 2;
+            while (strlen(temp) + length >= size - 1) {
+                size *= 2;
+            }
             checkpoint = realloc(temp, (size + 1) * sizeof(char));
 
             if (checkpoint == NULL) {
@@ -1725,6 +1736,7 @@ void mergeFile (ARCHIVE* file, ARCHIVE* overrides) {
             for (size_t y = 0; y > checkpoint->count; y++) {
                 if (strcmp(pointer->value[y].declaration, "\"model\"") == 0 && strcmp(checkpoint->value[y].declaration, matches->item[x]) == 0) {
                     deQueue(matches, x);
+                    logger("Found predicate model match \"%s\" at %s\n", matches->item[x], file->name);
                     break;
                 }
             }
@@ -1915,7 +1927,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
     char *pointer, *checkpoint, *temp, *path, buffer[1024], command[256], namespace[256], name[128];
     ARCHIVE *origin, *instruct, *template;
     OBJECT* placeholder, *value, *query;
-    int line_number = 0;
+    int line_number = 0, message = -1;
     bool skip = false;
 
     path = (char*)calloc(PATH_MAX + 1, sizeof(char));
@@ -1987,8 +1999,21 @@ void executeCommand(FOLDER* target, FOLDER* override) {
             sscanf(checkpoint, "%s", command);
 
             if (command[0] == 'x') {
+                free(origin->tab);
+                origin->tab = printJSON(placeholder);
+                indentJSON(&origin->tab);
+
                 checkpoint = strchr(checkpoint, '\"');
                 sscanf(checkpoint, "\"%256[^\"]\"", namespace);
+
+                temp = strrchr(namespace, '/');
+                temp++;
+                sscanf(temp, "%128[^\"]s", name);
+
+                if (strcmp(origin->name, name) != 0) {
+                    free(origin->name);
+                    origin->name = strdup(name);
+                }
 
                 if (strchr(command, '+') != NULL) {
                     navigator = localizeFolder(navigator, namespace, true);
@@ -1996,13 +2021,9 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                     navigator = localizeFolder(navigator, namespace, false);
                 }
 
-                temp = strrchr(namespace, '/');
-                temp++;
-                memmove(namespace, temp, strlen(temp) + 1);
-
                 template = NULL;
                 for (size_t x = 0; x < navigator->count; x++) {
-                    if (strcmp(navigator->content[x].name, namespace) == 0) {
+                    if (strcmp(navigator->content[x].name, name) == 0) {
                         logger("Found a match for %s, merging\n", origin->name);
                         line_number++;
 
@@ -2014,9 +2035,10 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 }
 
                 if (template == NULL) {
-                    addFile(&navigator, origin); // Continue debugging the other functions
+                    addFile(&navigator, origin);
                 }
                 skip = true;
+                message = 0;
             } else if (strstr(command, "texture_path") != NULL) {
                 checkpoint = strchr(checkpoint, ' ');
                 sscanf(checkpoint, "%255s", command);
@@ -2063,10 +2085,11 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 value = NULL;
                 temp = NULL;
 
-                free(origin->tab);
-                origin->tab = printJSON(placeholder);
-                indentJSON(&origin->tab);
             } else if (strstr(command, "autofill") != NULL) {
+				while(placeholder->value->value->count > 0) {
+					delOBJ(&placeholder->value->value, 0);
+				}
+
                 QUEUE* folders;
 
                 navigator = localizeFolder(navigator, "minecraft:textures/", false);
@@ -2113,14 +2136,15 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 if (query == NULL) {
                     logger("Error! atlas.json template is missing from program files!\n");
                     skip = true;
+                    message = 2;
                     break;
                 }
 
                 for (int x = 0; x < folders->end; x++) {
-                    char *stamp, *dummy;
-                    sprintf(namespace, "%s/textures", folders->item[x]);
+                    char* stamp;
+                    sprintf(namespace, "%s:textures/", folders->item[x]);
 
-                    navigator = localizeFolder(navigator, namespace, false);
+                    navigator = localizeFolder(target, namespace, false);
 
                     while (dirnumber >= 0) {
                         while (position[dirnumber] < (int)navigator->subcount) {
@@ -2131,30 +2155,39 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                         }
 
                         temp = returnPath(navigator);
+						stamp = strchr(temp, '/');
+						stamp[0] = ':';
                         temp[strlen(temp) - 1] = '\0';
 
                         if (navigator->count == 1) {
-                            dummy = printJSON(&query->value[1]);
-                            length = snprintf(NULL, 0, dummy, temp);
+                            value = dupOBJ(&query->value[1]);
 
+                            length = snprintf(NULL, 0, "\"%s/%s\"", temp, navigator->content->name);
                             stamp = (char*)calloc(length + 1, sizeof(char));
-                            sprintf(stamp, dummy, temp);
-                            free(dummy);
-                            value = processOBJ(stamp);
-                            free(stamp);
+                            sprintf(stamp, "\"%s/%s\"", temp, navigator->content->name);
+                            free(value->value[1].value->declaration);
+                            value->value[1].value->declaration = stamp;
+                            stamp = NULL;
 
                             addOBJ(&placeholder->value->value, value);
                             value = NULL;
 
                         } else if (navigator->count > 1) {
-                            dummy = printJSON(&query->value[1]);
-                            length = snprintf(NULL, 0, dummy, temp, temp);
+                            value = dupOBJ(&query->value[0]);
 
+                            length = snprintf(NULL, 0, "\"%s\"", temp);
                             stamp = (char*)calloc(length + 1, sizeof(char));
-                            sprintf(stamp, dummy, temp, temp);
-                            free(dummy);
-                            value = processOBJ(stamp);
-                            free(stamp);
+                            sprintf(stamp, "\"%s\"", temp);
+                            free(value->value[1].value->declaration);
+                            value->value[1].value->declaration = stamp;
+                            stamp = NULL;
+
+                            length = snprintf(NULL, 0, "\"%s/\"", temp);
+                            stamp = (char*)calloc(length + 1, sizeof(char));
+                            sprintf(stamp, "\"%s/\"", temp);
+                            free(value->value[2].value->declaration);
+                            value->value[2].value->declaration = stamp;
+                            stamp = NULL;
 
                             addOBJ(&placeholder->value->value, value);
                             value = NULL;
@@ -2165,12 +2198,20 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                             position[dirnumber] = 0;
                             dirnumber--;
                         }
+                        
+                        free(temp);
+                        
                         if (dirnumber < 0) {
                             dirnumber = 0;
                             break;
                         }
                     }
                 }
+
+                free(origin->tab);
+                origin->tab = printJSON(placeholder);
+				indentJSON(&origin->tab);
+                origin->size = strlen(origin->tab);
             } else if (strstr(command, "remove") != NULL) {
                 for (size_t x = 0; x < cursor->count; x++) {
                     if (strcmp(cursor->content[x].name, name) == 0) {
@@ -2180,13 +2221,25 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 }
 
                 skip = true;
+                message = 1;
             }
 
             checkpoint = strchr(checkpoint, '\n');
 
             if (skip) {
                 skip = false;
-                logger("File location was modified or removed, skipping to the next interaction\n");
+                switch (message)
+                {
+                case 0:
+                    logger("File location was moved, moving to next file\n");
+                    break;
+                case 1:
+                    logger("File was removed, moving to next file\n");
+                    break;
+                case 2:
+                    logger("\"atlas.json\" file template is missing in the program's files! Skipping to next iteraction\n");
+                    break;
+                }
                 line_number++;
 
                 continue;
