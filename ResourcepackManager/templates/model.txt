@@ -5,76 +5,74 @@
 	},
     "elements": [
         {
-			"from": [x, y, z],
-			"to": [x, y, z],
-			"rotation": {"angle": [definition], "axis": "[definition]", "origin": [x, y, z]},
+			"from": %fd, %fd, %fd,
+			"to": %fd, %fd, %fd,
+			"rotation": {"angle": %fd, "axis": "%fd", "origin": %fd, %fd, %fd},
 			"faces": {
-				"north": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
-				"east": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
-				"south": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
-				"west": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
-				"up": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]},
-				"down": {"uv": [x, y, size_x, size_y],"rotation": [definition] ,"texture": "#[variable]", "tintindex": [definition]}
+				"north": {"uv": %fd, %fd, %fd, %fd,"rotation": %fd ,"texture": "#[variable]", "tintindex": %d},
+				"east": {"uv": %fd, %fd, %fd, %fd,"rotation": %fd ,"texture": "#[variable]", "tintindex": %d},
+				"south": {"uv": %fd, %fd, %fd, %fd,"rotation": %fd ,"texture": "#[variable]", "tintindex": %d},
+				"west": {"uv": %fd, %fd, %fd, %fd,"rotation": %fd ,"texture": "#[variable]", "tintindex": %d},
+				"up": {"uv": %fd, %fd, %fd, %fd,"rotation": %fd ,"texture": "#[variable]", "tintindex": %d},
+				"down": {"uv": %fd, %fd, %fd, %fd,"rotation": %fd ,"texture": "#[variable]", "tintindex": %d}
 			}
 		}
     ],
-	"gui_light": "[definition]",
+	"gui_light": "%s",
 	"display": {
 		"thirdperson_righthand": {
-			"rotation": [x, y, z],
-			"translation": [x, y, z],
-			"scale": [x, y, z]
+			"rotation": %fd, %fd, %fd,
+			"translation": %fd, %fd, %fd,
+			"scale": %fd, %fd, %fd
 		},
 		"thirdperson_lefthand": {
-			"rotation": [x, y, z],
-			"translation": [x, y, z],
-			"scale": [x, y, z]
+			"rotation": %fd, %fd, %fd,
+			"translation": %fd, %fd, %fd,
+			"scale": %fd, %fd, %fd
 		},
 		"firstperson_righthand": {
-			"rotation": [x, y, z],
-			"translation": [x, y, z],
-			"scale": [x, y, z]
+			"rotation": %fd, %fd, %fd,
+			"translation": %fd, %fd, %fd,
+			"scale": %fd, %fd, %fd
 		},
 		"firstperson_lefthand": {
-			"rotation": [x, y, z],
-			"translation": [x, y, z],
-			"scale": [x, y, z]
+			"rotation": %fd, %fd, %fd,
+			"translation": %fd, %fd, %fd,
+			"scale": %fd, %fd, %fd
 		},
 		"gui": {
-			"rotation": [x, y, z],
-			"translation": [x, y, z],
-			"scale": [x, y, z]
+			"rotation": %fd, %fd, %fd,
+			"translation": %fd, %fd, %fd,
+			"scale": %fd, %fd, %fd
 		},
 		"head": {
-			"rotation": [x, y, z],
-			"translation": [x, y, z],
-			"scale": [x, y, z]
+			"rotation": %fd, %fd, %fd,
+			"translation": %fd, %fd, %fd,
+			"scale": %fd, %fd, %fd
 		},
 		"ground": {
-			"rotation": [x, y, z],
-			"translation": [x, y, z],
-			"scale": [x, y, z]
+			"rotation": %fd, %fd, %fd,
+			"translation": %fd, %fd, %fd,
+			"scale": %fd, %fd, %fd
 		},
 		"fixed": {
-			"rotation": [x, y, z],
-			"translation": [x, y, z],
-			"scale": [x, y, z]
+			"rotation": %fd, %fd, %fd,
+			"translation": %fd, %fd, %fd,
+			"scale": %fd, %fd, %fd
 		}
 	},
 	"groups": [
-		[elementx],
 		{
-			"name": "[definition]",
-			"origin": [x, y, z],
-			"color": [definition],
-			"children": [elements]
+			"name": "%s",
+			"origin": %s,
+			"color": %s,
+			"children": %s
 		}
 	],
 	"overrides": [
 		{
-		"model": "[definition]",
-		"predicate": {"[type]": [definition]}
+			"model": "%s",
+			"predicate": {"%s": %s}
 		}
 	]
 }
-[processed]

@@ -1926,7 +1926,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
     FOLDER* cursor = override;
     char *pointer, *checkpoint, *temp, *path, buffer[1024], command[256], namespace[256], name[128];
     ARCHIVE *origin, *instruct, *template;
-    OBJECT* placeholder, *value, *query;
+    OBJECT *placeholder, *value, *query;
     int line_number = 0, message = -1;
     bool skip = false;
 
@@ -2053,7 +2053,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 }
 
                 if (query == NULL) {
-                    logger("textures member wasn't found at %s, the program will add manually\n");
+                    logger("textures member wasn't found at %s, the program will add manually\n", origin->name);
                     line_number++;
 
                     query = createOBJ("\"textures\"");
@@ -2126,7 +2126,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 }
 
                 for (size_t x = 0; x < templates->count; x++) {
-                    if (strcmp(templates->content[x].name, "atlases.json") == 0) {
+                    if (strcmp(templates->content[x].name, "atlases.txt") == 0) {
                         query = processOBJ(templates->content[x].tab);
                         query = query->value->value;
                         break;
@@ -2222,7 +2222,126 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
                 skip = true;
                 message = 1;
-            }
+            } else if (strstr(command, "disassemble") != NULL) {
+				checkpoint = strchr(checkpoint, ' ');
+				sscanf(checkpoint, "%255s", command);
+
+				//OBJECT value, query, placeholder;
+				OBJECT *mirror, *copy, *elements, *cube, *base, *children;
+				QUEUE *groups, *list;
+				FOLDER* permutate_destination;
+				bool trim = false;
+
+				if (strcmp(command, "trim") == 0) {
+					trim = true;
+
+					checkpoint = strchr(checkpoint, ' ');
+					sscanf(checkpoint + 1, "%255[^\"]", command);
+				}
+
+				//Cleaning the reference
+				mirror = dupOBJ(placeholder);
+				for (size_t x = 0; x < mirror->count; x++) {
+					if (strcmp(mirror->value[x].declaration, "\"elements\"") == 0) {
+						query = mirror->value[x].value;
+						while (query->count > 0) {
+							delOBJ(query->value, 0);
+						}
+
+					} else if (strcmp(mirror->value[x].declaration, "\"groups\"") == 0) {
+						query = mirror->value[x].value;
+						while (query->count > 0) {
+							delOBJ(query->value, 0);
+						}
+
+					}
+				}
+
+				//QUEUEing the groups names and position
+				for (size_t x = 0; x < placeholder->count; x++) {
+					if (strcmp(placeholder->value[x].declaration, "\"elements\"") == 0) {
+						elements = placeholder->value[x].value;
+					} else if (strcmp(placeholder->value[x].declaration, "\"groups\"") == 0) {
+						query = placeholder->value[x].value;
+						groups = initQueue(query->count);
+
+						for (size_t y = 0; y < query->count; y++) {
+							if (strcmp(query->value[x].value[y].declaration, "\"name\"") == 0) {
+								if (strcmp(groups->item[groups->end - 1], "\"base\"") == 0) {
+									base = &query->value[y];
+								} else {
+									enQueue(groups, query->value[x].value[y].value->value->declaration);
+									groups->value[groups->end - 1] = y;
+								}
+							}
+						}
+					}
+				}
+
+				//OBJECT value, copy, cube
+				//Template it's OBJECT mirror
+
+				for (size_t x = 0; x < groups->end; x++) {
+					value = dupOBJ(mirror);
+					int index;
+					ARCHIVE* permutate;
+					char file_name[256];
+
+					for (size_t y = 0; y < mirror->count; y++) {
+						if (strcmp(mirror->value[y].declaration, "\"elements\"") == 0) {
+							copy = mirror->value[y].value;
+
+							break;
+						}
+					}
+
+					if (base != NULL) {
+						for (size_t x = 0; x < base->count; x++) {
+
+							if (strcmp(base->value[x].declaration, "\"children\"") == 0) {
+
+								for (size_t y = 0; y < base->value[x].value->count; y++) {
+									sscanf(base->value[x].value->value[y].declaration, "%d", index);
+									cube = dupOBJ(&elements->value[index]);
+
+									addOBJ(&copy, cube);
+									cube = NULL;
+								}
+								break;
+							}
+						}
+					}
+
+					// query is the array of groups
+					// elements points to the target cubes
+					// copy points to the destination of the copied cubes
+					for (size_t y = 0; y < query->value[x].count; y++) {
+						if (strcmp(query->value[groups->value[x]].value[y].declaration, "\"children\"") == 0) {
+							children = query->value[groups->value[x]].value[y].value;
+
+							for (size_t z = 0; z < children->count; z++) {
+								sscanf(children->value[z].declaration, "%d", index);
+								cube = dupOBJ(&elements->value[index]);
+
+								addOBJ(&copy, cube);
+								cube = NULL;
+							}
+
+							break;
+						}
+					}
+
+					sprintf(file_name, "%s%d", groups->item[x], x);
+					permutate = malloc(sizeof(ARCHIVE));
+					permutate->name = strdup(file_name);
+					permutate->tab = printJSON(value);
+					permutate->size = strlen(permutate->tab);
+
+					permutate_destination = localizeFolder(navigator, command, true);
+					addFile(&permutate_destination, permutate);
+					permutate = NULL;
+				}
+			}
 
             checkpoint = strchr(checkpoint, '\n');
 

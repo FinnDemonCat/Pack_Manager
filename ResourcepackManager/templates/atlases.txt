@@ -1,24 +1,23 @@
-[raw]
 {
-    "sources": [
-        {
-            "type": "directory",
-            "source": "[definition]",
-            "prefix": "[definition]/"
-        },
-        {
-            "type": "single",
-            "resource": "[definition]"
-        },
-        {
-            "type": "paletted_permutations",
-            "textures": [
-                "[definition]"
-            ],
-            "palette_key": "[definition]",
-            "permutations": {
-                "[tag]": "[definition]",
-            }
-        }
-    ]
+	"sources": [
+		{
+			"type": "directory",
+			"source": %s,
+			"prefix": %s
+		},
+		{
+			"type": "single",
+			"resource": %s
+		},
+		{
+			"type": "paletted_permutations",
+			"textures": [
+				%s
+			],
+			"palette_key": "%s",
+			"permutations": {
+				"%s": %s
+			}
+		}
+	]
 }
