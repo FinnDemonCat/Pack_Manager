@@ -330,7 +330,8 @@ void addOBJ (OBJECT** file, OBJECT* value) {
 
 void delOBJ (OBJECT** file, size_t key) {
     while (file[0]->value[key].count > 0) {
-        delOBJ(&file[0]->value, 0);
+		OBJECT* temp = &file[0]->value[key];
+        delOBJ(&temp, 0);
     }
 
     free(file[0]->value[key].declaration);
@@ -339,7 +340,7 @@ void delOBJ (OBJECT** file, size_t key) {
     
     if (file[0]->value[key].value != NULL) {
         if (file[0]->value[key].count == 0) {
-            free(file[0]->value[key].value);
+            free(file[0]->value[key].value); // It may not be working
         } else if (file[0]->value[key].count < file[0]->value[key].capacity / 2 && file[0]->value[key].capacity > 1) {
             file[0]->value[key].capacity /= 2;
             OBJECT* temp = realloc(file[0]->value[key].value, file[0]->value[key].capacity * sizeof(OBJECT));
@@ -491,18 +492,13 @@ OBJECT* processOBJ (char* obj) {
         case '\t':
             compass->indent = true;
             break;
-		case ' ':
-			if (obj[x + 1] == ' ') {
-				compass->indent = true;
-			}
-			break;
         case ':':
             compass = &compass->value[compass->count - 1];
             x += 2;
             array = false;
 
             while (true) {
-                pointer = strnotchr((obj + x), 2, ',', '\n');
+                pointer = strnotchr((obj + x), 3, ' ', ',', '\n');
 
                 switch (*pointer)
                 {
@@ -555,13 +551,6 @@ OBJECT* processOBJ (char* obj) {
                     pointer = strnotchr((obj + x), 4, ',', '\t', ' ', '\n');
                     x = (pointer - obj);
                     break;
-				case ' ':
-					if (obj[x + 1] == ' ') {
-						compass->indent = true;
-					}
-					pointer = strnotchr((obj + x), 4, ',', '\t', ' ', '\n');
-                    x = (pointer - obj);
-					break;
                 default:
                     x = (pointer - obj);
 
@@ -2000,8 +1989,10 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
             if (command[0] == 'x') {
                 free(origin->tab);
-                origin->tab = printJSON(placeholder);
-                indentJSON(&origin->tab);
+				if (placeholder != NULL) {
+					origin->tab = printJSON(placeholder);
+					indentJSON(&origin->tab);
+				}
 
                 checkpoint = strchr(checkpoint, '\"');
                 sscanf(checkpoint, "\"%256[^\"]\"", namespace);
@@ -2227,7 +2218,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				sscanf(checkpoint, "%255s", command);
 
 				//OBJECT value, query, placeholder;
-				OBJECT *mirror, *copy, *elements, *cube, *base, *children;
+				OBJECT *mirror, *copy, *elements, *cube, *base = NULL, *children;
 				QUEUE *groups, *list;
 				FOLDER* permutate_destination;
 				bool trim = false;
@@ -2235,7 +2226,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				if (strcmp(command, "trim") == 0) {
 					trim = true;
 
-					checkpoint = strchr(checkpoint, ' ');
+					checkpoint = strchr(checkpoint + 1, '\"');
 					sscanf(checkpoint + 1, "%255[^\"]", command);
 				}
 
@@ -2245,14 +2236,12 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 					if (strcmp(mirror->value[x].declaration, "\"elements\"") == 0) {
 						query = mirror->value[x].value;
 						while (query->count > 0) {
-							delOBJ(query->value, 0);
+							delOBJ(&query, 0);
 						}
 
 					} else if (strcmp(mirror->value[x].declaration, "\"groups\"") == 0) {
-						query = mirror->value[x].value;
-						while (query->count > 0) {
-							delOBJ(query->value, 0);
-						}
+						query = &mirror->value[x];
+						delOBJ(&mirror, x);
 
 					}
 				}
@@ -2265,32 +2254,39 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 						query = placeholder->value[x].value;
 						groups = initQueue(query->count);
 
-						for (size_t y = 0; y < query->count; y++) {
-							if (strcmp(query->value[x].value[y].declaration, "\"name\"") == 0) {
-								if (strcmp(groups->item[groups->end - 1], "\"base\"") == 0) {
-									base = &query->value[y];
-								} else {
-									enQueue(groups, query->value[x].value[y].value->value->declaration);
-									groups->value[groups->end - 1] = y;
+						 for (size_t y = 0; y < query->count; y++) {
+
+							for (size_t z = 0; z < query->value[y].count; z++) {
+
+								if (strcmp(query->value[y].value[z].declaration, "\"name\"") == 0) {
+
+									if (strcmp(query->value[y].value[z].value->declaration, "\"base\"") == 0) {
+										base = &query->value[y].value[z];
+									} else {
+										enQueue(groups, query->value[y].value[z].value->declaration);
+										groups->value[groups->end - 1] = y;
+									}
+
+									break;
 								}
 							}
-						}
+						 }
 					}
 				}
 
 				//OBJECT value, copy, cube
 				//Template it's OBJECT mirror
 
-				for (size_t x = 0; x < groups->end; x++) {
+				for (size_t x = 0; x < (size_t)groups->end; x++) {
 					value = dupOBJ(mirror);
 					int index;
 					ARCHIVE* permutate;
 					char file_name[256];
 
-					for (size_t y = 0; y < mirror->count; y++) {
-						if (strcmp(mirror->value[y].declaration, "\"elements\"") == 0) {
-							copy = mirror->value[y].value;
+					for (size_t y = 0; y < value->count; y++) {
 
+						if (strcmp(value->value[y].declaration, "\"elements\"") == 0) {
+							copy = value->value[y].value;
 							break;
 						}
 					}
@@ -2301,7 +2297,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 							if (strcmp(base->value[x].declaration, "\"children\"") == 0) {
 
 								for (size_t y = 0; y < base->value[x].value->count; y++) {
-									sscanf(base->value[x].value->value[y].declaration, "%d", index);
+									sscanf(base->value[x].value->value[y].declaration, "%d", &index);
 									cube = dupOBJ(&elements->value[index]);
 
 									addOBJ(&copy, cube);
@@ -2315,12 +2311,12 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 					// query is the array of groups
 					// elements points to the target cubes
 					// copy points to the destination of the copied cubes
-					for (size_t y = 0; y < query->value[x].count; y++) {
+					for (size_t y = 0; y < query->value[groups->value[x]].count; y++) {
 						if (strcmp(query->value[groups->value[x]].value[y].declaration, "\"children\"") == 0) {
 							children = query->value[groups->value[x]].value[y].value;
 
 							for (size_t z = 0; z < children->count; z++) {
-								sscanf(children->value[z].declaration, "%d", index);
+								sscanf(children->value[z].declaration, "%d", &index);
 								cube = dupOBJ(&elements->value[index]);
 
 								addOBJ(&copy, cube);
@@ -2331,15 +2327,20 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 						}
 					}
 
-					sprintf(file_name, "%s%d", groups->item[x], x);
+					sscanf(groups->item[x], "\"%[^\"]s\"", file_name);
+					sprintf(file_name + strlen(file_name), "%lld", x);
 					permutate = malloc(sizeof(ARCHIVE));
 					permutate->name = strdup(file_name);
 					permutate->tab = printJSON(value);
 					permutate->size = strlen(permutate->tab);
 
+					indentJSON(&permutate->tab);
+
 					permutate_destination = localizeFolder(navigator, command, true);
 					addFile(&permutate_destination, permutate);
 					permutate = NULL;
+
+					freeOBJ(value);
 				}
 			}
 
@@ -2350,10 +2351,10 @@ void executeCommand(FOLDER* target, FOLDER* override) {
                 switch (message)
                 {
                 case 0:
-                    logger("File location was moved, moving to next file\n");
+                    logger("File %s location was moved, moving to next file\n", origin->name);
                     break;
                 case 1:
-                    logger("File was removed, moving to next file\n");
+                    logger("File %s was removed, moving to next file\n", origin->name);
                     break;
                 case 2:
                     logger("\"atlas.json\" file template is missing in the program's files! Skipping to next iteraction\n");
