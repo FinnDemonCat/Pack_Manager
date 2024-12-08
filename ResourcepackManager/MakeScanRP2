@@ -2,7 +2,7 @@ CC = gcc
 TYPE = -static
 DIR = ./ResourcepackManager/
 LIBDIR = -LC:\mingw64\lib
-INCLUDES =  -lpdcurses $(TYPE) -lminizip -lz -lbz2 -lzstd -llzma -lbcrypt
+INCLUDES =  -lpdcurses $(TYPE) -lminizip -lz -lbz2 -lzstd -llzma -lbcrypt -lpng
 
 FILE = ScanRP2
 ICON = icon

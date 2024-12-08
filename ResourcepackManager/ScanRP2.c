@@ -9,9 +9,11 @@
 #include <unistd.h>
 #include <zlib.h>
 #include <minizip/zip.h>
+#include <windows.h>
 #include <math.h>
 #include <time.h>
 #include <locale.h>
+#include <png.h>
 
 #define ENTER 10
 #define TAB '\t'
@@ -58,6 +60,12 @@ typedef struct OBJECT {
     size_t capacity;
     bool indent;
 } OBJECT;
+
+typedef struct TEXTURE {
+	char *data;
+    size_t size;
+    size_t index;  
+} TEXTURE;
 
 WINDOW* sidebar;
 WINDOW* window;
@@ -257,6 +265,17 @@ void printLog(char* path) {
     fclose(reporting);
 }
 
+void pngErrLogger(png_structp png_ptr, png_const_charp message) {
+	(void)png_ptr;
+	logger("PNG > Error! %s\n", message);
+}
+
+void pngWarningLogger(png_structp png_ptr, png_const_charp message) {
+	(void)png_ptr;
+    logger("PNG > Warning! %s\n", message);
+}
+
+
 //Check for the filetype, counting zip file
 int fileType(const char* path) {
     char* pointer = strrchr(path, '/');
@@ -318,7 +337,6 @@ void addOBJ (OBJECT** file, OBJECT* value) {
             logger("Error reallocating memory for %s\n", file[0]->declaration);
             return;
         } else {
-            logger("Reallocated memory for %s sucessfully\n", file[0]->declaration);
             file[0]->value = temp;
         }
     }
@@ -823,9 +841,15 @@ ARCHIVE* getUnzip(unzFile* file, const char* name) {
 ARCHIVE* getFile(const char* path) {
     char *buffer, *placeholder;
     size_t bytesRead, length = 0, capacity = 1024;
-    FILE *file = fopen(path, "r");
+    FILE *file;
     ARCHIVE* model = (ARCHIVE*)malloc(sizeof(ARCHIVE));
     buffer = (char*)calloc(1025, sizeof(char));
+
+	if (strstr(path, ".png") != NULL) {
+		file = fopen(path, "rb");
+	} else {
+		file = fopen(path, "r");
+	}
 
     if (file == NULL) {
         logger("getFile: Could not open %s due to %s\n", path, strerror(errno));
@@ -1910,6 +1934,188 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
     logger("Finished targets linking, starting the override process\n");
 }
 
+void readPNGFile (png_structp image, png_bytep data, png_size_t size) {
+	TEXTURE* reader = (TEXTURE*)png_get_io_ptr(image);
+
+	if (reader->index + size > reader->size) {
+		pngErrLogger(image, "Reading beyond of the buffer!\n");
+	}
+
+	memcpy(data, reader->data + reader->index, size);
+	reader->index += size;
+}
+
+void getPNGDimentions (char* image, size_t size, int *height, int *width) {
+	TEXTURE reader = {
+		image, size, 0
+	};
+
+	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_infop info = png_create_info_struct(png);
+
+	png_set_read_fn(png, &reader, readPNGFile);
+	png_read_info(png, info);
+
+	*height = png_get_image_height(png, info);
+	*width = png_get_image_width(png, info);
+
+	png_destroy_read_struct(&png, &info, NULL);
+}
+
+png_bytep* processPNG (char* image, size_t size) {
+	size_t row_size, height;
+	png_bytep *row_pointers;
+
+	TEXTURE reader = {
+		image, size, 0
+	};
+
+	// Creating png structs
+	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_infop info = png_create_info_struct(png);
+
+	// Setting up custom reading
+	png_set_read_fn(png, &reader, readPNGFile);
+	png_read_info(png, info);
+
+	// Getting dimentions and color information
+    height = png_get_image_height(png, info);
+    png_byte color_type = png_get_color_type(png, info);
+    png_byte bit_depth = png_get_bit_depth(png, info);
+
+	// Adjusting mode to RGB if necessary
+	if (color_type == PNG_COLOR_TYPE_PALETTE) {
+		png_set_palette_to_rgb(png);
+	}
+    if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) {
+		png_set_expand_gray_1_2_4_to_8(png);
+	}
+    if (png_get_valid(png, info, PNG_INFO_tRNS)) {
+		png_set_tRNS_to_alpha(png);
+	}
+    if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_GRAY) {
+        png_set_add_alpha(png, 0xFF, PNG_FILLER_AFTER);
+	}
+
+	// Updating png structs info
+	png_read_update_info(png, info);
+	row_size = png_get_rowbytes(png, info);
+
+	row_pointers = (png_bytep *)malloc(height * sizeof(png_bytep));
+    if (!row_pointers) {
+        logger("Fail to allocate memory while reading the png: %s\n", strerror(errno));
+        png_destroy_read_struct(&png, &info, NULL);
+        return NULL;
+    }
+
+    for (int y = 0; y < (int)height; y++) {
+        row_pointers[y] = (png_bytep)malloc(row_size);
+        if (!row_pointers[y]) {
+            logger("Fail to allocate memory for image line: %s\n", strerror(errno));
+
+            for (int j = 0; j < y; j++) {
+                free(row_pointers[j]);
+            }
+            free(row_pointers);
+            png_destroy_read_struct(&png, &info, NULL);
+            return NULL;
+        }
+    }
+	
+	//Linking pointer array to char matrix
+    png_read_image(png, row_pointers);
+	png_destroy_read_struct(&png, &info, NULL);
+    return row_pointers;
+}
+
+void writePNGFile (png_structp png, png_bytep data, png_size_t size) {
+	TEXTURE* writer = (TEXTURE*)png_get_io_ptr(png);
+
+	if (writer->size + size > writer->index) {
+        writer->index *= 2;
+        writer->data = realloc(writer->data, writer->index);
+    }
+
+	memcpy(writer->data + writer->size, data, size);
+    writer->size += size;
+}
+
+char* printPNG (char* file, size_t input_size, png_bytep *pixels) {
+	png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (!png) return NULL;
+
+    png_infop data = png_create_info_struct(png);
+    if (!data) {
+        png_destroy_write_struct(&png, NULL);
+        return NULL;
+    }
+
+    if (setjmp(png_jmpbuf(png))) {
+        png_destroy_write_struct(&png, &data);
+        return NULL;
+    }
+
+	TEXTURE reader = {
+		file, input_size, 0
+	};
+
+	png_set_read_fn(png, &reader, readPNGFile);
+	png_read_info(png, data);
+
+	size_t width = png_get_image_width(png, data);
+    size_t height = png_get_image_height(png, data);
+    int color_type = png_get_color_type(png, data);
+    int bit_depth = png_get_bit_depth(png, data);
+
+	png_structp write_png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!write_png) {
+        png_destroy_read_struct(&png, &data, NULL);
+        return NULL;
+    }
+
+	png_infop write_info = png_create_info_struct(write_png);
+    if (!write_info) {
+        png_destroy_write_struct(&write_png, NULL);
+        png_destroy_read_struct(&png, &data, NULL);
+        return NULL;
+    }
+
+	if (setjmp(png_jmpbuf(write_png))) {
+        png_destroy_write_struct(&write_png, &write_info);
+        png_destroy_read_struct(&png, &data, NULL);
+        return NULL;
+    }
+
+	TEXTURE buffer = { malloc(1024), 0, 1024 };
+    if (!buffer.data) {
+        png_destroy_write_struct(&write_png, &write_info);
+        png_destroy_read_struct(&png, &data, NULL);
+        return NULL;
+    }
+
+	png_set_write_fn(write_png, &buffer, writePNGFile, NULL);
+
+	png_set_IHDR(
+        write_png, write_info,
+        width, height,
+        bit_depth,
+        color_type,
+        PNG_INTERLACE_NONE,
+        PNG_COMPRESSION_TYPE_DEFAULT,
+        PNG_FILTER_TYPE_DEFAULT
+    );
+
+	png_write_info(write_png, write_info);
+
+	png_write_image(write_png, pixels);
+    png_write_end(write_png, NULL);
+
+	png_destroy_write_struct(&write_png, &write_info);
+    png_destroy_read_struct(&png, &data, NULL);
+
+	 return buffer.data;
+}
+
 void executeCommand(FOLDER* target, FOLDER* override) {
     FOLDER* navigator = target;
     FOLDER* cursor = override;
@@ -2204,12 +2410,17 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				indentJSON(&origin->tab);
                 origin->size = strlen(origin->tab);
             } else if (strstr(command, "remove") != NULL) {
-                for (size_t x = 0; x < cursor->count; x++) {
-                    if (strcmp(cursor->content[x].name, name) == 0) {
-                        delFile(&cursor, x);
-                        break;
-                    }
-                }
+				if (origin != NULL) {
+					for (size_t x = 0; x < cursor->count; x++) {
+						if (strcmp(cursor->content[x].name, origin->name) == 0) {
+							delFile(&cursor, x);
+							break;
+						}
+					}
+				} else {
+					freeFolder(cursor);
+					cursor = NULL;
+				}
 
                 skip = true;
                 message = 1;
@@ -2219,7 +2430,7 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
 				//OBJECT value, query, placeholder;
 				OBJECT *mirror, *copy, *elements, *cube, *base = NULL, *children;
-				QUEUE *groups, *list;
+				QUEUE *groups;
 				FOLDER* permutate_destination;
 				bool trim = false;
 
@@ -2328,7 +2539,6 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 					}
 
 					sscanf(groups->item[x], "\"%[^\"]s\"", file_name);
-					sprintf(file_name + strlen(file_name), "%lld", x);
 					permutate = malloc(sizeof(ARCHIVE));
 					permutate->name = strdup(file_name);
 					permutate->tab = printJSON(value);
@@ -2341,6 +2551,125 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 					permutate = NULL;
 
 					freeOBJ(value);
+				}
+
+				for (size_t x = 0; x < cursor->count && trim == true; x++) {
+					if (strcmp(cursor->content[x].name, origin->name) == 0) {
+						delFile(&cursor, x);
+						break;
+					}
+				}
+			} else if (strcmp(command, "permutate_texture") == 0) {
+				// 1 find map
+				// 2 queue colors
+				// 3 create new duplicate texture
+				// 4 process map string
+				// 5 process texture string
+				// 6 substitute colors for each pallet in new file
+				// 7 clear map and pallets
+
+				// Processing file into pixels array
+				int width, height, texture_count = 0;
+				int lines, collums;
+				ARCHIVE *map, *copies[32];
+				FOLDER* location;
+				OBJECT* list;
+				png_bytep *texture, *pixels, *textures[32], *placeholders[32];
+				//pixels = processPNG(origin->tab, origin->size, &width, &height, &channels);
+				
+				//Getting texture map name
+				checkpoint = strchr(checkpoint, '\"');
+				sscanf(checkpoint + 1, "%[^\"]127", name);
+
+				for (size_t x = 0; x < cursor->count; x++) {
+					if (strcmp(cursor->content[x].name, name) == 0) {
+						map = &cursor->content[x];
+					}
+				}
+
+				//Getting pallets list
+				checkpoint = strchr(checkpoint, '{');
+				sscanf(checkpoint + 1, "%[^}]255", namespace);
+				char* temp = strdup(namespace);
+				list = processOBJ(temp);
+				free(temp);
+
+				for (size_t x = 0; x < list->count; x++) {
+					char* name_pointer;
+					sscanf(list->value[x].declaration, "\"%[^\"]s\"", namespace);
+					location = localizeFolder(navigator, namespace, false);
+
+					if (location == NULL) {
+						logger("%s is an invalid path\n", namespace);
+						continue;
+					}
+
+					if ((name_pointer = strrchr(namespace, '/')) == NULL) {
+						name_pointer = namespace;
+					} else {
+						memmove(namespace, name_pointer, strlen(name_pointer) + 1);
+					}
+
+					for (size_t y = 0; y < cursor->count; y++) {
+
+						if (strcmp(cursor->content[y].name, namespace) == 0) {
+							textures[texture_count] = processPNG(cursor->content[y].tab, cursor->content[y].size);
+
+							copies[texture_count] = dupFile(&cursor->content[y]);
+							placeholders[texture_count] = processPNG(copies[texture_count]->tab, copies[texture_count]->size);
+
+							texture_count++;
+							break;
+						}
+					}
+				}
+
+				//Continue with color substitution
+				pixels = processPNG(map->tab, map->size); // Color map
+				texture = processPNG(origin->tab, origin->size); // Texture
+
+				// textures[], copies[]
+				getPNGDimentions(origin->tab, origin->size, &height, &width);
+				getPNGDimentions(map->tab, map->size, &lines, &collums);
+
+				for (int x = 0; x < height; x++) {
+					for (int y = 0; y < width; y++) {
+						png_bytep px = &pixels[0][x];
+						png_bytep compare = &texture[x][y];
+
+						if (px[3] == 255) {
+							continue;
+						}
+
+						if (
+							px[0] == compare[0]
+							&& px[1] == compare[1]
+							&& px[2] == compare[2]
+						) {
+							for (int z = 0; z < texture_count; z++) {
+								placeholders[x][y][0] = textures[x][y][0];
+								placeholders[x][y][1] = textures[x][y][1];
+								placeholders[x][y][2] = textures[x][y][2];
+								placeholders[x][y][3] = textures[x][y][3];
+							}
+						}
+
+					}
+				}
+
+				for (int x = 0; x < texture_count; x++) {
+					sprintf(namespace, "%s_", copies[x]->name);
+					sscanf(list->value[x].declaration + 1, "%255[^\"]", namespace + strlen(namespace));
+					free(copies[x]->name);
+					copies[x]->name = strdup(namespace);
+					
+					free(copies[x]->tab);
+					copies[x]->tab = printPNG(copies[x]->tab, copies[x]->size, placeholders[x]);
+
+					addFile(&cursor, copies[x]);
+
+					free(textures[x]);
+					free(placeholders[x]);
 				}
 			}
 
@@ -2493,6 +2822,7 @@ int main () {
     entries = initQueue(8);
 
     logger("Starting screen\n");
+
     while (!quit) {
         //Draw miniwindow
         if (update == true) {
