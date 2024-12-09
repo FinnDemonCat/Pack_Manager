@@ -939,8 +939,14 @@ ARCHIVE* dupFile(ARCHIVE* file) {
     ARCHIVE* dup = (ARCHIVE*)malloc(sizeof(ARCHIVE));
 
     dup->name = strdup(file->name);
-    dup->tab = strdup(file->tab);
     dup->size = file->size;
+
+	if (strstr(dup->name, ".png") == NULL) {
+    	dup->tab = strdup(file->tab);
+	} else {
+		dup->tab = malloc(dup->size);
+		memcpy(dup->tab, file->tab, file->size);
+	}
 
     return dup;
 }
@@ -2571,10 +2577,10 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				// Processing file into pixels array
 				int width, height, texture_count = 0;
 				int lines, collums;
-				ARCHIVE *map, *copies[32];
+				ARCHIVE *map, *copies[32], *pallets[32];
 				FOLDER* location;
 				OBJECT* list;
-				png_bytep *texture, *pixels, *textures[32], *placeholders[32];
+				png_bytep *texture, *pixels, *pallet, *paint;
 				//pixels = processPNG(origin->tab, origin->size, &width, &height, &channels);
 				
 				//Getting texture map name
@@ -2584,12 +2590,13 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				for (size_t x = 0; x < cursor->count; x++) {
 					if (strcmp(cursor->content[x].name, name) == 0) {
 						map = &cursor->content[x];
+						break;
 					}
 				}
 
 				//Getting pallets list
 				checkpoint = strchr(checkpoint, '{');
-				sscanf(checkpoint + 1, "%[^}]255", namespace);
+				sscanf(checkpoint, "%[^\n]255", namespace);
 				char* temp = strdup(namespace);
 				list = processOBJ(temp);
 				free(temp);
@@ -2597,7 +2604,12 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				for (size_t x = 0; x < list->count; x++) {
 					char* name_pointer;
 					sscanf(list->value[x].declaration, "\"%[^\"]s\"", namespace);
-					location = localizeFolder(navigator, namespace, false);
+
+					if (namespace[0] == '.') {
+						location = localizeFolder(override, namespace, false);
+					} else {
+						location = localizeFolder(target, namespace, false);
+					}
 
 					if (location == NULL) {
 						logger("%s is an invalid path\n", namespace);
@@ -2607,16 +2619,14 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 					if ((name_pointer = strrchr(namespace, '/')) == NULL) {
 						name_pointer = namespace;
 					} else {
-						memmove(namespace, name_pointer, strlen(name_pointer) + 1);
+						memmove(namespace, name_pointer + 1, strlen(name_pointer + 1) + 1);
 					}
 
 					for (size_t y = 0; y < cursor->count; y++) {
 
-						if (strcmp(cursor->content[y].name, namespace) == 0) {
-							textures[texture_count] = processPNG(cursor->content[y].tab, cursor->content[y].size);
-
-							copies[texture_count] = dupFile(&cursor->content[y]);
-							placeholders[texture_count] = processPNG(copies[texture_count]->tab, copies[texture_count]->size);
+						if (strcmp(location->content[y].name, namespace) == 0) {
+							pallets[texture_count] = dupFile(&location->content[y]);
+							copies[texture_count] = dupFile(origin);
 
 							texture_count++;
 							break;
@@ -2628,35 +2638,79 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				pixels = processPNG(map->tab, map->size); // Color map
 				texture = processPNG(origin->tab, origin->size); // Texture
 
-				// textures[], copies[]
 				getPNGDimentions(origin->tab, origin->size, &height, &width);
 				getPNGDimentions(map->tab, map->size, &lines, &collums);
 
+				for (int a = 0; a < texture_count; a++) {
+					png_bytep compare, px;
+					char* temp;
+					paint = processPNG(copies[a]->tab, copies[a]->size);
+					pallet = processPNG(pallets[a]->tab, pallets[a]->size);
+
+					for (int x = 0; x < height; x++) {
+						for (int y = 0; y < width; y++) {
+
+							for (int z = 0; z < collums; z++) {
+								compare = &texture[x][y * 4];
+								px = &pixels[0][z * 4];
+
+								if (
+									px[0] == compare[0]
+									&& px[1] == compare[1]
+									&& px[2] == compare[2]
+								) {
+									paint[x][(y * 4) + 0] = pallet[0][(z * 4) + 0];
+									paint[x][(y * 4) + 1] = pallet[0][(z * 4) + 1];
+									paint[x][(y * 4) + 2] = pallet[0][(z * 4) + 2];
+									paint[x][(y * 4) + 3] = pallet[0][(z * 4) + 3];
+								}
+							}
+						}
+					}
+
+					temp = printPNG(copies[a]->tab, copies[a]->size, paint);
+					free(copies[a]->tab);
+					copies[a]->tab = temp;
+					temp = NULL;
+
+					FILE* debug = fopen("c:\\Users\\Calie\\Downloads\\debug.png", "wb+");
+					fwrite(copies[a]->tab, sizeof(char), copies[a]->size, debug);
+					fclose(test);
+
+					for (int x = 0; x < height; x++) {
+						free(paint[x]);
+						free(pallet[x]);
+					}
+				}
+				/* 
 				for (int x = 0; x < height; x++) {
 					for (int y = 0; y < width; y++) {
-						png_bytep px = &pixels[0][x];
-						png_bytep compare = &texture[x][y];
+						png_bytep compare = &texture[x][y * 4];
 
-						if (px[3] == 255) {
+						if (compare[3] == 0) {
 							continue;
 						}
 
-						if (
-							px[0] == compare[0]
-							&& px[1] == compare[1]
-							&& px[2] == compare[2]
-						) {
-							for (int z = 0; z < texture_count; z++) {
-								placeholders[x][y][0] = textures[x][y][0];
-								placeholders[x][y][1] = textures[x][y][1];
-								placeholders[x][y][2] = textures[x][y][2];
-								placeholders[x][y][3] = textures[x][y][3];
+						for (int z = 0; z < collums; z++) {
+							png_bytep px = &pixels[0][z * 4];
+
+							if (
+								px[0] == compare[0]
+								&& px[1] == compare[1]
+								&& px[2] == compare[2]
+							) {
+								for (int a = 0; a < texture_count; a++) {
+									placeholders[a][x][(y * 4) + 0] = textures[a][0][(z * 4) + 0]; // Continue debugging
+									placeholders[a][x][(y * 4) + 1] = textures[a][0][(z * 4) + 1];
+									placeholders[a][x][(y * 4) + 2] = textures[a][0][(z * 4) + 2];
+									placeholders[a][x][(y * 4) + 3] = textures[a][0][(z * 4) + 3];
+								}
+
+								break;
 							}
 						}
-
 					}
 				}
-
 				for (int x = 0; x < texture_count; x++) {
 					sprintf(namespace, "%s_", copies[x]->name);
 					sscanf(list->value[x].declaration + 1, "%255[^\"]", namespace + strlen(namespace));
@@ -2668,9 +2722,14 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 
 					addFile(&cursor, copies[x]);
 
+					FILE* debugger = fopen("c:\\Users\\Calie\\Downloads\\test.png", "w+");
+					fwrite(copies[x]->tab, 1, copies[x]->size, debugger);
+
 					free(textures[x]);
 					free(placeholders[x]);
 				}
+				*/
+
 			}
 
             checkpoint = strchr(checkpoint, '\n');
