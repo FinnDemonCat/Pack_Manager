@@ -2577,10 +2577,10 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				// Processing file into pixels array
 				int width, height, texture_count = 0;
 				int lines, collums;
-				ARCHIVE *map, *copies[32], *pallets[32];
+				ARCHIVE *map, *copies[32];
 				FOLDER* location;
 				OBJECT* list;
-				png_bytep *texture, *pixels, *pallet, *paint;
+				png_bytep *texture, *pixels, *pallet[32], *to_paint[32];
 				//pixels = processPNG(origin->tab, origin->size, &width, &height, &channels);
 				
 				//Getting texture map name
@@ -2625,15 +2625,17 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 					for (size_t y = 0; y < cursor->count; y++) {
 
 						if (strcmp(location->content[y].name, namespace) == 0) {
-							pallets[texture_count] = dupFile(&location->content[y]);
 							copies[texture_count] = dupFile(origin);
+
+							pallet[texture_count] = processPNG(location->content[y].tab, location->content[y].size);
+							to_paint[texture_count] = processPNG(copies[texture_count]->tab, copies[texture_count]->size);
 
 							texture_count++;
 							break;
 						}
 					}
 				}
-
+				
 				//Continue with color substitution
 				pixels = processPNG(map->tab, map->size); // Color map
 				texture = processPNG(origin->tab, origin->size); // Texture
@@ -2641,58 +2643,14 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 				getPNGDimentions(origin->tab, origin->size, &height, &width);
 				getPNGDimentions(map->tab, map->size, &lines, &collums);
 
-				for (int a = 0; a < texture_count; a++) {
-					png_bytep compare, px;
-					char* temp;
-					paint = processPNG(copies[a]->tab, copies[a]->size);
-					pallet = processPNG(pallets[a]->tab, pallets[a]->size);
-
-					for (int x = 0; x < height; x++) {
-						for (int y = 0; y < width; y++) {
-
-							for (int z = 0; z < collums; z++) {
-								compare = &texture[x][y * 4];
-								px = &pixels[0][z * 4];
-
-								if (
-									px[0] == compare[0]
-									&& px[1] == compare[1]
-									&& px[2] == compare[2]
-								) {
-									paint[x][(y * 4) + 0] = pallet[0][(z * 4) + 0];
-									paint[x][(y * 4) + 1] = pallet[0][(z * 4) + 1];
-									paint[x][(y * 4) + 2] = pallet[0][(z * 4) + 2];
-									paint[x][(y * 4) + 3] = pallet[0][(z * 4) + 3];
-								}
-							}
-						}
-					}
-
-					temp = printPNG(copies[a]->tab, copies[a]->size, paint);
-					free(copies[a]->tab);
-					copies[a]->tab = temp;
-					temp = NULL;
-
-					FILE* debug = fopen("c:\\Users\\Calie\\Downloads\\debug.png", "wb+");
-					fwrite(copies[a]->tab, sizeof(char), copies[a]->size, debug);
-					fclose(test);
-
-					for (int x = 0; x < height; x++) {
-						free(paint[x]);
-						free(pallet[x]);
-					}
-				}
-				/* 
 				for (int x = 0; x < height; x++) {
+
 					for (int y = 0; y < width; y++) {
-						png_bytep compare = &texture[x][y * 4];
+						png_bytep px, compare;
+						compare = &texture[x][y * 4];
 
-						if (compare[3] == 0) {
-							continue;
-						}
-
-						for (int z = 0; z < collums; z++) {
-							png_bytep px = &pixels[0][z * 4];
+						for (int z = 0; z < collums && compare[3] != 0; z++) {
+							px = &pixels[0][z * 4];
 
 							if (
 								px[0] == compare[0]
@@ -2700,10 +2658,9 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 								&& px[2] == compare[2]
 							) {
 								for (int a = 0; a < texture_count; a++) {
-									placeholders[a][x][(y * 4) + 0] = textures[a][0][(z * 4) + 0]; // Continue debugging
-									placeholders[a][x][(y * 4) + 1] = textures[a][0][(z * 4) + 1];
-									placeholders[a][x][(y * 4) + 2] = textures[a][0][(z * 4) + 2];
-									placeholders[a][x][(y * 4) + 3] = textures[a][0][(z * 4) + 3];
+									to_paint[a][x][(y * 4) + 0] = pallet[a][0][(z * 4) + 0];
+									to_paint[a][x][(y * 4) + 1] = pallet[a][0][(z * 4) + 1];
+									to_paint[a][x][(y * 4) + 2] = pallet[a][0][(z * 4) + 2];
 								}
 
 								break;
@@ -2711,25 +2668,6 @@ void executeCommand(FOLDER* target, FOLDER* override) {
 						}
 					}
 				}
-				for (int x = 0; x < texture_count; x++) {
-					sprintf(namespace, "%s_", copies[x]->name);
-					sscanf(list->value[x].declaration + 1, "%255[^\"]", namespace + strlen(namespace));
-					free(copies[x]->name);
-					copies[x]->name = strdup(namespace);
-					
-					free(copies[x]->tab);
-					copies[x]->tab = printPNG(copies[x]->tab, copies[x]->size, placeholders[x]);
-
-					addFile(&cursor, copies[x]);
-
-					FILE* debugger = fopen("c:\\Users\\Calie\\Downloads\\test.png", "w+");
-					fwrite(copies[x]->tab, 1, copies[x]->size, debugger);
-
-					free(textures[x]);
-					free(placeholders[x]);
-				}
-				*/
-
 			}
 
             checkpoint = strchr(checkpoint, '\n');
