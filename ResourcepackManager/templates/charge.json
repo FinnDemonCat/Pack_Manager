@@ -1,0 +1,15 @@
+{
+	"type": "minecraft:select",
+	"property": "minecraft:charge_type",
+	"cases": [
+		{
+			"model": {},
+			"when": "arrow"
+		},
+		{
+			"model": {},
+			"when": "rocket"
+		}
+	],
+	"fallback": {}
+}

@@ -1,0 +1,6 @@
+{
+	"type": "minecraft:condition",
+	"property": "minecraft:using_item",
+	"on_true": {},
+	"on_false": {}
+}

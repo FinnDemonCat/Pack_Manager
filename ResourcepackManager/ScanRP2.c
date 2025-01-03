@@ -406,6 +406,8 @@ void freeOBJ (OBJECT* file) {
     if (file[0].value != NULL) {
         free(file[0].value);
     }
+
+	free(file);
 }
 
 char* strnotchr(const char* str, int count, ...) {
@@ -593,7 +595,7 @@ OBJECT* processOBJ (char* obj) {
                         pointer = strchr(obj + x + 1, '\"');
                         pointer++;
                     } else {
-                        pointer = strchrs(pointer, 5, ' ', ',', '\n', '\t', ']');
+                        pointer = strchrs(pointer, 6, ' ', ',', '\n', '\t', ']', '}');
                     }
 
                     length = (pointer - (obj + x));
@@ -613,6 +615,8 @@ OBJECT* processOBJ (char* obj) {
                 }
             }
             break;
+		default:
+		break;
         }
     }
     
@@ -655,7 +659,7 @@ char* printJSON (OBJECT* json) {
     
     //Printing current obj in placeholder
     navigator = json;
-    if (strcmp(navigator->declaration, "obj") == 0 || strcmp(navigator->declaration, "array") == 0) {
+	if (strcmp(navigator->declaration, "obj") == 0 || strcmp(navigator->declaration, "array") == 0) {
         length = snprintf (NULL, 0,
             "%c%s%s%s%c",
             (strcmp(navigator->declaration, "obj") == 0) ? '{' : '[',
@@ -1747,7 +1751,7 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
     return navigator;
 }
 
-void mergeFile (ARCHIVE* file, ARCHIVE* overrides) {
+void copyOverides (ARCHIVE* file, ARCHIVE* overrides) {
     OBJECT *base, *predicates, *pointer, *checkpoint;
     QUEUE *matches;
 
@@ -1758,22 +1762,18 @@ void mergeFile (ARCHIVE* file, ARCHIVE* overrides) {
         predicates = processOBJ(overrides->tab);
 
         for (size_t x = 0; x < base->count; x++) {
-            if (strcmp(base->value[x].declaration, "overrides") == 0) {
+            if (strcmp(base->value[x].declaration, "\"overrides\"") == 0) {
                 pointer = base->value[x].value;
             }
         }
         
         for (size_t x = 0; x < predicates->count; x++) {
-            if (strcmp(predicates->value[x].declaration, "overrides") == 0) {
+            if (strcmp(predicates->value[x].declaration, "\"overrides\"") == 0) {
                 checkpoint = predicates->value[x].value;
             }
         }
 
         if (pointer == NULL || checkpoint == NULL) {
-            free(file->tab);
-            file->tab = strdup(overrides->tab);
-            file->size = strlen(file->tab);
-
             return;
         }
 
@@ -1816,11 +1816,6 @@ void mergeFile (ARCHIVE* file, ARCHIVE* overrides) {
         freeOBJ(base);
         freeOBJ(predicates);
 
-    } else {
-        free(file->tab);
-        file->tab = strdup(overrides->tab);
-
-        file->size = strlen(file->tab);
     }
 }
 
@@ -1896,7 +1891,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
                         logger("*%s\n", navigator->content[x].name);
                         line_number++;
                         
-                        mergeFile(&cursor->content[files->value[y]], &navigator->content[x]);
+                        copyOverides(&cursor->content[files->value[y]], &navigator->content[x]);
 
                         deQueue(files, y);
                         break;
@@ -2089,19 +2084,22 @@ void writePNGFile (png_structp png, png_bytep data, png_size_t size) {
     writer->size += size;
 }
 
-char* printPNG (char* file, size_t input_size, png_bytep *pixels) {
+void printToPNGFile (ARCHIVE** image, png_bytep *pixels) {
+	size_t input_size = image[0]->size;
+	char* file = image[0]->tab;
+
 	png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	if (!png) return NULL;
+	if (!png) return;
 
     png_infop data = png_create_info_struct(png);
     if (!data) {
         png_destroy_write_struct(&png, NULL);
-        return NULL;
+        return;
     }
 
     if (setjmp(png_jmpbuf(png))) {
         png_destroy_write_struct(&png, &data);
-        return NULL;
+        return;
     }
 
 	TEXTURE reader = {
@@ -2119,27 +2117,27 @@ char* printPNG (char* file, size_t input_size, png_bytep *pixels) {
 	png_structp write_png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     if (!write_png) {
         png_destroy_read_struct(&png, &data, NULL);
-        return NULL;
+        return;
     }
 
 	png_infop write_info = png_create_info_struct(write_png);
     if (!write_info) {
         png_destroy_write_struct(&write_png, NULL);
         png_destroy_read_struct(&png, &data, NULL);
-        return NULL;
+        return;
     }
 
 	if (setjmp(png_jmpbuf(write_png))) {
         png_destroy_write_struct(&write_png, &write_info);
         png_destroy_read_struct(&png, &data, NULL);
-        return NULL;
+        return;
     }
 
 	TEXTURE buffer = { malloc(1024), 0, 1024 };
     if (!buffer.data) {
         png_destroy_write_struct(&write_png, &write_info);
         png_destroy_read_struct(&png, &data, NULL);
-        return NULL;
+        return;
     }
 
 	png_set_write_fn(write_png, &buffer, writePNGFile, NULL);
@@ -2162,7 +2160,297 @@ char* printPNG (char* file, size_t input_size, png_bytep *pixels) {
 	png_destroy_write_struct(&write_png, &write_info);
     png_destroy_read_struct(&png, &data, NULL);
 
-	 return buffer.data;
+	free(image[0]->tab);
+	image[0]->tab = buffer.data;
+}
+
+void resizePNGFile(ARCHIVE** image, size_t height, size_t width) {
+	png_bytep* file = processPNG(image[0]->tab, image[0]->size), *resize;
+	int lines, collums;
+	size_t row_size;
+	
+	//Setting up the reader
+	png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (!png) return;
+
+    png_infop data = png_create_info_struct(png);
+    if (!data) {
+        png_destroy_write_struct(&png, NULL);
+        return;
+    }
+
+    if (setjmp(png_jmpbuf(png))) {
+        png_destroy_write_struct(&png, &data);
+        return;
+    }
+
+	TEXTURE reader = {
+		image[0]->tab, image[0]->size, 0
+	};
+
+	png_set_read_fn(png, &reader, readPNGFile);
+	png_read_info(png, data);
+
+	collums = png_get_image_width(png, data);
+    lines = png_get_image_height(png, data);
+    int color_type = png_get_color_type(png, data);
+    int bit_depth = png_get_bit_depth(png, data);
+
+	png_read_update_info(png, data);
+	row_size = png_get_rowbytes(png, data);
+
+	png_structp write_png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!write_png) {
+        png_destroy_read_struct(&png, &data, NULL);
+        return;
+    }
+
+	png_infop write_info = png_create_info_struct(write_png);
+    if (!write_info) {
+        png_destroy_write_struct(&write_png, NULL);
+        png_destroy_read_struct(&png, &data, NULL);
+        return;
+    }
+
+	if (setjmp(png_jmpbuf(write_png))) {
+        png_destroy_write_struct(&write_png, &write_info);
+        png_destroy_read_struct(&png, &data, NULL);
+        return;
+    }
+
+	TEXTURE buffer = { malloc(1024), 0, 1024 };
+    if (!buffer.data) {
+        png_destroy_write_struct(&write_png, &write_info);
+        png_destroy_read_struct(&png, &data, NULL);
+        return;
+    }
+
+	png_set_write_fn(write_png, &buffer, writePNGFile, NULL);
+
+	png_set_IHDR(
+        write_png, write_info,
+        width, height,
+        bit_depth,
+        color_type,
+        PNG_INTERLACE_NONE,
+        PNG_COMPRESSION_TYPE_DEFAULT,
+        PNG_FILTER_TYPE_DEFAULT
+    );
+
+	//Resizing 
+	resize = (png_bytep*)malloc(height * sizeof(png_bytep));
+	for (size_t y = 0; y < height; y++) {
+		resize[y] = (png_bytep)malloc(row_size);
+
+		if (resize[y] == NULL) {
+			logger("Fail to allocate memory for image line: %s\n", strerror(errno));
+
+			for (size_t x = 0; x < y; x++) {
+				free(resize[x]);
+			}
+
+			free(resize);
+			return;
+		}
+	}
+
+	for (size_t x = 0; x < height; x++) {
+
+		for (size_t y = 0; y < width; y++) {
+			png_bytep pixel, texture;
+			pixel = &resize[x][(y * 4)];
+
+			if (x < (size_t)lines && y < (size_t)collums) {
+				texture = &file[x][(y * 4)];
+
+				pixel[0] = texture[0];
+				pixel[1] = texture[1];
+				pixel[2] = texture[2];
+				pixel[3] = texture[3];
+			} else {
+
+				pixel[3] = 0;
+			}
+		}
+	}
+
+	//Writing
+	png_write_info(write_png, write_info);
+	png_write_image(write_png, resize);
+    png_write_end(write_png, NULL);
+
+	png_destroy_write_struct(&write_png, &write_info);
+	png_destroy_read_struct(&png, &data, NULL);
+
+	free(image[0]->tab);
+	image[0]->tab = buffer.data;
+}
+
+void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
+	OBJECT *placeholder, *overrides, *query, *value, *model;
+	QUEUE *types, *list;
+	char buffer[1024], *pointer, name[256];
+	int type = 0;
+
+	// 1 - Queue all the predicates type
+	// 2 - Create the components file to acomodade them
+	// 3 - Sort the entries
+
+	pointer = strchr(file[0]->name, '.');
+	snprintf(name, (pointer - file[0]->name) + 1, "%s", file[0]->name);
+
+	sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
+	model = processOBJ(buffer);
+	
+	overrides = processOBJ(file[0]->tab);
+	switch (format)
+	{
+	case 1:
+		placeholder = processOBJ("{\n\t\"model\": {}\n}");
+		placeholder = placeholder->value;
+		freeOBJ(placeholder->value);
+		placeholder->value = NULL;
+
+		// Locating the overrides
+		for (size_t x = 0; x < overrides->count; x++) {
+			if (strcmp(overrides->value[x].declaration, "\"overrides\"") == 0) {
+				overrides = &overrides->value[x];
+				break;
+			}
+		}
+
+		if (strcmp(overrides->declaration, "\"overrides\"") != 0) {
+			logger("Failed to locate \"overrides\" at %s", file[0]->name);
+			return;
+		}
+		overrides = overrides->value;
+		types = initQueue(overrides->count);
+
+		for (size_t x = 0; x < overrides->count; x++) {
+			for (size_t y = 0; y < overrides->value[x].count; y++) {
+				// Pointing to the predicates
+				if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
+					query = overrides->value[x].value[y].value;
+					break;
+				}
+			}
+
+			// Queueing the predictes
+			list = initQueue(query->count);
+			for (size_t y = 0; y < query->count; y++) {
+				list->value[list->end] = y;
+				enQueue(list, query->value[y].declaration);
+			}
+
+			// Dequeuing repeats
+			for (size_t y = 0; y < (size_t)types->end; y++) {
+				for (size_t z = 0; z < (size_t)list->end;) {
+					if (strcmp(types->item[y], list->item[z]) == 0) {
+						deQueue(list, z);
+						break;
+					} else {
+						z++;
+					}
+				}
+			}
+
+			// Adding the uniques
+			for (size_t y = 0; y < (size_t)list->end; y++) {
+				enQueue(types, list->item[y]);
+			}
+
+			endQueue(list);
+		}
+
+		// placeholder->value = processOBJ("{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:using_item\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
+		// freeOBJ(&placeholder->value[2].value); // "on_true"
+		// freeOBJ(&placeholder->value[3].value); // "on_false"
+		
+		for (size_t x = 0; x < (size_t)types->end; x++) {
+			if (strcmp(types->item[x], "\"pull\"") == 0) {
+				type = 1;
+				break;
+			}
+		}
+
+		for (size_t x = 0; x < (size_t)types->end && type == 0; x++) {
+			if (strcmp(types->item[x], "\"custom_model_data\"") == 0) {
+				type = 2;
+				break;
+			}
+		}
+
+		switch (type)
+		{
+		case 1:
+			// It's a bow / crossbow
+			placeholder->value = processOBJ("{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:using_item\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
+			freeOBJ(placeholder->value->value[2].value); // "on_true"
+			freeOBJ(placeholder->value->value[3].value); // "on_false"
+			placeholder->value->value[2].value = NULL;
+			placeholder->value->value[3].value = NULL;
+
+			for (size_t x = 0; x < (size_t)types->end; x++) {
+				if (strcmp(types->item[x], "\"charged\"") == 0) {
+					// Crossbow
+					// "on_true"
+					placeholder->value->value[2].value = processOBJ("{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:crossbow/pull\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
+					free(placeholder->value->value[2].value[2].value->value->value); // "entries" -> {"model": ,"threshold": }
+					free(placeholder->value->value[2].value[3].value); // "fall_back"
+					break;
+				}
+			}
+
+			if (placeholder->value->value[2].value == NULL) {
+				// Bow
+				// "on_true"
+				placeholder->value->value[2].value = processOBJ("{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:use_duration\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
+				free(placeholder->value->value[2].value->value[2].value->value); // "entries"
+				free(placeholder->value->value[2].value->value[3].value); // "fall_back"
+				placeholder->value->value[2].value->value[2].value->value = NULL;
+				placeholder->value->value[2].value->value[3].value = NULL;
+			}
+
+			for (size_t x = 0; x < (size_t)types->end; x++) {
+				if (strcmp(types->item[x], "\"firework\"") == 0) {
+					// "on_false"
+					placeholder->value->value[3].value = processOBJ("{\n\t\"type\": \"minecraft:select\",\n\t\"property\": \"minecraft:charge_type\",\n\t\"cases\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"when\": \"arrow\"\n\t\t},\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"when\": \"rocket\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
+					break;
+				}
+			}
+
+			// There is no charge type listed
+			if (placeholder->value->value[3].value == NULL) {
+				// "on_false"
+				sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
+				placeholder->value->value[3].value = processOBJ(buffer);
+			}
+
+			// This should let the pattern ready to add the models
+			
+			// "on_true"
+			// using_item:true -> range_dispatch -> entries
+			sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [],\n\t\"fallback\": {\n\t\t\"type\": \"minecraft:model\",\n\t\t\"model\": \"minecraft:item/%s\"\n\t}\n}", name);
+			placeholder->value->value[2].value->value[2].value->value = processOBJ(buffer);
+
+			char* temp = printJSON(placeholder);
+			break;
+		case 2:
+			// It's a regular model
+			break;
+		
+		default:
+			break;
+		}
+
+
+		break;
+	case 0:
+		/* code */
+		break;
+	default:
+		break;
+	}
 }
 
 void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
@@ -2257,7 +2545,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							if (strcmp(name, cursor->content[x].name) == 0) {
 								logger("A matching file to %s was found, copying the override contents\n", name);
 								line_number++;
-								mergeFile(file, &cursor->content[x]);
+								copyOverides(file, &cursor->content[x]);
 
 								delFile(&cursor, x);
 								break;
@@ -2425,6 +2713,16 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						value->value = NULL;
 						freeOBJ(value);
 					}
+				} else if (strcmp(command, "dimentions") == 0) {
+					getNextStr(&checkpoint, command);
+					size_t width = 0, height = 0;
+					sscanf(command, "%llux%llu", &width, &height);
+
+					resizePNGFile(&file, height, width);
+
+					FILE* test = fopen("c:\\Users\\Calie\\Downloads\\test.png", "wb+"); // This paint job isn't working for some reason
+					fwrite(file->tab, 1, file->size, test);
+					fclose(test);
 				}
 
 			} else if (strstr(command, "autofill") != NULL) {
@@ -2717,21 +3015,22 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				checkpoint = strchr(checkpoint, '\"');
 				sscanf(checkpoint + 1, "%[^\"]127", name);
 
-				for (size_t x = 0; x < cursor->count; x++) {
-					if (strcmp(cursor->content[x].name, name) == 0) {
-						pixels = processPNG(cursor->content[x].tab, cursor->content[x].size);
-						getPNGDimentions(cursor->content[x].tab, cursor->content[x].size, &lines, &collums);
+				for (size_t x = 0; x < navigator->count; x++) {
+					if (strcmp(navigator->content[x].name, name) == 0) {
+						pixels = processPNG(navigator->content[x].tab, navigator->content[x].size);
+						getPNGDimentions(navigator->content[x].tab, navigator->content[x].size, &lines, &collums);
 						break;
 					}
 				}
 
 				// Pallet
+				checkpoint += strlen(name) + 2;
 				checkpoint = strchr(checkpoint, '\"');
 				sscanf(checkpoint + 1, "%[^\"]127", name);
 
-				for (size_t x = 0; x < cursor->count; x++) {
-					if (strcmp(cursor->content[x].name, name) == 0) {
-						pallet = processPNG(cursor->content[x].tab, cursor->content[x].size);
+				for (size_t x = 0; x < navigator->count; x++) {
+					if (strcmp(navigator->content[x].name, name) == 0) {
+						pallet = processPNG(navigator->content[x].tab, navigator->content[x].size);
 						break;
 					}
 				}
@@ -2742,7 +3041,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						png_bytep px, compare;
 						compare = &texture[x][y * 4];
 
-						for (int z = 0; z < collums; z++) {
+						for (int z = 0; z < collums && compare[3] != 0; z++) {
 							px = &pixels[0][z * 4];
 
 							if (
@@ -2761,8 +3060,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 				}
 
-				free(file->tab);
-				file->tab = printPNG(file->tab, file->size, texture);
+				printToPNGFile(&file, texture);
 
 				free(pallet);
 				free(texture);
@@ -2867,15 +3165,21 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				freeOBJ(list);
 
 				for (int x = 0; x < texture_count; x++) {
-					free(copies[x]->tab);
-					copies[x]->tab = printPNG(copies[x]->tab, copies[x]->size, to_paint[x]);
-
+					printToPNGFile(&copies[x], to_paint[x]);
 					addFile(&cursor, copies[x]);
 
 					free(to_paint[x]);
 					free(pallet[x]);
 				}
+			} else if (strcmp(command, "convert_overrides") == 0) {
+				// (send adress of FOLDER and ARCHIVE pointer, return the ARCHIVE pointer file if 1, return null if 0. Crop overrides of the file if 1, delete components file if 0);
+				overridesFormatConvert(navigator, &file, 1);
 			}
+		}
+
+		if (strstr(file->name, ".json") != NULL) {
+			free(file->name);
+			file->name = printJSON(placeholder);
 		}
 	}
 }

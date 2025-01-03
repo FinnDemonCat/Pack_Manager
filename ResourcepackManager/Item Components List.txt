@@ -1,0 +1,456 @@
+
+Top-level Client Item Info
+
+    Contains information needed to render item
+    Stored in /assets/[namespace]/items/[path].json
+    Fields:
+        model: Object with fields:
+            type: Type of item model (see below)
+            <type-specific> - Additional fields depending on item model type
+        hand_animation_on_swap - Boolean field describing if down-and-up animation should be played in first-person view when item stack is changed (either type, count or components), default: true
+            Only the value from the new item is taken into account
+            Does not control "pop" animation in GUI when item is picked up or changes count
+
+minecraft:model Item Model Type
+
+    Renders a plain model from the models directory
+    Fields:
+        model: Namespaced ID of a model in models (e.g. minecraft:block/yellow_glazed_terracotta)
+        tints: A list of tint sources to apply to elements of rendered model (first entry applies to tintindex 0, second one - 1, etc.)
+            Each tint source is expected to return an RGB color
+            Colors are specified as either packed integer RGB values (e.g. -1) or an array of RGB values in range 0.0 to 1.0 (e.g. [ 1.0, 1.0, 1.0 ])
+            Format:
+                type: Type of tint source (see below)
+                <type-specific> - Additional fields depending on tint source type
+
+minecraft:constant Tint Source Type
+
+    Returns a constant RGB color
+    Fields:
+        value - RGB value
+
+minecraft:custom_model_data Tint Source Type
+
+    Returns a value from the colors list in the minecraft:custom_model_data component, if present
+    Fields:
+        index - Index for field in colors, default: 0
+        default: RGB value
+
+minecraft:dye Tint Source Type
+
+    Returns the value from the minecraft:dyed_color component, or a default value if not present
+    Fields:
+        default - RGB value
+
+minecraft:grass Tint Source Type
+
+    Returns a grass color at specific climate parameters, based on textures/colormap/grass.png
+    This yields the same colors as ones selected by downfall and temperature in biome configuration
+    Fields:
+        temperature - Float in 0..1 (inclusive) range
+        downfall - Float in 0..1 (inclusive) range
+
+minecraft:firework Tint Source Type
+
+    Returns the average of colors from minecraft:firework_explosion component, or a default color if there are none
+    Fields:
+        default: RGB value
+
+minecraft:map_color Tint Source Type
+
+    Return the color from the minecraft:map_color component, or the default color if the component is not present
+    Fields:
+        default: RGB value
+
+minecraft:potion Tint Source Type
+
+    Returns a color based on the minecraft:potion_contents component:
+        If the component is present:
+            Custom color, if there is one present in the component
+            Average of the effect colors, if at least one is present
+        Default color, if the component is not present or doesn't have any effects
+    Fields:
+        default: RGB value
+
+minecraft:team Tint Source Type
+
+    Returns the team color of the context entity, if any
+    Fields:
+        default - RGB value to return when there is no context entity, entity is not in a team or the team has no color
+
+minecraft:special Item Model Type
+
+    Renders a special (not data-driven) model
+    Fields:
+        model: Special model instance
+            Format:
+                type - Type of special model (see below)
+                <type-specific> - Additional fields depending on tint source type
+        base: Namespaced ID of a model in models to provide transformations, particle texture and GUI light
+
+minecraft:banner Special Model Type
+
+    Renders a Banner with patterns from the minecraft:banner_patterns component
+    Fields:
+        color - Color of the Banner base, one of 16 predefined colors
+
+minecraft:bed Special Model Type
+
+    Renders a whole Bed
+    Fields:
+        texture - Namespaced ID for the texture to use, without textures/entity/bed/ prefix and .png suffix
+
+minecraft:chest Special Model Type
+
+    Renders a single Chest
+    Fields:
+        texture - Namespaced ID for the texture to use, without textures/entity/chest/ prefix and .png suffix
+        openness - Float, 0.0 (default) - fully closed, 1.0 - fully open
+
+minecraft:conduit Special Model Type
+
+    Renders a Conduit
+    No fields
+
+minecraft:decorated_pot Special Model Type
+
+    Renders a Decorated Pot
+    Uses values from minecraft:pot_decorations component
+    No fields
+
+minecraft:hanging_sign Special Model Type
+
+    Renders a Hanging Sign
+    Fields:
+        wood_type - One of oak, spruce, birch, acacia, cherry, jungle, dark_oak, pale_oak, mangrove, bamboo, crimson and warped
+        texture - Optional namespaced ID for the texture to use, without textures/entity/signs/hanging/ prefix and .png suffix
+            If not present, it will be derived from wood_type
+
+minecraft:head Special Model Type
+
+    Renders a Head
+    Uses profile from minecraft:profile component when applicable
+    Fields:
+        kind - One of skeleton, wither_skeleton, player, zombie, creeper, piglin, dragon
+        texture - Optional namespaced ID for the texture to use, without textures/entity/ prefix and .png suffix
+            If absent, default texture will be used, depending on kind field
+            Additionally, if present, minecraft:profile component is ignored
+        animation - float controlling head animation (like Piglin ears or Ender Dragon jaw), default: 0.0
+
+minecraft:shield Special Model Type
+
+    Renders a Shield
+    Uses patterns from the minecraft:banner_patterns component and color from the minecraft:base_color component
+    No fields
+
+minecraft:shulker_box Special Model Type
+
+    Renders a Shulker Box
+    Fields:
+        texture - Namespaced ID for the texture to use, without textures/entity/shulker/ prefix and .png suffix
+        openness - Float, 0.0 (default) - fully closed, 1.0 - fully open
+        orientation - Orientation for rendering, default: up
+
+minecraft:standing_sign Special Model Type
+
+    Renders a Standing Sign
+    Fields:
+        wood_type - One of oak, spruce, birch, acacia, cherry, jungle, dark_oak, pale_oak, mangrove, bamboo, crimson and warped
+        texture - Optional namespaced ID for the texture to use, without textures/entity/signs/ prefix and .png suffix
+            If not present, it will be derived from wood_type
+
+minecraft:trident Special Model Type
+
+    Renders a Trident
+    No fields
+
+minecraft:composite Item Model Type
+
+    Renders multiple sub-models
+    All models are rendered in the same space
+    Fields:
+        models: A list of item models to render
+
+minecraft:condition Item Model Type
+
+    Renders an item model depending on boolean property
+    Fields:
+        property: Type of property (see below)
+        <property-specific> - Additional fields depending on property type, added inline
+        on_true - Item model to render when property is true
+        on_false - Item model to render when property is false
+
+
+minecraft:broken Boolean Property
+
+    Returns true if the item is damageable and has only one use remaining before breaking
+    No fields
+
+minecraft:bundle/has_selected_item Boolean Property
+
+    Returns true if Bundle is "open", i.e. it has selected item visible in GUI
+    No fields
+
+minecraft:carried Boolean Property
+
+    Returns true if item is carried between slots in GUI
+    No fields
+
+minecraft:custom_model_data Boolean Property
+
+    Returns a value from the flags list in the minecraft:custom_model_data component, if present
+    Returns false if the component is not present
+    Fields:
+        index - Index for the entry to use in flags, default: 0
+
+minecraft:damaged Boolean Property
+
+    Returns true if the item is damageable and has been used at least once
+    No fields
+
+minecraft:extended_view Boolean Property
+
+    Returns true if the player has requested extended details by holding down the shift key
+        Note: not a keybind, can't be rebound
+    Only works when item is displayed in UI
+    No fields
+
+minecraft:fishing_rod/cast Boolean Property
+
+    Returns true if there is a Fishing Bobber attached to currently used Fishing Rod
+    No fields
+
+minecraft:has_component Boolean Property
+
+    Returns true if the given component is present on the item
+    Fields:
+        component - Component type to check for
+        ignore_default - If the default component value for the item type should be treated as "no component", default: false
+
+minecraft:keybind_down Boolean Property
+
+    Returns true if keybind is currently active
+        Note: The keybind tested is the local one for the viewer, regardless of the context
+    Fields:
+        keybind - Keybind ID, same as the value in a keybind text component
+            Examples: key.use, key.left
+
+minecraft:selected Boolean Property
+
+    Returns true if item is selected on a hotbar
+    No fields
+
+minecraft:using_item Boolean Property
+
+    Returns true if the Player is currently using this item
+    No fields
+
+minecraft:view_entity Boolean Property
+
+    When not spectating, returns true if the context entity is the local Player entity, i.e. one controlled by client
+    When spectating, returns true if the context entity is the spectated entity
+    If no context entity is present, will return false
+    No fields
+
+minecraft:select Item Model Type
+
+    Renders an item model based on matching a string property
+    Fields:
+        property: Type of property (see below)
+        <property-specific> - Additional fields depending on property type, added inline
+        cases - List of cases to match in format:
+            when - Value to match against property, type depends on property
+                Can be a single string or a list of strings
+            model - Item model to render when this case is selected
+        fallback - Item model to render if none of the cases matched the value
+            If not present, a placeholder "missing" model will be rendered instead
+
+minecraft:block_state String Property
+
+    Returns the value of some property from the minecraft:block_state component
+    Fields:
+        block_state_property - The string key to select from the component
+    Possible values: Any string
+
+minecraft:charge_type String Property
+
+    Returns the charge type stored in the minecraft:charged_projectiles component, if present
+    No fields
+    Possible values:
+        none - If there are no projectiles, or the component is not present
+        rocket - If there is at least one firework rocket
+        arrow - Any other case
+
+minecraft:context_dimension String Property
+
+    Returns the ID of the dimension in the context, if any
+    No fields
+    Possible values: Namespaced dimension IDs (like minecraft:overworld)
+
+minecraft:context_entity_type String Property
+
+    Returns the type of entity present in the context, if any
+    No fields
+    Possible values: Namespaced entity type IDs
+
+    Developer's Note: Context entities were initially used only for Compasses and Clocks, which means that type is available only in rendering contexts where those items would show correct reading (see MC-186797 and related bugs).
+
+minecraft:custom_model_data String Property
+
+    Returns a value from strings list in the minecraft:custom_model_data component
+    Fields:
+        index - Index for the entry to use in strings, default: 0
+    Possible values: Any string
+
+minecraft:display_context String Property
+
+    Returns the context this item is being rendered in
+    No fields
+    Possible values:
+        none
+        thirdperson_lefthand
+        thirdperson_righthand
+        firstperson_lefthand
+        firstperson_righthand
+        head
+        gui
+        ground
+        fixed
+
+minecraft:local_time String Property
+
+    Returns the current time, formatted according to a given pattern
+    The value is updated every second
+    For full format documentation for locale, time zone and pattern, see the ICU (International Components for Unicode) documentation
+    Fields:
+        locale - Optional value describing the locale
+            Examples:
+                en_US: English language (used for things like week names), formatting as in USA
+                cs_AU@numbers=thai;calendar=japanese: Czech language, Australian formatting, Thai numerals and Japanese calendar
+            The default value is "", which means the "root" locale (a set of defaults, including English names)
+        time_zone - Optional value describing the time zone
+            If not present, defaults to the timezone set on the client computer
+            Examples:
+                Europe/Stockholm
+                GMT+0:45
+        pattern - Describes format to be used for time formatting
+            Examples:
+                yyyy-MM-dd - 4-digit year number, then 2-digit month number, then 2-digit day of month number, all zero-padded if needed, separated by -
+                HH:mm:ss - Current time (hours, minutes, seconds), 24-hour cycle, all zero-padded to 2 digits of needed, separated by :
+    Possible values: Any string
+
+    Developer's Note: There is no "use locale set on client" option to avoid unexpected issues when the user's locale does not match the pack developer's one. Also, time is complicated, be careful.
+
+minecraft:main_hand String Property
+
+    Returns the main hand of holding player
+    No fields
+    Possible values: left, right
+
+minecraft:trim_material String Property
+
+    Returns the value of the material field from the minecraft:trim component, if present
+    No fields
+    Possible values: Namespaced IDs
+
+minecraft:range_dispatch Item Model Type
+
+    Renders an item model based on a numeric property
+    This is a replacement for the old overrides section from block models
+    The last entry with a threshold less than or equal to the property value is selected
+    Fields:
+        property: Type of property (see below)
+        <property-specific> - Additional fields depending on property type
+        scale - Factor to multiply property value with, default: 1.0
+        entries - List of entries in format:
+            threshold - Float value for when this entry should be selected
+            model - Item model to render when this entry is selected
+            Note: The order of entries does not matter, the list will be sorted by threshold in ascending order before use
+        fallback - Item model to render if no entries were less than or equal to the property value
+            If not present, a placeholder "missing" model will be rendered instead
+
+minecraft:bundle/fullness Numeric Property
+
+    Returns the weight of the minecraft:bundle_contents component, or 0.0 if not present
+    No fields
+
+minecraft:compass Numeric Property
+
+    Returns the angle in the X-Z plane between the holder position and the target, scaled to 0..1
+    If the target is not valid (not present, in another dimension or too close to holder position), a random value will be returned
+    Fields:
+        target - One of:
+            none - Always returns an invalid target
+            spawn - Points at the world spawn
+            lodestone - Points at a location stored in the minecraft:lodestone_tracker component
+            recovery - Points at the last death location of the Player in the context
+        wobble - If true, the value will oscillate for some time around target before settling, default: true
+
+minecraft:cooldown Numeric Property
+
+    Returns the remaining cooldown for the item, scaled to 0..1
+    No fields
+
+minecraft:crossbow/pull Numeric Property
+
+    Returns Crossbow-specific use time
+    No fields
+
+minecraft:count Numeric Property
+
+    Returns stack size
+    Fields:
+        normalize: Boolean, default: true
+            If true, returns the count divided by the value of the minecraft:max_stack_size component, clamped to 0..1
+            If false, returns the count clamped to 0..max_stack_size
+
+minecraft:custom_model_data Numeric Property
+
+    Returns a value from the floats list in the minecraft:custom_model_data component, if present
+    If the component is not present, returns 0.0
+    Fields:
+        index - Index for the entry in floats to use, default: 0
+
+minecraft:damage Numeric Property
+
+    Returns the value of the minecraft:damage component, if present
+    If the component is not present, returns 0.0
+    Fields:
+        normalize: Boolean, default: true
+            If true, returns the damage divided by the value of the minecraft:max_damage component, clamped to 0..1
+            If false, returns the damage, clamped to 0..max_damage
+
+minecraft:time Numeric Property
+
+    Returns an aspect of day time (like used for Clocks), scaled to 0..1
+    Fields:
+        wobble - If true, the value will oscillate for some time around target before settling, default: true
+        source - The time source, possible values:
+            daytime - Time of day
+            moon_phase - Moon phase
+            random - Random value
+
+minecraft:use_cycle Numeric Property
+
+    Returns the remaining use ticks, modulo period
+    Fields:
+        period - Positive float, default 1.0
+
+minecraft:use_duration Numeric Property
+
+    Returns item use ticks
+    Fields:
+        remaining - Boolean value determining if the used or remaining ticks should be returned, default: false
+            If true, the returned value is the remaining use ticks
+            If false, the returned value is the ticks so far
+
+minecraft:empty Item Model Type
+
+    Does not render anything
+    No fields
+
+minecraft:bundle/selected_item Item Model Type
+
+    Renders the selected stack in the minecraft:bundle_contents component, if present
+    Renders nothing if the component is missing
+    No fields

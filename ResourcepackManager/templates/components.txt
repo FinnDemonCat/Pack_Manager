@@ -1,0 +1,70 @@
+Pull Ammount
+start
+{
+	"model": {
+		"type": "minecraft:condition",
+		"property": "minecraft:using_item",
+		"on_true": {
+			"type": "minecraft:range_dispatch",
+			"property": "minecraft:use_duration",
+			"scale": "0.05",
+			"entries": [
+				{
+					"model": {
+						"type": "minecraft:model",
+						"model": "%s"
+					},
+					"threshold": "%d"
+				},
+				{
+					"model": {
+						"type": "minecraft:range_dispatch",
+						"property": "minecraft:custom_model_data",
+						"entries": [
+							"model": {
+								"type": "minecraft:model",
+								"model": "%s"
+							},
+							"threshold": %d,
+						],
+						"fallback": {
+							"type": "minecraft:model",
+							"model": "%s"
+						}
+					},
+					"threshold": "%d"
+				}
+			],
+			"fallback": {
+				"type": "minecraft:model",
+				"model": "%s"
+			}
+		},
+		"on_false": {
+			"type": "minecraft:model",
+			"model": "%s"
+		}
+	}
+}
+end
+
+Custom Model data
+start
+{
+	"model": {
+		"type": "minecraft:range_dispatch",
+		"property": "minecraft:custom_model_data",
+		"entries": [
+			"model": {
+				"type": "minecraft:model",
+				"model": "%s"
+			},
+			"threshold": %d,
+		],
+		"fallback": {
+			"type": "minecraft:model",
+			"model" "%s"
+		}
+	}
+}
+end
