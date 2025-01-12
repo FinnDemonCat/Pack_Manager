@@ -2287,7 +2287,7 @@ void resizePNGFile(ARCHIVE** image, size_t height, size_t width) {
 }
 
 void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
-	OBJECT *placeholder, *overrides, *query, *value, *model;
+	OBJECT *placeholder, *overrides, *query, *value, *model, *temp;
 	QUEUE *types, *list;
 	char buffer[1024], *pointer, name[256];
 	int type = 0;
@@ -2299,9 +2299,6 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
 	pointer = strchr(file[0]->name, '.');
 	snprintf(name, (pointer - file[0]->name) + 1, "%s", file[0]->name);
 
-	sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
-	model = processOBJ(buffer);
-	
 	overrides = processOBJ(file[0]->tab);
 	switch (format)
 	{
@@ -2309,6 +2306,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
 		placeholder = processOBJ("{\n\t\"model\": {}\n}");
 		placeholder = placeholder->value;
 		freeOBJ(placeholder->value);
+		placeholder->count--;
 		placeholder->value = NULL;
 
 		// Locating the overrides
@@ -2361,10 +2359,6 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
 
 			endQueue(list);
 		}
-
-		// placeholder->value = processOBJ("{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:using_item\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
-		// freeOBJ(&placeholder->value[2].value); // "on_true"
-		// freeOBJ(&placeholder->value[3].value); // "on_false"
 		
 		for (size_t x = 0; x < (size_t)types->end; x++) {
 			if (strcmp(types->item[x], "\"pull\"") == 0) {
@@ -2384,9 +2378,14 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
 		{
 		case 1:
 			// It's a bow / crossbow
-			placeholder->value = processOBJ("{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:using_item\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
+			temp = processOBJ("{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:using_item\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
+			addOBJ(&placeholder, temp);
+			temp = NULL;
+
 			freeOBJ(placeholder->value->value[2].value); // "on_true"
 			freeOBJ(placeholder->value->value[3].value); // "on_false"
+			placeholder->value->value[2].count--;
+			placeholder->value->value[3].count--;
 			placeholder->value->value[2].value = NULL;
 			placeholder->value->value[3].value = NULL;
 
@@ -2394,9 +2393,14 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
 				if (strcmp(types->item[x], "\"charged\"") == 0) {
 					// Crossbow
 					// "on_true"
-					placeholder->value->value[2].value = processOBJ("{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:crossbow/pull\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
+					temp =  processOBJ("{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:crossbow/pull\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
+					addOBJ(&placeholder->value->value[2].value, temp);
+					temp = NULL;
+
 					free(placeholder->value->value[2].value[2].value->value->value); // "entries" -> {"model": ,"threshold": }
+					placeholder->value->value[2].value[2].value->value->count--;
 					free(placeholder->value->value[2].value[3].value); // "fall_back"
+					placeholder->value->value[2].value[3].count--;
 					break;
 				}
 			}
@@ -2404,36 +2408,186 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
 			if (placeholder->value->value[2].value == NULL) {
 				// Bow
 				// "on_true"
-				placeholder->value->value[2].value = processOBJ("{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:use_duration\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
+				temp = processOBJ("{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:use_duration\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
+				value = &placeholder->value->value[2];
+				addOBJ(&value, temp);
+				temp = NULL;
+				
 				free(placeholder->value->value[2].value->value[2].value->value); // "entries"
 				free(placeholder->value->value[2].value->value[3].value); // "fall_back"
+				placeholder->value->value[2].value->value[2].value->count--;
+				placeholder->value->value[2].value->value[3].count--;
 				placeholder->value->value[2].value->value[2].value->value = NULL;
 				placeholder->value->value[2].value->value[3].value = NULL;
 			}
 
 			for (size_t x = 0; x < (size_t)types->end; x++) {
-				if (strcmp(types->item[x], "\"firework\"") == 0) {
-					// "on_false"
-					placeholder->value->value[3].value = processOBJ("{\n\t\"type\": \"minecraft:select\",\n\t\"property\": \"minecraft:charge_type\",\n\t\"cases\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"when\": \"arrow\"\n\t\t},\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"when\": \"rocket\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
+				if (strcmp(types->item[x], "\"custom_model_data\"") == 0) {
+					OBJECT* mirror;
+					// "on_true" -> "entries"
+					sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [],\n\t\"fallback\": {}");
+					temp = processOBJ(buffer);
+
+					freeOBJ(temp->value[3].value);
+					temp->value[3].value = NULL;
+					temp->value[3].count--;
+
+					value = &placeholder->value->value[2].value->value[2]; // entries
+					mirror = dupOBJ(temp);
+					addOBJ(&value, mirror);
+					mirror = NULL;
+
+					value = &placeholder->value->value[2].value->value[3]; // fallback
+					mirror = dupOBJ(temp);
+					addOBJ(&value, mirror);
+					mirror = NULL;
+
+					value = &placeholder->value->value[3]; // on_false
+					mirror = dupOBJ(temp);
+					addOBJ(&value, mirror);
+					mirror = NULL;
+					
 					break;
 				}
 			}
 
-			// There is no charge type listed
-			if (placeholder->value->value[3].value == NULL) {
-				// "on_false"
+			// Sorting models
+			for (size_t x = 0; x < overrides->count; x++) {
+				float index = 0;
+
+				for (size_t y = 0; y < overrides->value[x].count; y++) {
+					if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
+						query = overrides->value[x].value[y].value;
+					} else if (strcmp(overrides->value[x].value[y].declaration, "\"model\"") == 0) {
+						model = overrides->value[x].value[y].value;
+					}
+				}
+
+				for (size_t y = 0; y < query->count; y++) {
+					if (strcmp(query->value[y].declaration, "\"pull\"") == 0) {
+						index = strtof(query->value[y].value->declaration, NULL);
+
+						if (index == 0) {
+							type = 1;
+							value = &placeholder->value->value[2].value->value[3]; // using true -> range dispatch -> fallback
+						} else {
+							type = 2;
+							value = &placeholder->value->value[2].value->value[2]; // using true -> range dispatch -> entries
+
+							for (size_t z = 0; z < (value->value->count + 1); z++) {
+								//When it doesn't find the respective pull value entry
+								if (z < value->value->count && strcmp(value->value->value[z].value[1].value->declaration, query->value[y].value->declaration) == 0) {
+									value = &value->value->value[z].value[0]; // Pointing to the respective pull value's model if already set
+									break;
+								} else if (z >= value->value->count) {
+									sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %.2f\n}", index);
+									temp = processOBJ(buffer);
+									freeOBJ(temp->value[0].value);
+									temp->value[0].count--;
+
+									addOBJ(&value->value, temp);
+									value = &temp->value[0];
+									temp = NULL;
+
+									break;
+								}
+							}
+						}
+						break;
+					} else if (strcmp(query->value[y].declaration, "\"firework\"") == 0) {
+						index = strtof(query->value[y].value->declaration, NULL);
+						
+						if (index == -1) {
+							value = &placeholder->value->value[3].value->value[3]; // using_false -> range_dispatch -> fallback
+						} else {
+							value = &placeholder->value->value[3].value->value[2]; // using_false -> range_dispatch -> entries
+
+							for (size_t z = 0; z < (value->value->count + 1); z++) {
+								if (z < value->count && strcmp(value->value[z].value[1].value->declaration, "\"rocket\"") == 0) {
+									value = &value->value[z].value[0];
+								} else if (z >= value->value->count) {
+									sprintf(buffer, "{\n\t\"model\": {},\n\t\"when\": %s\n}", index == 1 ? "\"rocket\"" : "\"arrow\"");
+									temp = processOBJ(buffer);
+									freeOBJ(temp->value[0].value);
+									temp->value[0].count--;
+
+									addOBJ(&value->value, temp);
+									value = &temp->value[0];
+									temp = NULL;
+
+									break;
+								}
+							}
+						}
+						break;
+					}
+				}
+
+				index = 0;
+				for (size_t y = 0; y < query->count; y++) {
+					// Search for the respective cmd index
+					if (strcmp(query->value[y].declaration, "\"custom_model_data\"") == 0) {
+						index = strtof(query->value[y].value->declaration, NULL);
+						
+						// handling adding range_dispatch when the current entry doesn't have
+						if (value->value == NULL) {
+							sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [],\n\t\"fallback\": {}");
+							temp = processOBJ(buffer);
+
+							freeOBJ(temp->value[3].value);
+							temp->value[3].value = NULL;
+							temp->value[3].count--;
+
+							addOBJ(&value->value, temp);
+							temp = NULL;
+						}
+
+						if (index == 0) {
+							value = &value->value->value[3]; //Pointing to fallback
+						} else {
+							value = &value->value->value[2]; //Pointing to entries
+							for (size_t z = 0; z < (value->value->count + 1); z++) {
+								if (z < value->value->count && strcmp(value->value->value[z].value[1].value->declaration, query->value[y].value->declaration) == 0) {
+									value = &value->value->value[z].value[0];
+									break;
+								} else if (z >= value->value->count) {
+									sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %.2f\n}", index);
+									temp = processOBJ(buffer);
+									freeOBJ(temp->value[0].value);
+									temp->value[0].count--;
+
+									addOBJ(&value->value, temp);
+									value = &temp->value[0];
+									temp = NULL;
+
+									break;
+								}
+							}
+						}
+						
+						break;
+					}
+				}
+
+				pointer = strrchr(model->declaration, '/');
+				sscanf(pointer + 1, "%255[^\"]", name);
 				sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
-				placeholder->value->value[3].value = processOBJ(buffer);
+
+				if (value != NULL && strcmp(value->declaration, "array") == 0) {
+					temp = processOBJ(buffer);
+					addOBJ(&value, temp);
+					
+					temp = NULL;
+				} else {
+					temp = processOBJ(buffer);
+					addOBJ(&value, temp);
+					temp = NULL;
+				}
 			}
 
-			// This should let the pattern ready to add the models
-			
-			// "on_true"
-			// using_item:true -> range_dispatch -> entries
-			sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [],\n\t\"fallback\": {\n\t\t\"type\": \"minecraft:model\",\n\t\t\"model\": \"minecraft:item/%s\"\n\t}\n}", name);
-			placeholder->value->value[2].value->value[2].value->value = processOBJ(buffer);
+			free(file[0]->tab);
+			file[0]->tab = printJSON(placeholder);
 
-			char* temp = printJSON(placeholder);
 			break;
 		case 2:
 			// It's a regular model
@@ -2442,8 +2596,6 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
 		default:
 			break;
 		}
-
-
 		break;
 	case 0:
 		/* code */
@@ -3257,7 +3409,7 @@ int main () {
         
     //Starting the menu;
     initscr();
-    setlocale(LC_ALL, "");
+    setlocale(LC_ALL|~LC_NUMERIC, "");
     int input = 0, cursor[3], optLenght, actionLenght[2], type = 0, relay_message = -1, diretrix[2];
     cursor[0] = cursor[1] = cursor[2] = diretrix[0] = diretrix[1] = 0;
     bool quit = false, update = true;
