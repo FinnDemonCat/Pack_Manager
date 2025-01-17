@@ -2286,320 +2286,329 @@ void resizePNGFile(ARCHIVE** image, size_t height, size_t width) {
 	image[0]->tab = buffer.data;
 }
 
-void overridesFormatConvert(FOLDER* folder, ARCHIVE** file, int format) {
+void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	OBJECT *placeholder, *overrides, *query, *value, *model, *temp;
 	QUEUE *types, *list;
+	FOLDER* location;
 	char buffer[1024], *pointer, name[256];
 	int type = 0;
+	bool custom_model_data, crossbow;
+	custom_model_data = crossbow = false;
 
 	// 1 - Queue all the predicates type
 	// 2 - Create the components file to acomodade them
 	// 3 - Sort the entries
 
+	location = localizeFolder(folder, "minecraft:items/", true);
+
 	pointer = strchr(file[0]->name, '.');
 	snprintf(name, (pointer - file[0]->name) + 1, "%s", file[0]->name);
 
 	overrides = processOBJ(file[0]->tab);
-	switch (format)
+	placeholder = processOBJ("{\n\t\"model\": {}\n}");
+	placeholder = placeholder->value;
+	freeOBJ(placeholder->value);
+	placeholder->count--;
+	placeholder->value = NULL;
+
+	// Locating the overrides
+	for (size_t x = 0; x < overrides->count; x++) {
+		if (strcmp(overrides->value[x].declaration, "\"overrides\"") == 0) {
+			overrides = &overrides->value[x];
+			break;
+		}
+	}
+
+	if (strcmp(overrides->declaration, "\"overrides\"") != 0) {
+		logger("Failed to locate \"overrides\" at %s", file[0]->name);
+		return;
+	}
+	overrides = overrides->value;
+	types = initQueue(overrides->count);
+
+	logger("Starting components translation for %s\n", file[0]->name);
+
+	for (size_t x = 0; x < overrides->count; x++) {
+		for (size_t y = 0; y < overrides->value[x].count; y++) {
+			// Pointing to the predicates
+			if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
+				query = overrides->value[x].value[y].value;
+				break;
+			}
+		}
+
+		// Queueing the predictes
+		list = initQueue(query->count);
+		for (size_t y = 0; y < query->count; y++) {
+			list->value[list->end] = y;
+			enQueue(list, query->value[y].declaration);
+		}
+
+		// Dequeuing repeats
+		for (size_t y = 0; y < (size_t)types->end; y++) {
+			for (size_t z = 0; z < (size_t)list->end;) {
+				if (strcmp(types->item[y], list->item[z]) == 0) {
+					deQueue(list, z);
+					break;
+				} else {
+					z++;
+				}
+			}
+		}
+
+		// Adding the uniques
+		for (size_t y = 0; y < (size_t)list->end; y++) {
+			enQueue(types, list->item[y]);
+			logger("Found \"%s\" predicate\n", list->item[y]);
+		}
+
+		endQueue(list);
+	}
+
+	if (strstr(file[0]->name, "bow") != NULL) {
+		type = 1;
+		if (strstr(file[0]->name, "crossbow") != NULL) {
+			crossbow = true;
+		} 
+	} else {
+		type = 2;
+	}
+
+	switch (type)
 	{
 	case 1:
-		placeholder = processOBJ("{\n\t\"model\": {}\n}");
-		placeholder = placeholder->value;
-		freeOBJ(placeholder->value);
-		placeholder->count--;
-		placeholder->value = NULL;
+		// It's a bow / crossbow
+		temp = processOBJ("{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:using_item\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
+		addOBJ(&placeholder, temp);
+		temp = NULL;
 
-		// Locating the overrides
-		for (size_t x = 0; x < overrides->count; x++) {
-			if (strcmp(overrides->value[x].declaration, "\"overrides\"") == 0) {
-				overrides = &overrides->value[x];
-				break;
-			}
-		}
-
-		if (strcmp(overrides->declaration, "\"overrides\"") != 0) {
-			logger("Failed to locate \"overrides\" at %s", file[0]->name);
-			return;
-		}
-		overrides = overrides->value;
-		types = initQueue(overrides->count);
-
-		for (size_t x = 0; x < overrides->count; x++) {
-			for (size_t y = 0; y < overrides->value[x].count; y++) {
-				// Pointing to the predicates
-				if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
-					query = overrides->value[x].value[y].value;
-					break;
-				}
-			}
-
-			// Queueing the predictes
-			list = initQueue(query->count);
-			for (size_t y = 0; y < query->count; y++) {
-				list->value[list->end] = y;
-				enQueue(list, query->value[y].declaration);
-			}
-
-			// Dequeuing repeats
-			for (size_t y = 0; y < (size_t)types->end; y++) {
-				for (size_t z = 0; z < (size_t)list->end;) {
-					if (strcmp(types->item[y], list->item[z]) == 0) {
-						deQueue(list, z);
-						break;
-					} else {
-						z++;
-					}
-				}
-			}
-
-			// Adding the uniques
-			for (size_t y = 0; y < (size_t)list->end; y++) {
-				enQueue(types, list->item[y]);
-			}
-
-			endQueue(list);
-		}
+		freeOBJ(placeholder->value->value[2].value); // "on_true"
+		freeOBJ(placeholder->value->value[3].value); // "on_false"
+		placeholder->value->value[2].count--;
+		placeholder->value->value[3].count--;
+		placeholder->value->value[2].value = NULL;
+		placeholder->value->value[3].value = NULL;
 		
+		sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:%s\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}", crossbow == true ? "crossbow/pull" : "use_duration");
+
+		value = &placeholder->value->value[2];
+		addOBJ(&value, temp);
+		temp = NULL;
+		
+		free(placeholder->value->value[2].value->value[2].value->value); // "entries"
+		free(placeholder->value->value[2].value->value[3].value); // "fall_back"
+		placeholder->value->value[2].value->value[2].value->count--;
+		placeholder->value->value[2].value->value[3].count--;
+		placeholder->value->value[2].value->value[2].value->value = NULL;
+		placeholder->value->value[2].value->value[3].value = NULL;
+
 		for (size_t x = 0; x < (size_t)types->end; x++) {
-			if (strcmp(types->item[x], "\"pull\"") == 0) {
-				type = 1;
-				break;
-			}
-		}
-
-		for (size_t x = 0; x < (size_t)types->end && type == 0; x++) {
 			if (strcmp(types->item[x], "\"custom_model_data\"") == 0) {
-				type = 2;
-				break;
-			}
-		}
+				OBJECT* mirror;
+				custom_model_data = true;
+				// "on_true" -> "entries"
+				sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [\n\t\n],\n\t\"fallback\": {}");
+				temp = processOBJ(buffer);
 
-		switch (type)
-		{
-		case 1:
-			// It's a bow / crossbow
-			temp = processOBJ("{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:using_item\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
-			addOBJ(&placeholder, temp);
-			temp = NULL;
+				freeOBJ(temp->value[3].value);
+				temp->value[3].value = NULL;
+				temp->value[3].count--;
 
-			freeOBJ(placeholder->value->value[2].value); // "on_true"
-			freeOBJ(placeholder->value->value[3].value); // "on_false"
-			placeholder->value->value[2].count--;
-			placeholder->value->value[3].count--;
-			placeholder->value->value[2].value = NULL;
-			placeholder->value->value[3].value = NULL;
+				value = &placeholder->value->value[2].value->value[3]; // fallback
+				mirror = dupOBJ(temp);
+				addOBJ(&value, mirror);
+				mirror = NULL;
 
-			for (size_t x = 0; x < (size_t)types->end; x++) {
-				if (strcmp(types->item[x], "\"charged\"") == 0) {
-					// Crossbow
-					// "on_true"
-					temp =  processOBJ("{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:crossbow/pull\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
-					addOBJ(&placeholder->value->value[2].value, temp);
-					temp = NULL;
-
-					free(placeholder->value->value[2].value[2].value->value->value); // "entries" -> {"model": ,"threshold": }
-					placeholder->value->value[2].value[2].value->value->count--;
-					free(placeholder->value->value[2].value[3].value); // "fall_back"
-					placeholder->value->value[2].value[3].count--;
-					break;
-				}
-			}
-
-			if (placeholder->value->value[2].value == NULL) {
-				// Bow
-				// "on_true"
-				temp = processOBJ("{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:use_duration\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}");
-				value = &placeholder->value->value[2];
+				value = &placeholder->value->value[3]; // on_false
+				sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [\n\t],\n\t\"fallback\": {\n\t\t\"type\": \"minecraft:model\",\n\t\t\"model\": \"minecraft:item/%s\"\n\t}\n}", name);
+				temp = processOBJ(buffer);
 				addOBJ(&value, temp);
 				temp = NULL;
 				
-				free(placeholder->value->value[2].value->value[2].value->value); // "entries"
-				free(placeholder->value->value[2].value->value[3].value); // "fall_back"
-				placeholder->value->value[2].value->value[2].value->count--;
-				placeholder->value->value[2].value->value[3].count--;
-				placeholder->value->value[2].value->value[2].value->value = NULL;
-				placeholder->value->value[2].value->value[3].value = NULL;
+				break;
+			}
+		}
+
+		// Sorting models
+		for (size_t x = 0; x < overrides->count; x++) {
+			float index = -1;
+
+			for (size_t y = 0; y < overrides->value[x].count; y++) {
+				if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
+					query = overrides->value[x].value[y].value;
+				} else if (strcmp(overrides->value[x].value[y].declaration, "\"model\"") == 0) {
+					model = overrides->value[x].value[y].value;
+				}
 			}
 
-			for (size_t x = 0; x < (size_t)types->end; x++) {
-				if (strcmp(types->item[x], "\"custom_model_data\"") == 0) {
-					OBJECT* mirror;
-					// "on_true" -> "entries"
-					sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [],\n\t\"fallback\": {}");
+			for (size_t y = 0; y < query->count; y++) {
+				if (strcmp(query->value[y].declaration, "\"pulling\"") == 0) {
+					index = strtof(query->value[y].value->declaration, NULL);
+					break;
+				}
+			}
+
+			for (size_t y = 0; y < query->count; y++) {
+				if (strcmp(query->value[y].declaration, "\"pull\"") == 0) {
+					index = strtof(query->value[y].value->declaration, NULL);
+
+					if (index == 0) {
+						type = 1;
+						value = &placeholder->value->value[2].value->value[3]; // using true -> range dispatch -> fallback
+					} else {
+						type = 2;
+						value = &placeholder->value->value[2].value->value[2]; // using true -> range dispatch -> entries
+
+						for (size_t z = 0; z < (value->value->count + 1); z++) {
+							if (z < value->value->count && index == strtof(value->value->value[z].value[1].value->declaration, NULL)) {
+								value = &value->value->value[z].value[0]; // Pointing to the respective pull value's model if already set
+								break;
+							} else if (z >= value->value->count) {
+								sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %.2f\n}", index);
+								temp = processOBJ(buffer);
+								freeOBJ(temp->value[0].value);
+								temp->value[0].value = NULL;
+								temp->value[0].count--;
+
+								addOBJ(&value->value, temp);
+								value = &temp->value[0];
+								temp = NULL;
+
+								break;
+							}
+						}
+					}
+					break;
+				} else if (index == 0) {
+					value = &placeholder->value->value[3];
+					break;
+				}
+			}
+
+			index = -1;
+			
+			// Search for the respective cmd index
+			for (size_t y = 0; custom_model_data && y < (query->count + 1); y++) {
+				// handling adding range_dispatch when the current entry doesn't have
+				if (value->value == NULL) {
+					sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [\n\t],\n\t\"fallback\": {}");
 					temp = processOBJ(buffer);
 
 					freeOBJ(temp->value[3].value);
 					temp->value[3].value = NULL;
 					temp->value[3].count--;
 
-					value = &placeholder->value->value[2].value->value[2]; // entries
-					mirror = dupOBJ(temp);
-					addOBJ(&value, mirror);
-					mirror = NULL;
+					addOBJ(&value, temp);
+					temp = NULL;
+				}
+				
+				if (y < query->count && strcmp(query->value[y].declaration, "\"custom_model_data\"") == 0) {
+					index = strtof(query->value[y].value->declaration, NULL);
+					value = &value->value->value[2]; //Pointing to entries
 
-					value = &placeholder->value->value[2].value->value[3]; // fallback
-					mirror = dupOBJ(temp);
-					addOBJ(&value, mirror);
-					mirror = NULL;
+					for (size_t z = 0; z < (value->value->count + 1); z++) {
+						if (z < value->value->count && index == strtof(value->value->value[z].value[1].value->declaration, NULL)) {
+							value = &value->value->value[z].value[0];
+							break;
+						} else if (z >= value->value->count) {
+							sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %d\n}", (int)index);
+							temp = processOBJ(buffer);
+							freeOBJ(temp->value[0].value);
+							temp->value[0].count--;
 
-					value = &placeholder->value->value[3]; // on_false
-					mirror = dupOBJ(temp);
-					addOBJ(&value, mirror);
-					mirror = NULL;
-					
+							addOBJ(&value->value, temp);
+							value = &temp->value[0];
+							temp = NULL;
+
+							break;
+						}
+					}
+
+					break;
+				} else if (y >= query->count) {
+					value = &value->value->value[3]; //Pointing to fallback when the predicate doesn't have cmd predicate
 					break;
 				}
 			}
 
-			// Sorting models
-			for (size_t x = 0; x < overrides->count; x++) {
-				float index = 0;
+			// Search for the respective charge type
+			for (size_t y = 0; crossbow && y < (query->count + 1); y++) {
+				if (value->value == NULL) {
+					sprintf(buffer, "{\n\t\"type\": \"minecraft:select\",\n\t\"property\": \"minecraft:charge_type\",\n\t\"cases\": [\n\n\t],\n\t\"fallback\": {}\n}");
+					temp = processOBJ(buffer);
 
-				for (size_t y = 0; y < overrides->value[x].count; y++) {
-					if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
-						query = overrides->value[x].value[y].value;
-					} else if (strcmp(overrides->value[x].value[y].declaration, "\"model\"") == 0) {
-						model = overrides->value[x].value[y].value;
-					}
+					freeOBJ(temp->value[3].value);
+					temp->value[3].value = NULL;
+					temp->value[3].count--;
+
+					addOBJ(&value, temp);
+					temp = NULL;
 				}
+				
+				if (y < query->count && strcmp(query->value[y].declaration, "\"firework\"") == 0) {
+					index = strtof(query->value[y].value->declaration, NULL);
+					value = &value->value->value[2]; //Pointing to entries
 
-				for (size_t y = 0; y < query->count; y++) {
-					if (strcmp(query->value[y].declaration, "\"pull\"") == 0) {
-						index = strtof(query->value[y].value->declaration, NULL);
+					for (size_t z = 0; z < (value->value->count + 1); z++) {
+						if (
+							(index == 1 && strcmp(value->value->value[z].value[1].value->declaration, "firework") == 0) 
+							|| (index == 0 && strcmp(value->value->value[z].value[1].value->declaration, "arrow") == 0)
+						) {
+							value = &value->value->value[z].value[0];
+							break;
 
-						if (index == 0) {
-							type = 1;
-							value = &placeholder->value->value[2].value->value[3]; // using true -> range dispatch -> fallback
-						} else {
-							type = 2;
-							value = &placeholder->value->value[2].value->value[2]; // using true -> range dispatch -> entries
-
-							for (size_t z = 0; z < (value->value->count + 1); z++) {
-								//When it doesn't find the respective pull value entry
-								if (z < value->value->count && strcmp(value->value->value[z].value[1].value->declaration, query->value[y].value->declaration) == 0) {
-									value = &value->value->value[z].value[0]; // Pointing to the respective pull value's model if already set
-									break;
-								} else if (z >= value->value->count) {
-									sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %.2f\n}", index);
-									temp = processOBJ(buffer);
-									freeOBJ(temp->value[0].value);
-									temp->value[0].count--;
-
-									addOBJ(&value->value, temp);
-									value = &temp->value[0];
-									temp = NULL;
-
-									break;
-								}
-							}
-						}
-						break;
-					} else if (strcmp(query->value[y].declaration, "\"firework\"") == 0) {
-						index = strtof(query->value[y].value->declaration, NULL);
-						
-						if (index == -1) {
-							value = &placeholder->value->value[3].value->value[3]; // using_false -> range_dispatch -> fallback
-						} else {
-							value = &placeholder->value->value[3].value->value[2]; // using_false -> range_dispatch -> entries
-
-							for (size_t z = 0; z < (value->value->count + 1); z++) {
-								if (z < value->count && strcmp(value->value[z].value[1].value->declaration, "\"rocket\"") == 0) {
-									value = &value->value[z].value[0];
-								} else if (z >= value->value->count) {
-									sprintf(buffer, "{\n\t\"model\": {},\n\t\"when\": %s\n}", index == 1 ? "\"rocket\"" : "\"arrow\"");
-									temp = processOBJ(buffer);
-									freeOBJ(temp->value[0].value);
-									temp->value[0].count--;
-
-									addOBJ(&value->value, temp);
-									value = &temp->value[0];
-									temp = NULL;
-
-									break;
-								}
-							}
-						}
-						break;
-					}
-				}
-
-				index = 0;
-				for (size_t y = 0; y < query->count; y++) {
-					// Search for the respective cmd index
-					if (strcmp(query->value[y].declaration, "\"custom_model_data\"") == 0) {
-						index = strtof(query->value[y].value->declaration, NULL);
-						
-						// handling adding range_dispatch when the current entry doesn't have
-						if (value->value == NULL) {
-							sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [],\n\t\"fallback\": {}");
+						} else if (z >= value->value->count) {
+							sprintf(buffer, "{\n\t\"model\": {},\n\t\"when\": %s\n}", index == 1 ? "firework" : "arrow");
 							temp = processOBJ(buffer);
-
-							freeOBJ(temp->value[3].value);
-							temp->value[3].value = NULL;
-							temp->value[3].count--;
+							freeOBJ(temp->value[0].value);
+							temp->value[0].count--;
 
 							addOBJ(&value->value, temp);
+							value = &temp->value[0];
 							temp = NULL;
+
+							break;
 						}
-
-						if (index == 0) {
-							value = &value->value->value[3]; //Pointing to fallback
-						} else {
-							value = &value->value->value[2]; //Pointing to entries
-							for (size_t z = 0; z < (value->value->count + 1); z++) {
-								if (z < value->value->count && strcmp(value->value->value[z].value[1].value->declaration, query->value[y].value->declaration) == 0) {
-									value = &value->value->value[z].value[0];
-									break;
-								} else if (z >= value->value->count) {
-									sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %.2f\n}", index);
-									temp = processOBJ(buffer);
-									freeOBJ(temp->value[0].value);
-									temp->value[0].count--;
-
-									addOBJ(&value->value, temp);
-									value = &temp->value[0];
-									temp = NULL;
-
-									break;
-								}
-							}
-						}
-						
-						break;
 					}
-				}
 
-				pointer = strrchr(model->declaration, '/');
-				sscanf(pointer + 1, "%255[^\"]", name);
-				sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
-
-				if (value != NULL && strcmp(value->declaration, "array") == 0) {
-					temp = processOBJ(buffer);
-					addOBJ(&value, temp);
-					
-					temp = NULL;
-				} else {
-					temp = processOBJ(buffer);
-					addOBJ(&value, temp);
-					temp = NULL;
+					break;
+				} else if (y >= query->count) {
+					value = &value->value->value[3]; //Pointing to fallback when the predicate doesn't have cmd predicate
+					break;
 				}
 			}
 
-			free(file[0]->tab);
-			file[0]->tab = printJSON(placeholder);
+			pointer = strrchr(model->declaration, '/');
+			sscanf(pointer + 1, "%255[^\"]", name);
+			sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
 
-			break;
-		case 2:
-			// It's a regular model
-			break;
-		
-		default:
-			break;
+			if (value != NULL && strcmp(value->declaration, "array") == 0) {
+				temp = processOBJ(buffer);
+				addOBJ(&value, temp);
+				temp = NULL;
+
+			} else {
+				temp = processOBJ(buffer);
+				addOBJ(&value, temp);
+				temp = NULL;
+
+			}
 		}
+
+		placeholder = placeholder->parent;
+		ARCHIVE* item = (ARCHIVE*)malloc(sizeof(ARCHIVE));
+		item->name = strdup(file[0]->name);
+		item->tab = printJSON(placeholder);
+		item->size = strlen(item->tab);
+
+		addFile(&location, item);
+		item = NULL;
+
 		break;
-	case 0:
-		/* code */
+	case 2:
+		// It's a regular model
 		break;
+	
 	default:
 		break;
 	}
@@ -2610,7 +2619,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	char *pointer, *checkpoint, *save, buffer[1024], namespace[512], command[256], name[256], *path = calloc(256, sizeof(char));
 	ARCHIVE *file, *destination;
 	OBJECT *placeholder, *value, *query;
-    int line_number = 0, version, type;
+    int line_number = 0, type;
 
 	pointer = instruct;
 	getcwd(path, 256);
@@ -2759,7 +2768,6 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 				} else if (strcmp(command, "display") == 0) {
 					char par[1024];
-					OBJECT *display, *parameters;
 
 					checkpoint = strchr(checkpoint, '{');
 					for (int x = 1, y = 1; checkpoint[x] != '\0'; x++) {
@@ -2880,7 +2888,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			} else if (strstr(command, "autofill") != NULL) {
 				QUEUE* folders;
 				int dirnumber = 0, position[16];
-				char *temp, *stamp;
+				char *temp;
                 size_t length;
 
 				for (int x = 0; x < 16; x++) {
@@ -3325,7 +3333,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				}
 			} else if (strcmp(command, "convert_overrides") == 0) {
 				// (send adress of FOLDER and ARCHIVE pointer, return the ARCHIVE pointer file if 1, return null if 0. Crop overrides of the file if 1, delete components file if 0);
-				overridesFormatConvert(navigator, &file, 1);
+				overridesFormatConvert(navigator, &file);
 			}
 		}
 
