@@ -2292,7 +2292,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	FOLDER* location;
 	char buffer[1024], *pointer, name[256];
 	int type = 0;
-	bool custom_model_data, crossbow;
+	bool custom_model_data, crossbow, pulling;
 	custom_model_data = crossbow = false;
 
 	// 1 - Queue all the predicates type
@@ -2389,18 +2389,11 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 		placeholder->value->value[2].value = NULL;
 		placeholder->value->value[3].value = NULL;
 		
-		sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:%s\",\n\t\"entries\": [\n\t\t{\n\t\t\t\"model\": {},\n\t\t\t\"threshold\": \"0\"\n\t\t}\n\t],\n\t\"fallback\": {}\n}", crossbow == true ? "crossbow/pull" : "use_duration");
-
+		sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:%s\",\n\t\"entries\": [\n\t\t\n\t],\n\t\"fallback\": {\n\t\t\"type\": \"minecraft:model\",\n\t\t\"model\": \"minecraft:item/%s\"\n\t}\n}", crossbow == true ? "crossbow/pull" : "use_duration", file[0]->name);
+		temp = processOBJ(buffer);
 		value = &placeholder->value->value[2];
 		addOBJ(&value, temp);
 		temp = NULL;
-		
-		free(placeholder->value->value[2].value->value[2].value->value); // "entries"
-		free(placeholder->value->value[2].value->value[3].value); // "fall_back"
-		placeholder->value->value[2].value->value[2].value->count--;
-		placeholder->value->value[2].value->value[3].count--;
-		placeholder->value->value[2].value->value[2].value->value = NULL;
-		placeholder->value->value[2].value->value[3].value = NULL;
 
 		for (size_t x = 0; x < (size_t)types->end; x++) {
 			if (strcmp(types->item[x], "\"custom_model_data\"") == 0) {
@@ -2432,6 +2425,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 		// Sorting models
 		for (size_t x = 0; x < overrides->count; x++) {
 			float index = -1;
+			pulling = false;
 
 			for (size_t y = 0; y < overrides->value[x].count; y++) {
 				if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
@@ -2443,6 +2437,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 
 			for (size_t y = 0; y < query->count; y++) {
 				if (strcmp(query->value[y].declaration, "\"pulling\"") == 0) {
+					pulling = true;
 					index = strtof(query->value[y].value->declaration, NULL);
 					break;
 				}
@@ -2451,6 +2446,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			for (size_t y = 0; y < query->count; y++) {
 				if (strcmp(query->value[y].declaration, "\"pull\"") == 0) {
 					index = strtof(query->value[y].value->declaration, NULL);
+					pulling = true;
 
 					if (index == 0) {
 						type = 1;
@@ -2479,7 +2475,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 						}
 					}
 					break;
-				} else if (index == 0) {
+				} else if (pulling == false) {
 					value = &placeholder->value->value[3];
 					break;
 				}
@@ -2531,34 +2527,30 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 				}
 			}
 
-			// Search for the respective charge type
-			for (size_t y = 0; crossbow && y < (query->count + 1); y++) {
+			// Search for the respective charge type when "being used" is false
+			for (size_t y = 0; pulling == false && crossbow == true && y < (query->count + 1); y++) {
+				index = 0;
+				
 				if (value->value == NULL) {
-					sprintf(buffer, "{\n\t\"type\": \"minecraft:select\",\n\t\"property\": \"minecraft:charge_type\",\n\t\"cases\": [\n\n\t],\n\t\"fallback\": {}\n}");
+					sprintf(buffer, "{\n\t\"type\": \"minecraft:select\",\n\t\"property\": \"minecraft:charge_type\",\n\t\"cases\": [\n\n\t],\n\t\"fallback\": {\n\t\t\"type\": \"minecraft:model\",\n\t\t\"model\": \"minecraft:item/%s\"\n\t}\n}", file[0]->name);
 					temp = processOBJ(buffer);
-
-					freeOBJ(temp->value[3].value);
-					temp->value[3].value = NULL;
-					temp->value[3].count--;
 
 					addOBJ(&value, temp);
 					temp = NULL;
 				}
 				
 				if (y < query->count && strcmp(query->value[y].declaration, "\"firework\"") == 0) {
-					index = strtof(query->value[y].value->declaration, NULL);
 					value = &value->value->value[2]; //Pointing to entries
+					index = strtof(query->value[y].value->declaration, NULL);
 
 					for (size_t z = 0; z < (value->value->count + 1); z++) {
-						if (
-							(index == 1 && strcmp(value->value->value[z].value[1].value->declaration, "firework") == 0) 
-							|| (index == 0 && strcmp(value->value->value[z].value[1].value->declaration, "arrow") == 0)
-						) {
+						
+						if (z < value->value->count && (index == 1 && strcmp(value->value->value[z].value[1].value->declaration, "\"rocket\"") == 0)) {
 							value = &value->value->value[z].value[0];
-							break;
 
+							break;
 						} else if (z >= value->value->count) {
-							sprintf(buffer, "{\n\t\"model\": {},\n\t\"when\": %s\n}", index == 1 ? "firework" : "arrow");
+							sprintf(buffer, "{\n\t\"model\": {},\n\t\"when\": \"rocket\"\n}");
 							temp = processOBJ(buffer);
 							freeOBJ(temp->value[0].value);
 							temp->value[0].count--;
@@ -2573,7 +2565,17 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 
 					break;
 				} else if (y >= query->count) {
-					value = &value->value->value[3]; //Pointing to fallback when the predicate doesn't have cmd predicate
+					value = &value->value->value[2]; //Pointing to entries
+
+					sprintf(buffer, "{\n\t\"model\": {},\n\t\"when\": \"arrow\"\n}");
+					temp = processOBJ(buffer);
+					freeOBJ(temp->value[0].value);
+					temp->value[0].count--;
+
+					addOBJ(&value->value, temp);
+					value = &temp->value[0];
+					temp = NULL;
+
 					break;
 				}
 			}
@@ -2582,27 +2584,10 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			sscanf(pointer + 1, "%255[^\"]", name);
 			sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
 
-			if (value != NULL && strcmp(value->declaration, "array") == 0) {
-				temp = processOBJ(buffer);
-				addOBJ(&value, temp);
-				temp = NULL;
-
-			} else {
-				temp = processOBJ(buffer);
-				addOBJ(&value, temp);
-				temp = NULL;
-
-			}
+			temp = processOBJ(buffer);
+			addOBJ(&value, temp);
+			temp = NULL;
 		}
-
-		placeholder = placeholder->parent;
-		ARCHIVE* item = (ARCHIVE*)malloc(sizeof(ARCHIVE));
-		item->name = strdup(file[0]->name);
-		item->tab = printJSON(placeholder);
-		item->size = strlen(item->tab);
-
-		addFile(&location, item);
-		item = NULL;
 
 		break;
 	case 2:
@@ -2612,6 +2597,16 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	default:
 		break;
 	}
+
+	placeholder = placeholder->parent;
+	ARCHIVE* item = (ARCHIVE*)malloc(sizeof(ARCHIVE));
+	item->name = strdup(file[0]->name);
+	item->tab = printJSON(placeholder);
+	indentJSON(&item->tab);
+	item->size = strlen(item->tab);
+
+	addFile(&location, item);
+	item = NULL;
 }
 
 void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
