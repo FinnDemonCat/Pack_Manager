@@ -2292,7 +2292,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	FOLDER* location;
 	char buffer[1024], *pointer, name[256];
 	int type = 0;
-	bool custom_model_data, crossbow, pulling;
+	bool custom_model_data, crossbow, pulling, damage;
 	custom_model_data = crossbow = false;
 
 	// 1 - Queue all the predicates type
@@ -2323,11 +2323,11 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 		logger("Failed to locate \"overrides\" at %s", file[0]->name);
 		return;
 	}
+	
 	overrides = overrides->value;
 	types = initQueue(overrides->count);
 
 	logger("Starting components translation for %s\n", file[0]->name);
-
 	for (size_t x = 0; x < overrides->count; x++) {
 		for (size_t y = 0; y < overrides->value[x].count; y++) {
 			// Pointing to the predicates
@@ -2397,27 +2397,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 
 		for (size_t x = 0; x < (size_t)types->end; x++) {
 			if (strcmp(types->item[x], "\"custom_model_data\"") == 0) {
-				OBJECT* mirror;
 				custom_model_data = true;
-				// "on_true" -> "entries"
-				sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [\n\t\n],\n\t\"fallback\": {}");
-				temp = processOBJ(buffer);
-
-				freeOBJ(temp->value[3].value);
-				temp->value[3].value = NULL;
-				temp->value[3].count--;
-
-				value = &placeholder->value->value[2].value->value[3]; // fallback
-				mirror = dupOBJ(temp);
-				addOBJ(&value, mirror);
-				mirror = NULL;
-
-				value = &placeholder->value->value[3]; // on_false
-				sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [\n\t],\n\t\"fallback\": {\n\t\t\"type\": \"minecraft:model\",\n\t\t\"model\": \"minecraft:item/%s\"\n\t}\n}", name);
-				temp = processOBJ(buffer);
-				addOBJ(&value, temp);
-				temp = NULL;
-				
 				break;
 			}
 		}
@@ -2428,10 +2408,10 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			pulling = false;
 
 			for (size_t y = 0; y < overrides->value[x].count; y++) {
-				if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
-					query = overrides->value[x].value[y].value;
-				} else if (strcmp(overrides->value[x].value[y].declaration, "\"model\"") == 0) {
+				if (strcmp(overrides->value[x].value[y].declaration, "\"model\"") == 0) {
 					model = overrides->value[x].value[y].value;
+				} else if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
+					query = overrides->value[x].value[y].value;
 				}
 			}
 
@@ -2510,6 +2490,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 							sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %d\n}", (int)index);
 							temp = processOBJ(buffer);
 							freeOBJ(temp->value[0].value);
+							temp->value[0].value = NULL;
 							temp->value[0].count--;
 
 							addOBJ(&value->value, temp);
@@ -2587,13 +2568,109 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			temp = processOBJ(buffer);
 			addOBJ(&value, temp);
 			temp = NULL;
+
+			char* temp = printJSON(placeholder->parent);
+			free(temp);
 		}
 
 		break;
 	case 2:
 		// It's a regular model
+		// Add durability predicate translation to fallback
+		sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [\n\t],\n\t\"fallback\": {}");
+		temp = processOBJ(buffer);
+		addOBJ(&placeholder, temp);
+		temp = NULL;
+
+		for (size_t x = 0; x < (size_t)types->end; x++) {
+			if (strcmp(types->item[x], "\"damage\"") == 0) {
+				damage = true;
+				break;
+			}
+		}
+
+		for (size_t x = 0; x < query->count; x++) {
+			float index = 0;
+			for (size_t y = 0; y < overrides->value[x].count; y++) {
+				if (strcmp(overrides->value[x].value[y].declaration, "\"model\"") == 0) {
+					model = overrides->value[x].value[y].value;
+				} else if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
+					query = overrides->value[x].value[y].value;
+				}
+			}
+
+			for (size_t y = 0; custom_model_data && y < (query->count + 1); y++) {
+				if (y < query->count && strcmp(query->value[y].declaration, "\"custom_model_data\"") == 0) {
+					value = &placeholder->value->value[2];
+					index = strtof(query->value[y].value->declaration, NULL);
+
+					for (size_t z = 0; z < (value->value->count + 1); z++) {
+						if (z < value->value->count && index == strtof(value->value->value[z].value[1].value->declaration, NULL)) {
+							value = &value->value->value[z].value[0];
+							break;
+						} else if (z >= value->value->count) {
+							sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %d\n}", (int)index);
+							temp = processOBJ(buffer);
+							freeOBJ(temp->value[0].value);
+							temp->value[0].value = NULL;
+							temp->value[0].count--;
+
+							addOBJ(&value->value, temp);
+							value = &temp->value[0];
+							temp = NULL;
+
+							break;
+						}
+					}
+
+					break;
+				}
+			}
+
+			for (size_t y = 0; damage && y < (query->count + 1); y++) {
+				if (value->value == NULL) {
+					sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:damage\",\n\t\"normalize\": false\n\t\"entries\": [\n\t],\n\t\"fallback\": {}");
+					temp = processOBJ(buffer);
+
+					freeOBJ(temp->value[3].value);
+					temp->value[3].value = NULL;
+					temp->value[3].count--;
+
+					addOBJ(&value, temp);
+					temp = NULL;
+				}
+
+				if (y < query->count && strcmp(query->value[y].declaration, "\"damage\"") == 0) {
+					value = &value->value->value[3]; //Pointing to entries
+					index = strtof(query->value[y].value->declaration, NULL);
+
+					for (size_t z = 0; z < (value->value->count + 1); z++) {
+						if (z < value->value->count && index == strtof(value->value->value[z].value[1].value->declaration, NULL)) {
+							value = &value->value->value[z].value[0];
+							break;
+						} else if (z >= value->value->count) {
+							sprintf(buffer, "{\n\t\"model\": {},\n\t\"threshold\": %d\n}", (int)index);
+							temp = processOBJ(buffer);
+							freeOBJ(temp->value[0].value);
+							temp->value[0].value = NULL;
+							temp->value[0].count--;
+
+							addOBJ(&value->value, temp);
+							value = &temp->value[0];
+							temp = NULL;
+
+							break;
+						}
+					}
+
+					break;
+				} else if (y >= query->count) {
+					value = &value->value->value[4];
+				}
+			}
+		}
+
 		break;
-	
 	default:
 		break;
 	}

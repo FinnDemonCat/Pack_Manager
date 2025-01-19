@@ -2,10 +2,6 @@
 	"type": "minecraft:range_dispatch",
 	"property": "minecraft:custom_model_data",
 	"entries": [
-		{
-			"model": {},
-			"threshold": "%d"
-		}
 	],
 	"fallback": {
 		"type": "minecraft:model",
