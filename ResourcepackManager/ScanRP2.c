@@ -390,7 +390,7 @@ OBJECT* dupOBJ (OBJECT* target) {
     return mirror;
 }
 
-void freeOBJ (OBJECT* file) {
+void freeOBJ (OBJECT* file) { // Fix to make this a double pointer
     if (file == NULL) {
         return;
     }
@@ -403,11 +403,8 @@ void freeOBJ (OBJECT* file) {
     if (file[0].declaration != NULL) {
         free(file[0].declaration);
     }
-    if (file[0].value != NULL) {
-        free(file[0].value);
-    }
 
-	free(file);
+	// free(file);
 }
 
 char* strnotchr(const char* str, int count, ...) {
@@ -2292,6 +2289,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	FOLDER* location;
 	char buffer[1024], *pointer, name[256];
 	int type = 0;
+	float index = 0;
 	bool custom_model_data, crossbow, pulling, damage;
 	custom_model_data = crossbow = false;
 
@@ -2370,8 +2368,10 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 		if (strstr(file[0]->name, "crossbow") != NULL) {
 			crossbow = true;
 		} 
-	} else {
+	} else if (strstr(file[0]->name, "compass") != NULL || strstr(file[0]->name, "clock") != NULL) {
 		type = 2;
+	} else {
+		type = 3;
 	}
 
 	switch (type)
@@ -2404,7 +2404,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 
 		// Sorting models
 		for (size_t x = 0; x < overrides->count; x++) {
-			float index = -1;
+			index = -1;
 			pulling = false;
 
 			for (size_t y = 0; y < overrides->value[x].count; y++) {
@@ -2566,30 +2566,183 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
 
 			temp = processOBJ(buffer);
+			if (value->value != NULL) {
+				freeOBJ(&value->value[0]);
+				value->count--;
+				value->value = NULL;
+			}
+
 			addOBJ(&value, temp);
 			temp = NULL;
-
-			char* temp = printJSON(placeholder->parent);
-			free(temp);
 		}
 
 		break;
 	case 2:
-		// It's a regular model
-		// Add durability predicate translation to fallback
-		sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [\n\t],\n\t\"fallback\": {}");
+		OBJECT* cases, *mirror;
+		if (strcmp(file[0]->name, "compass.json") == 0) {
+			sprintf(buffer, "{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:has_component\",\n\t\"component\": \"minecraft:lodestone_tracker\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
+			temp = processOBJ(buffer);
+			freeOBJ(temp->value[3].value);
+			freeOBJ(temp->value[4].value);
+			temp->value[3].value = NULL;
+			temp->value[4].value = NULL;
+			temp->value[3].count--;
+			temp->value[4].count--;
+
+			addOBJ(&placeholder, temp);
+			temp = NULL;
+
+			placeholder = &placeholder->value->value[4]; // "on_false"
+		}
+
+		if (strcmp(file[0]->name, "recovery_compass.json") != 0) {
+			// "recovery_compass" doesn't have select "context dimention" property
+			sprintf(buffer, "{\n\t\"type\": \"minecraft:select\",\n\t\"property\": \"minecraft:context_dimension\",\n\t\"cases\": [\n\t],\n\t\"fallback\": {}\n}");
+			temp = processOBJ(buffer);
+			free(temp->value[3].value);
+			temp->value[3].count--;
+			temp->value[3].value = NULL;
+
+			addOBJ(&placeholder, temp);
+			placeholder = placeholder->value;
+			temp = NULL;
+		}
+
+		// create "range_dispatch" on temp pointer		
+		sprintf(
+			buffer,
+			"{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:%s\",\n\t\"entries\": [\n\t]\n}",
+			strstr(file[0]->name, "compass")
+				? "compass"
+				: "time"
+		);
+
 		temp = processOBJ(buffer);
-		addOBJ(&placeholder, temp);
-		temp = NULL;
+		value = &temp->value[2];
+
+		for (size_t x = 0; x < overrides->count; x++) {
+			for (size_t y = 0; y < overrides->value[x].count; y++) {
+				if (strcmp(overrides->value[x].value[y].declaration, "\"model\"") == 0) {
+					model = overrides->value[x].value[y].value;
+				} else if (strcmp(overrides->value[x].value[y].declaration, "\"predicate\"") == 0) {
+					query = overrides->value[x].value[y].value;
+				}
+			}
+
+			for (size_t y = 0; y < query->count; y++) {
+				if (strcmp(query->value[y].declaration, "\"angle\"")  == 0 || strcmp(query->value[y].declaration, "\"time\"") == 0) {
+					index = strtof(query->value[y].value->declaration, NULL);
+					break;
+				}
+			}
+
+			pointer = strrchr(model->declaration, '/');
+			sscanf(pointer + 1, "%255[^\"]", name);
+
+			sprintf(buffer, "{\n\t\"model\": {\n\t\t\"type\": \"minecraft:model\"\n\t\t\"model\": \"minecraft:item/%s\"\n\t},\n\t\"threshold\": %f\n}", name, index);
+			mirror = processOBJ(buffer);
+
+			addOBJ(&value->value, mirror);
+			mirror = NULL;
+		}
+
+		// *temp is the cases
+		if (strcmp(file[0]->name, "recovery_compass.json") != 0) {
+			// adding the target to "range_dispatch"
+			if (strcmp(file[0]->name, "compass.json") == 0) {
+				sprintf(buffer, " \"target\": \"spawn\"");
+			} else {
+				sprintf(buffer, " \"source\": \"daytime\"");
+			}
+			mirror = processOBJ(buffer);
+			addOBJ(&temp, mirror->value);
+			mirror->value = NULL;
+			freeOBJ(mirror);
+
+			// preparing case
+			sprintf(buffer, "{\n\t\"model\": {\n\t},\n\t\"when\": \"overworld\"\n}");
+			cases = processOBJ(buffer);
+			freeOBJ(cases->value[0].value);
+			cases->value[0].count--;
+			
+			// duplicating range_dispatch and adding to model value
+			mirror = dupOBJ(temp);
+			value = &cases->value[0];
+			addOBJ(&value, mirror);
+			mirror = NULL;
+			value = NULL;
+
+			// adding to "on_false" on select
+			addOBJ(&placeholder->value[2].value, cases);
+			cases = NULL;
+
+			// preparing fallback
+			// adding the target to "range_dispatch"
+			if (strcmp(file[0]->name, "compass.json") == 0) {
+				sprintf(buffer, " \"target\": \"none\"");
+			} else {
+				sprintf(buffer, " \"source\": \"random\"");
+			}
+			delOBJ(&temp, (temp->count - 1));
+			mirror = processOBJ(buffer);
+			addOBJ(&temp, mirror->value);
+			mirror->value = NULL;
+			freeOBJ(mirror);
+
+			// duplicating range_dispatch
+			mirror = dupOBJ(temp);
+
+			// adding to fallback
+			value = &placeholder->value[3]; 
+			addOBJ(&value, mirror);
+			mirror = NULL;
+			value = NULL;
+
+			placeholder = placeholder->parent->parent;
+		} else {
+			sprintf(buffer, " \"target\": \"recovery\"");
+			mirror = processOBJ(buffer);
+			addOBJ(&temp, mirror->value);
+			addOBJ(&placeholder, temp);
+
+			temp = NULL;
+			mirror->value = NULL;
+			freeOBJ(mirror);
+			mirror = NULL;
+
+			placeholder = placeholder->parent;
+		}
+
+		if (strcmp(file[0]->name, "compass.json") == 0) {
+			placeholder = placeholder->parent->parent;
+			delOBJ(&temp, (temp->count - 1));
+			sprintf(buffer, " \"target\": \"lodestone\"");
+
+			mirror = processOBJ(buffer);
+			addOBJ(&temp, mirror->value);
+			mirror->value = NULL;
+			freeOBJ(mirror);
+			
+			mirror = &placeholder->value[3];
+			addOBJ(&mirror, temp);
+			mirror = NULL;
+		}
+
+		break;
+	case 3:
+		// It's a regular model
 
 		for (size_t x = 0; x < (size_t)types->end; x++) {
 			if (strcmp(types->item[x], "\"damage\"") == 0) {
 				damage = true;
-				break;
+			} else if (strcmp(types->item[x], "\"custom_model_data\"") == 0) {
+				custom_model_data = true;
 			}
 		}
 
-		for (size_t x = 0; x < query->count; x++) {
+		for (size_t x = 0; x < overrides->count; x++) {
+			value = placeholder;
+
 			float index = 0;
 			for (size_t y = 0; y < overrides->value[x].count; y++) {
 				if (strcmp(overrides->value[x].value[y].declaration, "\"model\"") == 0) {
@@ -2600,6 +2753,20 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			}
 
 			for (size_t y = 0; custom_model_data && y < (query->count + 1); y++) {
+				if (value->value == NULL || strcmp(value->value->value[1].value->declaration, "\"minecraft:custom_model_data\"") != 0) {
+					sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:custom_model_data\",\n\t\"entries\": [\n\t],\n\t\"fallback\": {\n\t\t\"type\": \"minecraft:model\",\n\t\t\"model\": \"minecraft:item/%s\"\n\t}\n}", file[0]->name);
+					temp = processOBJ(buffer);
+
+					if (value->value != NULL) {
+						freeOBJ(&value->value[0]);
+						value->count--;
+						value->value = NULL;
+					}
+
+					addOBJ(&value, temp);
+					temp = NULL;
+				}
+
 				if (y < query->count && strcmp(query->value[y].declaration, "\"custom_model_data\"") == 0) {
 					value = &placeholder->value->value[2];
 					index = strtof(query->value[y].value->declaration, NULL);
@@ -2624,18 +2791,23 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 					}
 
 					break;
+				} else if (y >= query->count) {
+					value = &value->value->value[3]; //Pointing to fallback when the predicate doesn't have cmd predicate
+					break;
 				}
 			}
 
 			for (size_t y = 0; damage && y < (query->count + 1); y++) {
-				if (value->value == NULL) {
-					sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:damage\",\n\t\"normalize\": false\n\t\"entries\": [\n\t],\n\t\"fallback\": {}");
+				if (value->value == NULL || strcmp(value->value->value[1].value->declaration, "\"minecraft:damage\"") != 0) {
+					sprintf(buffer, "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:damage\",\n\t\"normalize\": false\n\t\"entries\": [\n\t],\n\t\"fallback\": {\n\t\t\"type\": \"minecraft:model\",\n\t\t\"model\": \"minecraft:item/%s\"\n\t}\n}", file[0]->name);
 					temp = processOBJ(buffer);
 
-					freeOBJ(temp->value[3].value);
-					temp->value[3].value = NULL;
-					temp->value[3].count--;
-
+					if (value->value != NULL) {
+						freeOBJ(&value->value[0]);
+						value->count--;
+						value->value = NULL;
+					}
+					
 					addOBJ(&value, temp);
 					temp = NULL;
 				}
@@ -2668,14 +2840,28 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 					value = &value->value->value[4];
 				}
 			}
+
+			pointer = strrchr(model->declaration, '/');
+			sscanf(pointer + 1, "%255[^\"]", name);
+			sprintf(buffer, "{\n\t\"type\": \"minecraft:model\",\n\t\"model\": \"minecraft:item/%s\"\n}", name);
+
+			temp = processOBJ(buffer);
+			if (value->value != NULL) {
+				freeOBJ(&value->value[0]);
+				value->count--;
+				value->value = NULL;
+			}
+
+			addOBJ(&value, temp);
+			temp = NULL;
 		}
 
+		placeholder = placeholder->parent;
 		break;
 	default:
 		break;
 	}
 
-	placeholder = placeholder->parent;
 	ARCHIVE* item = (ARCHIVE*)malloc(sizeof(ARCHIVE));
 	item->name = strdup(file[0]->name);
 	item->tab = printJSON(placeholder);

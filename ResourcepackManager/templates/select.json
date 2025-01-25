@@ -1,0 +1,8 @@
+{
+	"type": "minecraft:select",
+	"property": "minecraft:context_dimension",
+	"cases": [
+		"{\n\t\"model\": {\n\t},\n\t\"when\": \"%s\"\n}"
+	],
+	"fallback": "{\n\t\"type\": \"minecraft:select\",\n\t\"property\": \"minecraft:context_dimension\",\n\t\"cases\": [\n\t],\n\t\"fallback\": {}\n}"
+}

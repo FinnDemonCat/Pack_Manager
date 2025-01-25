@@ -1,10 +1,8 @@
 {
 	"type": "minecraft:range_dispatch",
-	"property": "minecraft:custom_model_data",
+	"property": "minecraft:%s",
+	"target": "%s",
 	"entries": [
 	],
-	"fallback": {
-		"type": "minecraft:model",
-		"model": "minecraft:item/%s"
-	}
+	"fallback": "{\n\t\"type\": \"minecraft:range_dispatch\",\n\t\"property\": \"minecraft:%s\",\n\t\"target\": \"%s\",\n\t\"entries\": [\n\t]\n}"
 }
