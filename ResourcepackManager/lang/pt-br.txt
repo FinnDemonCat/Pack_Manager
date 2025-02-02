@@ -8,7 +8,7 @@
 [Options]:
 Menu Principal
 Escanear Resourcepacks
-Executar Edições
+Ferramentas
 Linguagem
 Sair
 [Messages]:

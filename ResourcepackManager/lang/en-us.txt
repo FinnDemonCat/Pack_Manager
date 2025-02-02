@@ -10,7 +10,7 @@ ______          _     ___  ___
 [Options]:
 Main Menu
 Scan Resourcepacks
-Execute Edit
+Tools
 Language
 Quit
 [Messages]:
@@ -26,5 +26,5 @@ Finished targets scan
 Execute Edits?
 Merge and Stack
 Run Diretrix
-Finished Query!
+Finished edit query!
 No Diretrix Selected

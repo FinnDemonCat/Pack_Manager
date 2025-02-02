@@ -64,7 +64,7 @@ typedef struct OBJECT {
 typedef struct TEXTURE {
 	char *data;
     size_t size;
-    size_t index;  
+    size_t offset;  
 } TEXTURE;
 
 WINDOW* sidebar;
@@ -1111,74 +1111,6 @@ size_t mvwprintLines(WINDOW* window, char* list, int y, int x, int from, int to)
     return big;
 }
 
-//Prepares the confirmation dialog screen with the gives line from lang file.
-//Type 0 will prepare a yes/no question. Type 1 will prepare a notice
-void confirmationDialog(char* lang, int line, int* sizes, int type) {
-    size_t center, size;
-    char *pointer = lang, *checkpoint, *checkpoint2;
-    box(action, 0, 0);
-    center = getmaxx(action);
-
-    for (int x = 1; x < line; x++, pointer += 1) {
-        pointer = strchr(pointer, '\n');
-    }
-    checkpoint = pointer;
-    pointer = strchr(pointer, '\n');
-    pointer += 1;
-    size = pointer - checkpoint;
-    
-    if (size < center - 2) {
-        mvwprintw(action, 1, ((center - size - 1)/2), "%.*s", size - 1, checkpoint);
-    } else {
-        checkpoint2 = &checkpoint[center - 2];
-        for (int x = (center - 2); *checkpoint2 != ' '; x--) {
-            checkpoint2 = &checkpoint[x];
-        }
-
-        mvwprintw(action, 1, ((center - (checkpoint2 - checkpoint - 1))/2), "%.*s", (checkpoint2 - checkpoint - 1), checkpoint);
-        mvwprintw(action, 2, ((center - (pointer - checkpoint2 - 1))/2), "%.*s", (pointer - checkpoint2 - 1), checkpoint2);
-    }
-
-    if (type == 0) {
-        pointer = lang;
-        for (int x = 0; x < 6; x++, pointer++) {
-            pointer = strchr(pointer, '\n');
-        }
-
-        //Get Lang "YES"
-        checkpoint = pointer;
-        pointer = strchr(pointer, '\n');
-        pointer += 1;
-
-        size = pointer - checkpoint - 1;
-        sizes[0] = size;
-        mvwprintw(action, getmaxy(action) - 2, ((center - size)/4), "%.*s", size, checkpoint);
-
-        //Get Lang "NO"
-        checkpoint = pointer;
-        pointer = strchr(pointer, '\n');
-        pointer += 1;
-
-        size = pointer - checkpoint - 1;
-        sizes[1] = size;
-
-        mvwprintw(action, getmaxy(action) - 2, ((center - size)*3/4), "%.*s", size, checkpoint);
-    } else {
-        pointer = lang;
-        for (int x = 0; x < 8; x++, pointer++) {
-            pointer = strchr(pointer, '\n');
-        }
-
-        checkpoint = pointer;
-        pointer = strchr(pointer, '\n');
-        pointer += 1;
-        size = pointer - checkpoint - 1;
-
-        sizes[0] = size;
-        mvwprintw(action, getmaxy(action) - 2, ((center - size)/2), "%.*s", size, checkpoint);
-    }
-}
-
 void setWindowRatio(RESOLUTION* target, char* ratios) {
     char buffer[4][64], placeholder[2][32], operator, operator2, *pointer, *checkpoint;
     int alpha, beta, gamma, delta;
@@ -1357,7 +1289,7 @@ void calcWindow(RESOLUTION* target) {
     
 }
 
-void updateWindows() {
+void refreshWindows() {
     char* temp;
     int result;
 
@@ -1400,6 +1332,142 @@ void updateWindows() {
     wrefresh(sidebar);
 }
 
+//Prepares the confirmation dialog screen with the gives line from lang file.
+//Type 0 will prepare a yes/no question. Type 1 will prepare a notice
+bool confirmationDialog(char* lang, int line, int* sizes, int type) {
+    size_t center, size;
+	char options[4][128];
+	int choice, key;
+    char *pointer = lang, *checkpoint;
+	key = choice = 0;
+	bool update = true;
+
+	wclear(action);
+    box(action, 0, 0);
+    center = getmaxx(action);
+
+    for (int x = 1; x < line; x++, pointer += 1) {
+        pointer = strchr(pointer, '\n');
+    }
+    checkpoint = pointer;
+    pointer = strchr(pointer, '\n');
+    pointer += 1;
+    size = pointer - checkpoint - 1;
+	sprintf(options[0], "%.*s", (int)size, checkpoint);
+
+	pointer = lang;
+	for (int x = 0; x < 6; x++, pointer++) {
+		pointer = strchr(pointer, '\n');
+	}
+
+	//Get Lang "YES"
+	checkpoint = pointer;
+	pointer = strchr(pointer, '\n');
+	pointer += 1;
+	size = pointer - checkpoint - 1;
+	sprintf(options[1], "%.*s", (int)size, checkpoint);
+	sizes[0] = size;
+
+	//Get Lang "NO"
+	checkpoint = pointer;
+	pointer = strchr(pointer, '\n');
+	pointer += 1;
+	size = pointer - checkpoint - 1;
+	sprintf(options[2], "%.*s", (int)size, checkpoint);
+	sizes[1] = size;
+
+	//Get Lang "GOT IT"
+	checkpoint = pointer;
+	pointer = strchr(pointer, '\n');
+	pointer += 1;
+	size = pointer - checkpoint - 1;
+	sprintf(options[3], "%.*s", (int)size, checkpoint);
+
+	while (true) {
+		if (update) {
+			wclear(action);
+			box(action, 0, 0);
+
+			if (strlen(options[0]) > center - 2) {
+				pointer = strrchr(options[0], ' ');
+				size = (pointer - options[0]) - 1;
+				mvwprintw(action, 1, ((center - size)/2), "%.*s", (int)size, options[0]);
+				mvwprintw(action, 2, ((center - (strlen(pointer) - 1))/2), "%.*s", strlen(pointer), pointer);
+			} else {
+				mvwprintw(action, 1, ((center - strlen(options[0]))/2), "%s", options[0]);
+			}
+
+			if (type == 0) {
+				mvwprintw(action, getmaxy(action) - 2, ((center - strlen(options[3]))/2), "%s", options[3]);
+			} else {
+				mvwprintw(action, getmaxy(action) - 2, ((center - sizes[0])/4), "%s", options[1]);
+				mvwprintw(action, getmaxy(action) - 2, ((center - sizes[1])*3/4), "%s", options[2]);
+			}
+			wrefresh(action);
+
+			update = false;
+		}
+
+		if (type == 0) {
+			mvwchgat(action, getmaxy(action) - 2, ((center - strlen(options[3]))/2), strlen(options[3]), A_STANDOUT, 0, NULL);
+		} else {
+			if (choice == 0) {
+				mvwchgat(action, getmaxy(action) - 2, ((center - sizes[0])/4), sizes[0], A_STANDOUT, 0, NULL);
+			} else {
+				mvwchgat(action, getmaxy(action) - 2, ((center - sizes[1])*3/4), sizes[1], A_STANDOUT, 0, NULL);
+			}
+		}
+		wrefresh(action);
+
+		key = wgetch(window);
+		switch (key)
+		{
+		case ENTER:
+			if (choice == 0) {
+				wclear(action);
+				wrefresh(action);
+
+				refreshWindows();
+				return true;
+			} else {
+				wclear(action);
+				wrefresh(action);
+
+				refreshWindows();
+				return false;
+			}
+			break;
+		case KEY_LEFT:
+			if (choice < 1) {
+				choice++;
+			}
+			break;
+		case KEY_RIGHT:
+			if (choice > 0) {
+				choice --;
+			}
+			break;
+		case KEY_RESIZE:
+			refreshWindows();
+
+			update = true;
+			break;
+		default:
+			break;
+		}
+
+		if (type == 0) {
+			mvwchgat(action, getmaxy(action) - 2, ((center - strlen(options[3]))/2), strlen(options[3]), A_NORMAL, 0, NULL);
+		} else {
+			if (choice == 0) {
+				mvwchgat(action, getmaxy(action) - 2, ((center - sizes[0])/4), sizes[0], A_NORMAL, 0, NULL);
+			} else {
+				mvwchgat(action, getmaxy(action) - 2, ((center - sizes[1])*3/4), sizes[1], A_NORMAL, 0, NULL);
+			}
+		}
+	}
+}
+
 //Read from a target file into the memory
 //pack is the parent folder, path is the path to loop for and position is the file position. -1 Will take the path as target.
 FOLDER* getFolder(char* path, int position) {
@@ -1409,7 +1477,7 @@ FOLDER* getFolder(char* path, int position) {
     char placeholder[1024], *location = strdup(path), name[1024];
 
     if (translated != NULL) {
-        updateWindows();
+        refreshWindows();
         nodelay(window, true);
     }
 
@@ -1486,7 +1554,7 @@ FOLDER* getFolder(char* path, int position) {
             wrefresh(miniwin);
 
             if (input == KEY_RESIZE) {
-                updateWindows();
+                refreshWindows();
             }
 
             entry = readdir(scanner);
@@ -1608,7 +1676,7 @@ FOLDER* getFolder(char* path, int position) {
             wrefresh(miniwin);
 
             if (input == KEY_RESIZE) {
-                updateWindows();
+                refreshWindows();
             }
 
             input = 0;
@@ -1842,7 +1910,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         }
 
         if (wgetch(window) == KEY_RESIZE) {
-            updateWindows();
+            refreshWindows();
         }
         box(miniwin, 0, 0);
         wrefresh(miniwin);
@@ -1975,313 +2043,168 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
     logger("Finished targets linking, starting the override process\n");
 }
 
-void readPNGFile (png_structp image, png_bytep data, png_size_t size) {
-	TEXTURE* reader = (TEXTURE*)png_get_io_ptr(image);
+void decodePNG (png_structp png_ptr, png_bytep data, png_size_t size) {
+	TEXTURE* reader = (TEXTURE*)png_get_io_ptr(png_ptr);
 
-	if (reader->index + size > reader->size) {
-		pngErrLogger(image, "Reading beyond of the buffer!\n");
-	}
-
-	memcpy(data, reader->data + reader->index, size);
-	reader->index += size;
+	if (reader->offset + size > reader->size) {
+        logger("Read error: beyond buffer size!\n");
+    }
+	memcpy(data, reader->data + reader->offset, size);
+	reader->offset += size;
 }
 
-void getPNGDimentions (char* image, size_t size, int *height, int *width) {
-	TEXTURE reader = {
-		image, size, 0
-	};
+void encodePNG (png_structp png_ptr, png_bytep data, png_size_t size) {
+	TEXTURE* reader = (TEXTURE*)png_get_io_ptr(png_ptr);
 
-	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	png_infop info = png_create_info_struct(png);
+	if (reader->offset + size > reader->size) {
+		size_t new_size = reader->size + 256;
+		char* temp = (char*)realloc(reader->data, new_size);
 
-	png_set_read_fn(png, &reader, readPNGFile);
-	png_read_info(png, info);
-
-	*height = png_get_image_height(png, info);
-	*width = png_get_image_width(png, info);
-
-	png_destroy_read_struct(&png, &info, NULL);
-}
-
-png_bytep* processPNG (char* image, size_t size) {
-	size_t row_size, height;
-	png_bytep *row_pointers;
-
-	TEXTURE reader = {
-		image, size, 0
-	};
-
-	// Creating png structs
-	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	png_infop info = png_create_info_struct(png);
-
-	// Setting up custom reading
-	png_set_read_fn(png, &reader, readPNGFile);
-	png_read_info(png, info);
-
-	// Getting dimentions and color information
-    height = png_get_image_height(png, info);
-    png_byte color_type = png_get_color_type(png, info);
-    png_byte bit_depth = png_get_bit_depth(png, info);
-
-	// Adjusting mode to RGB if necessary
-	if (color_type == PNG_COLOR_TYPE_PALETTE) {
-		png_set_palette_to_rgb(png);
-	}
-    if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) {
-		png_set_expand_gray_1_2_4_to_8(png);
-	}
-    if (png_get_valid(png, info, PNG_INFO_tRNS)) {
-		png_set_tRNS_to_alpha(png);
-	}
-    if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_GRAY) {
-        png_set_add_alpha(png, 0xFF, PNG_FILLER_AFTER);
-	}
-
-	// Updating png structs info
-	png_read_update_info(png, info);
-	row_size = png_get_rowbytes(png, info);
-
-	row_pointers = (png_bytep *)malloc(height * sizeof(png_bytep));
-    if (!row_pointers) {
-        logger("Fail to allocate memory while reading the png: %s\n", strerror(errno));
-        png_destroy_read_struct(&png, &info, NULL);
-        return NULL;
-    }
-
-    for (int y = 0; y < (int)height; y++) {
-        row_pointers[y] = (png_bytep)malloc(row_size);
-        if (!row_pointers[y]) {
-            logger("Fail to allocate memory for image line: %s\n", strerror(errno));
-
-            for (int j = 0; j < y; j++) {
-                free(row_pointers[j]);
-            }
-            free(row_pointers);
-            png_destroy_read_struct(&png, &info, NULL);
-            return NULL;
-        }
-    }
-	
-	//Linking pointer array to char matrix
-    png_read_image(png, row_pointers);
-	png_destroy_read_struct(&png, &info, NULL);
-    return row_pointers;
-}
-
-void writePNGFile (png_structp png, png_bytep data, png_size_t size) {
-	TEXTURE* writer = (TEXTURE*)png_get_io_ptr(png);
-
-	if (writer->size + size > writer->index) {
-        writer->index *= 2;
-        writer->data = realloc(writer->data, writer->index);
-    }
-
-	memcpy(writer->data + writer->size, data, size);
-    writer->size += size;
-}
-
-void printToPNGFile (ARCHIVE** image, png_bytep *pixels) {
-	size_t input_size = image[0]->size;
-	char* file = image[0]->tab;
-
-	png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	if (!png) return;
-
-    png_infop data = png_create_info_struct(png);
-    if (!data) {
-        png_destroy_write_struct(&png, NULL);
-        return;
-    }
-
-    if (setjmp(png_jmpbuf(png))) {
-        png_destroy_write_struct(&png, &data);
-        return;
-    }
-
-	TEXTURE reader = {
-		file, input_size, 0
-	};
-
-	png_set_read_fn(png, &reader, readPNGFile);
-	png_read_info(png, data);
-
-	size_t width = png_get_image_width(png, data);
-    size_t height = png_get_image_height(png, data);
-    int color_type = png_get_color_type(png, data);
-    int bit_depth = png_get_bit_depth(png, data);
-
-	png_structp write_png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!write_png) {
-        png_destroy_read_struct(&png, &data, NULL);
-        return;
-    }
-
-	png_infop write_info = png_create_info_struct(write_png);
-    if (!write_info) {
-        png_destroy_write_struct(&write_png, NULL);
-        png_destroy_read_struct(&png, &data, NULL);
-        return;
-    }
-
-	if (setjmp(png_jmpbuf(write_png))) {
-        png_destroy_write_struct(&write_png, &write_info);
-        png_destroy_read_struct(&png, &data, NULL);
-        return;
-    }
-
-	TEXTURE buffer = { malloc(1024), 0, 1024 };
-    if (!buffer.data) {
-        png_destroy_write_struct(&write_png, &write_info);
-        png_destroy_read_struct(&png, &data, NULL);
-        return;
-    }
-
-	png_set_write_fn(write_png, &buffer, writePNGFile, NULL);
-
-	png_set_IHDR(
-        write_png, write_info,
-        width, height,
-        bit_depth,
-        color_type,
-        PNG_INTERLACE_NONE,
-        PNG_COMPRESSION_TYPE_DEFAULT,
-        PNG_FILTER_TYPE_DEFAULT
-    );
-
-	png_write_info(write_png, write_info);
-
-	png_write_image(write_png, pixels);
-    png_write_end(write_png, NULL);
-
-	png_destroy_write_struct(&write_png, &write_info);
-    png_destroy_read_struct(&png, &data, NULL);
-
-	free(image[0]->tab);
-	image[0]->tab = buffer.data;
-}
-
-void resizePNGFile(ARCHIVE** image, size_t height, size_t width) {
-	png_bytep* file = processPNG(image[0]->tab, image[0]->size), *resize;
-	int lines, collums;
-	size_t row_size;
-	
-	//Setting up the reader
-	png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	if (!png) return;
-
-    png_infop data = png_create_info_struct(png);
-    if (!data) {
-        png_destroy_write_struct(&png, NULL);
-        return;
-    }
-
-    if (setjmp(png_jmpbuf(png))) {
-        png_destroy_write_struct(&png, &data);
-        return;
-    }
-
-	TEXTURE reader = {
-		image[0]->tab, image[0]->size, 0
-	};
-
-	png_set_read_fn(png, &reader, readPNGFile);
-	png_read_info(png, data);
-
-	collums = png_get_image_width(png, data);
-    lines = png_get_image_height(png, data);
-    int color_type = png_get_color_type(png, data);
-    int bit_depth = png_get_bit_depth(png, data);
-
-	png_read_update_info(png, data);
-	row_size = png_get_rowbytes(png, data);
-
-	png_structp write_png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!write_png) {
-        png_destroy_read_struct(&png, &data, NULL);
-        return;
-    }
-
-	png_infop write_info = png_create_info_struct(write_png);
-    if (!write_info) {
-        png_destroy_write_struct(&write_png, NULL);
-        png_destroy_read_struct(&png, &data, NULL);
-        return;
-    }
-
-	if (setjmp(png_jmpbuf(write_png))) {
-        png_destroy_write_struct(&write_png, &write_info);
-        png_destroy_read_struct(&png, &data, NULL);
-        return;
-    }
-
-	TEXTURE buffer = { malloc(1024), 0, 1024 };
-    if (!buffer.data) {
-        png_destroy_write_struct(&write_png, &write_info);
-        png_destroy_read_struct(&png, &data, NULL);
-        return;
-    }
-
-	png_set_write_fn(write_png, &buffer, writePNGFile, NULL);
-
-	png_set_IHDR(
-        write_png, write_info,
-        width, height,
-        bit_depth,
-        color_type,
-        PNG_INTERLACE_NONE,
-        PNG_COMPRESSION_TYPE_DEFAULT,
-        PNG_FILTER_TYPE_DEFAULT
-    );
-
-	//Resizing 
-	resize = (png_bytep*)malloc(height * sizeof(png_bytep));
-	for (size_t y = 0; y < height; y++) {
-		resize[y] = (png_bytep)malloc(row_size);
-
-		if (resize[y] == NULL) {
-			logger("Fail to allocate memory for image line: %s\n", strerror(errno));
-
-			for (size_t x = 0; x < y; x++) {
-				free(resize[x]);
-			}
-
-			free(resize);
+		if (temp == NULL) {
+			logger("Failed to expand pixels memory! %s\n", strerror(errno));
 			return;
 		}
+
+		reader->data = temp;
+		reader->size = new_size;
+    }
+	
+	memcpy(reader->data + reader->offset, data, size);
+	reader->offset += size;
+}
+
+int getPNGPixels(ARCHIVE* file, png_bytep** pixels, int* width, int* height, int* color_type, int* bit_depth, int* row_bytes, bool extract) {
+	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png == NULL) {
+		logger("Failed to create read struct for %s\n", file->name);
+		return 0;
 	}
 
-	for (size_t x = 0; x < height; x++) {
+	png_infop info = png_create_info_struct(png);
+	if (info == NULL) {
+		logger("Failed to create info struct for %s\n", file->name);
+		png_destroy_read_struct(&png, NULL, NULL);
+		return 0;
+	}
 
-		for (size_t y = 0; y < width; y++) {
-			png_bytep pixel, texture;
-			pixel = &resize[x][(y * 4)];
+	if (setjmp(png_jmpbuf(png))) {
+        png_destroy_read_struct(&png, &info, NULL);
+        return 0;
+    }
 
-			if (x < (size_t)lines && y < (size_t)collums) {
-				texture = &file[x][(y * 4)];
+	TEXTURE reader = {(char*)file->tab, file->size, 0};
+	png_set_read_fn(png, &reader, decodePNG);
+	png_read_info(png, info);
 
-				pixel[0] = texture[0];
-				pixel[1] = texture[1];
-				pixel[2] = texture[2];
-				pixel[3] = texture[3];
-			} else {
+	if (height != NULL) {
+		*height = png_get_image_height(png, info);
+	}
+	if (width != NULL) {
+		*width = png_get_image_width(png, info);
+	}
+	if (bit_depth != NULL) {
+		*bit_depth = png_get_bit_depth(png, info);
+	}
+	if (color_type != NULL) {
+		*color_type = png_get_color_type(png, info);
+	}
+	if (row_bytes != NULL) {
+		*row_bytes = png_get_rowbytes(png, info);
+	}
+	if (extract) {
+		size_t byte_size = png_get_rowbytes(png, info);
+		size_t lines;
+		lines = png_get_image_height(png, info);
+		png_bytep* pxs = (png_bytep*)malloc(lines * sizeof(png_bytep));
 
-				pixel[3] = 0;
+		for (size_t x = 0; x < lines; x++) {
+			pxs[x] = (png_bytep)malloc(byte_size);
+
+			if (pxs[x] == NULL) {
+				logger("Failed to allocate memory for row of png bytes for %s! %s\n", file->name, strerror(errno));
+
+				for (size_t y = 0; y < x; y++) {
+					free(pxs[y]);
+				}
+				free(pxs);
+				png_destroy_read_struct(&png, &info, NULL);
+				*pixels = NULL;
+            	return 0;
 			}
 		}
+
+		png_read_image(png, pxs);
+		*pixels = pxs;
+	}
+	png_destroy_read_struct(&png, &info, NULL);
+
+	return 1;
+}
+
+void printPNGPixels(ARCHIVE* file, png_bytep *pixels) {
+	// Creating writing structs
+	png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png == NULL) {
+		logger("Failed to create read struct for %s\n", file->name);
+		return;
 	}
 
-	//Writing
-	png_write_info(write_png, write_info);
-	png_write_image(write_png, resize);
-    png_write_end(write_png, NULL);
+	png_infop info = png_create_info_struct(png);
+	if (info == NULL) {
+		logger("Failed to create info struct for %s\n", file->name);
+		png_destroy_write_struct(&png, NULL);
+		return;
+	}
 
-	png_destroy_write_struct(&write_png, &write_info);
-	png_destroy_read_struct(&png, &data, NULL);
+	// Error handling
+	if (setjmp(png_jmpbuf(png))) {
+        png_destroy_write_struct(&png, &info);
+        return;
+    }
 
-	free(image[0]->tab);
-	image[0]->tab = buffer.data;
-}
+	int width, height, color_type, bit_depth;
+	getPNGPixels(file, NULL, &width, &height, &color_type, &bit_depth, NULL, false);
+	
+	TEXTURE texture;
+    texture.data = (char*)malloc(file->size);
+    texture.size = file->size;
+    texture.offset = 0;
+	if (texture.data == NULL) {
+		logger("Failed to allocate memory for texture TEXTURE %s\n", strerror(errno));
+		png_destroy_write_struct(&png, &info);
+		return;
+	}
+
+	png_set_write_fn(png, &texture, encodePNG, NULL);
+	
+	png_set_IHDR(
+		png, info,
+		width, height,
+		bit_depth, color_type,
+		PNG_INTERLACE_NONE,
+		PNG_COMPRESSION_TYPE_DEFAULT,
+		PNG_FILTER_TYPE_DEFAULT
+	);
+
+	png_set_compression_level(png, Z_BEST_COMPRESSION);
+
+	png_write_info(png, info);
+	png_write_image(png, pixels);
+	png_write_end(png, NULL);
+
+	logger("PNG %s data size %zu", file->name, texture.size);
+
+	if (file->tab != NULL) {
+		free(file->tab);
+	}
+	file->tab = texture.data;
+	file->size = texture.offset;
+
+	png_destroy_write_struct(&png, &info);
+} 
+
+// void resizePNGFile(ARCHIVE** image, size_t height, size_t width) {
+// }
 
 void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	OBJECT *placeholder, *overrides, *query, *value, *model, *temp;
@@ -2292,10 +2215,6 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	float index = 0;
 	bool custom_model_data, crossbow, pulling, damage;
 	custom_model_data = crossbow = false;
-
-	// 1 - Queue all the predicates type
-	// 2 - Create the components file to acomodade them
-	// 3 - Sort the entries
 
 	location = localizeFolder(folder, "minecraft:items/", true);
 
@@ -2875,9 +2794,16 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	FOLDER *navigator, *cursor, *templates;
 	char *pointer, *checkpoint, *save, buffer[1024], namespace[512], command[256], name[256], *path = calloc(256, sizeof(char));
-	ARCHIVE *file, *destination;
 	OBJECT *placeholder, *value, *query;
     int line_number = 0, type;
+
+	struct FILEPTR {
+		FOLDER *container;
+		size_t index;
+	} file, destination;
+
+	file.container = destination.container = NULL;
+	file.index = destination.index = 0;
 
 	pointer = instruct;
 	getcwd(path, 256);
@@ -2895,7 +2821,6 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	pointer = instruct;
 	while ((pointer = strchrs(pointer, 2, '>', '<')) != NULL) {
 		type = 0;
-		file = destination = NULL;
 
 		sscanf(pointer + 2, "%[^:]255", command);
 		switch (pointer[0]) {
@@ -2922,19 +2847,21 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 		for (size_t x = 0; x < navigator->count && type == 0; x++) {
 			if (strcmp(name, navigator->content[x].name) == 0) {
-				file = &navigator->content[x];
+				file.container = navigator;
+				file.index = x;
 				break;
 			}
 		}
 
-		if (file == NULL && type == 0) {
+		if (file.container == NULL && type == 0) {
 			logger("File %s was not found! Skipping to next iteration\n", name);
+			pointer = strchrs(pointer + 1, 2, '>');
 			line_number++;
 			continue;
 		}
 
-		if (strstr(file->name, ".json") != NULL) {
-            placeholder = processOBJ(file->tab); //Check if it's a json file
+		if (strstr(file.container->content[file.index].name, ".json") != NULL) {
+            placeholder = processOBJ(file.container->content[file.index].tab); //Check if it's a json file
         }
 
 		pointer = strchr(pointer, ':');
@@ -2943,7 +2870,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 		checkpoint = &buffer[0];
 
-		while (checkpoint != NULL) {
+		while (*checkpoint != '\0') {
 			checkpoint = strnotchr(checkpoint, 4, ';', ' ', '\n', '\t');
 
 			getNextStr(&checkpoint, command);
@@ -2964,7 +2891,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							if (strcmp(name, cursor->content[x].name) == 0) {
 								logger("A matching file to %s was found, copying the override contents\n", name);
 								line_number++;
-								copyOverides(file, &cursor->content[x]);
+								copyOverides(&file.container->content[file.index], &cursor->content[x]);
 
 								delFile(&cursor, x);
 								break;
@@ -2973,10 +2900,10 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 
 					if (strcmp(command, "copy") == 0) {
-						mirror = dupFile(file);
+						mirror = dupFile(&file.container->content[file.index]);
 						addFile(&cursor, mirror);
 					} else {
-						mirror = dupFile(file);
+						mirror = dupFile(&file.container->content[file.index]);
 						addFile(&cursor, mirror);
 
 						for (size_t x = 0; x < navigator->count; x++) {
@@ -3021,8 +2948,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						free(navigator->name);
 						navigator->name = strdup(name);
 					} else {
-						free(file->name);
-						file->name = strdup(name);
+						free(&file.container->content[file.index].name);
+						file.container->content[file.index].name = strdup(name);
 					}
 				} else if (strcmp(command, "display") == 0) {
 					char par[1024];
@@ -3088,7 +3015,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 
 					if (query == NULL) {
-						logger("textures member wasn't found at %s, the program will add manually\n", file->name);
+						logger("textures member wasn't found at %s, the program will add manually\n", file.container->content[file.index].name);
 						line_number++;
 
 						query = createOBJ("\"textures\"");
@@ -3132,15 +3059,17 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						freeOBJ(value);
 					}
 				} else if (strcmp(command, "dimentions") == 0) {
+					/* 
 					getNextStr(&checkpoint, command);
 					size_t width = 0, height = 0;
 					sscanf(command, "%llux%llu", &width, &height);
 
 					resizePNGFile(&file, height, width);
 
-					FILE* test = fopen("c:\\Users\\Calie\\Downloads\\test.png", "wb+"); // This paint job isn't working for some reason
-					fwrite(file->tab, 1, file->size, test);
-					fclose(test);
+					// FILE* test = fopen("c:\\Users\\Calie\\Downloads\\test.png", "wb+"); // This paint job isn't working for some reason
+					// fwrite(file->tab, 1, file->size, test);
+					// fclose(test);
+					*/
 				}
 
 			} else if (strstr(command, "autofill") != NULL) {
@@ -3261,15 +3190,15 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                     }
                 }
 
-                free(file->tab);
-                file->tab = printJSON(placeholder);
-				indentJSON(&file->tab);
-                file->size = strlen(file->tab);
+                free(file.container->content[file.index].tab);
+                file.container->content[file.index].tab = printJSON(placeholder);
+				indentJSON(&file.container->content[file.index].tab);
+                file.container->content[file.index].size = strlen(file.container->content[file.index].tab);
 				
 			} else if (strcmp(command, "remove") == 0) {
 				if (type == 0) {
 					for (size_t x = 0; x < navigator->count; x++) {
-						if (strcmp(navigator->content[x].name, file->name) == 0) {
+						if (strcmp(navigator->content[x].name, file.container->content[file.index].name) == 0) {
 							delFile(&navigator, x);
 							break;
 						}
@@ -3415,19 +3344,21 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				}
 
 				for (size_t x = 0; x < navigator->count && trim == true; x++) {
-					if (strcmp(navigator->content[x].name, file->name) == 0) {
+					if (strcmp(navigator->content[x].name, file.container->content[file.index].name) == 0) {
 						delFile(&navigator, x);
 						break;
 					}
 				}
 
 			} else if (strcmp(command, "paint") == 0) {
+				/* 
 				int width, height;
 				int lines, collums;
+				int bit_depth, color_type;
 				png_bytep *texture, *pixels, *pallet;
 
 				texture = processPNG(file->tab, file->size);
-				getPNGDimentions(file->tab, file->size, &height, &width);
+				getPNGDimentions(file->tab, file->size, &height, &width, &bit_depth, &color_type);
 
 				// Map
 				checkpoint = strchr(checkpoint, '\"');
@@ -3436,7 +3367,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				for (size_t x = 0; x < navigator->count; x++) {
 					if (strcmp(navigator->content[x].name, name) == 0) {
 						pixels = processPNG(navigator->content[x].tab, navigator->content[x].size);
-						getPNGDimentions(navigator->content[x].tab, navigator->content[x].size, &lines, &collums);
+						getPNGDimentions(navigator->content[x].tab, navigator->content[x].size, &lines, &collums, &bit_depth, &color_type);
 						break;
 					}
 				}
@@ -3479,17 +3410,25 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				}
 
 				printToPNGFile(&file, texture);
+				// Temp line
+				// sprintf(namespace, "c:\\Users\\Calie\\Downloads\\Output\\debug.png");
+				// FILE* print = fopen(namespace, "wb+");
+				// fwrite(file->tab, 1, file->size, print);
+				// fclose(print);
 
 				free(pallet);
 				free(texture);
 				free(pixels);
+				*/
 			} else if (strcmp(command, "permutate_texture") == 0) {
-				int width, height, texture_count = 0;
+				int width, height, texture_count = 0, bit_deph, color_type[2], bpp[2];
 				int lines, collums;
 				ARCHIVE *map, *copies[32];
 				FOLDER* location;
 				OBJECT* list;
 				png_bytep *texture, *pixels, *pallet[32], *to_paint[32];
+				navigator = target;
+				cursor = assets;
 				
 				//Getting texture map name
 				checkpoint = strchr(checkpoint, '\"');
@@ -3504,14 +3443,13 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 				//Getting pallets list
 				checkpoint = strchr(checkpoint, '{');
-				sscanf(checkpoint, "%[^\n]255", namespace);
-				char* temp = strdup(namespace);
-				list = processOBJ(temp);
-				free(temp);
+				sscanf(checkpoint, "%[^;]255", namespace);
+				checkpoint += strlen(namespace) + 1;
+				list = processOBJ(namespace);
 
 				for (size_t x = 0; x < list->count; x++) {
 					char* name_pointer;
-					sscanf(list->value[x].declaration, "\"%[^\"]s\"", namespace);
+					sscanf(list->value[x].declaration, "\"%[^\"]\"", namespace);
 
 					if (namespace[0] == '.') {
 						location = localizeFolder(target, namespace, false);
@@ -3525,40 +3463,65 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 
 					if ((name_pointer = strrchr(namespace, '/')) == NULL) {
-						name_pointer = namespace;
+						sprintf(name, "%.*s", 255, namespace);
+						name_pointer = name;
 					} else {
-						memmove(namespace, name_pointer + 1, strlen(name_pointer + 1) + 1);
+						sprintf(name, "%s", name_pointer + 1);
 					}
 
 					for (size_t y = 0; y < cursor->count; y++) {
 
 						if (strcmp(location->content[y].name, namespace) == 0) {
-							copies[texture_count] = dupFile(file);
+							copies[texture_count] = dupFile(&file.container->content[file.index]);
 
-							pallet[texture_count] = processPNG(location->content[y].tab, location->content[y].size);
-							to_paint[texture_count] = processPNG(copies[texture_count]->tab, copies[texture_count]->size);
+							name_pointer = strchr(name, '.');
+							sprintf(namespace, "%.*s_%s", (int)(name_pointer - name), name, copies[texture_count]->name);
+							free(copies[texture_count]->name);
+							copies[texture_count]->name = strdup(namespace);
 
-							texture_count++;
+							ARCHIVE *temp = &location->content[y];
+							ARCHIVE *mirror = copies[texture_count];
+
+							getPNGPixels(temp, &pallet[texture_count], NULL, NULL, NULL, NULL, NULL, true);
+							getPNGPixels(mirror, &to_paint[texture_count], NULL, NULL, NULL, NULL, NULL, true);
+
+							if (pallet[texture_count] == NULL || to_paint[texture_count] == NULL) {
+								logger("Error! Failed to process png files: %s, %s\n", location->content[y].name, copies[texture_count]->name);
+								continue;
+							} else {
+								texture_count++;
+							}
+
+							temp = mirror = NULL;
 							break;
 						}
 					}
 				}
 				
 				//Continue with color substitution
-				pixels = processPNG(map->tab, map->size); // Color map
-				texture = processPNG(file->tab, file->size); // Texture
+				getPNGPixels(map, &pixels, &collums, &lines, &bit_deph, &color_type[0], NULL, true);
+				getPNGPixels(&file.container->content[file.index], &texture, &width, &height, &bit_deph, &color_type[1], NULL, true);
 
-				getPNGDimentions(file->tab, file->size, &height, &width);
-				getPNGDimentions(map->tab, map->size, &lines, &collums);
+				if (pixels == NULL || texture == NULL) {
+					logger("Error! Failed to process png files: %s, %s\n", map->name, file.container->content[file.index].name);
+					break;
+				}
+
+				bpp[1] = (color_type[0] == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+				bpp[0] = (color_type[1] == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+				// bpp[0] = bpp[1] = 4;
 
 				for (int x = 0; x < height; x++) {
 
 					for (int y = 0; y < width; y++) {
-						png_bytep px, compare;
-						compare = &texture[x][y * 4];
+						png_bytep compare = &texture[x][y * bpp[0]];
 
-						for (int z = 0; z < collums && compare[3] != 0; z++) {
-							px = &pixels[0][z * 4];
+						for (int z = 0; z < collums; z++) {
+							png_bytep px = &pixels[0][z * bpp[1]];
+
+							if (bpp[0] == 4 && compare[3] == 0) {
+								continue;
+							}
 
 							if (
 								px[0] == compare[0]
@@ -3566,10 +3529,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 								&& px[2] == compare[2]
 							) {
 								for (int a = 0; a < texture_count; a++) {
-									to_paint[a][x][(y * 4) + 0] = pallet[a][0][(z * 4) + 0];
-									to_paint[a][x][(y * 4) + 1] = pallet[a][0][(z * 4) + 1];
-									to_paint[a][x][(y * 4) + 2] = pallet[a][0][(z * 4) + 2];
-									to_paint[a][x][(y * 4) + 3] = pallet[a][0][(z * 4) + 3];
+									to_paint[a][x][(y * bpp[0]) + 0] = pallet[a][0][(z * bpp[1]) + 0];
+									to_paint[a][x][(y * bpp[0]) + 1] = pallet[a][0][(z * bpp[1]) + 1];
+									to_paint[a][x][(y * bpp[0]) + 2] = pallet[a][0][(z * bpp[1]) + 2];
 								}
 
 								break;
@@ -3583,21 +3545,31 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				freeOBJ(list);
 
 				for (int x = 0; x < texture_count; x++) {
-					printToPNGFile(&copies[x], to_paint[x]);
+					ARCHIVE *mirror = copies[x];
+					printPNGPixels(mirror, to_paint[x]);
 					addFile(&cursor, copies[x]);
 
+					// Temp line
+					sprintf(namespace, "c:\\Users\\Calie\\Downloads\\Output\\%s", copies[x]->name);
+					FILE* print = fopen(namespace, "wb+");
+					fwrite(copies[x]->tab, 1, copies[x]->size, print);
+					fclose(print);
+ 					
 					free(to_paint[x]);
 					free(pallet[x]);
+
+					mirror = NULL;
 				}
 			} else if (strcmp(command, "convert_overrides") == 0) {
-				// (send adress of FOLDER and ARCHIVE pointer, return the ARCHIVE pointer file if 1, return null if 0. Crop overrides of the file if 1, delete components file if 0);
-				overridesFormatConvert(navigator, &file);
+				ARCHIVE* temp = &file.container->content[file.index];
+				overridesFormatConvert(navigator, &temp);
+				temp = NULL;
 			}
 		}
 
-		if (strstr(file->name, ".json") != NULL) {
-			free(file->name);
-			file->name = printJSON(placeholder);
+		if (strstr(file.container->content[file.index].name, ".json") != NULL) {
+			free(file.container->content[file.index].name);
+			file.container->content[file.index].name = printJSON(placeholder);
 		}
 	}
 }
@@ -3676,7 +3648,7 @@ int main () {
     //Starting the menu;
     initscr();
     setlocale(LC_ALL|~LC_NUMERIC, "");
-    int input = 0, cursor[3], optLenght, actionLenght[2], type = 0, relay_message = -1, diretrix[2];
+    int input = 0, cursor[3], optLenght, actionLenght[2], diretrix[2];
     cursor[0] = cursor[1] = cursor[2] = diretrix[0] = diretrix[1] = 0;
     bool quit = false, update = true;
     n_entries = 0;
@@ -3711,7 +3683,7 @@ int main () {
     noecho();
     keypad(window, true);
     
-    updateWindows();
+    refreshWindows();
     optLenght = mvwprintLines(NULL, translated[0], 0, 1, 0, -1);
 
     query = initQueue(8);
@@ -3721,7 +3693,7 @@ int main () {
 
     while (!quit) {
         //Draw miniwindow
-        if (update == true) {
+		if (update == true) {
             wclear(miniwin);
             box(miniwin, 0, 0);
 
@@ -3747,9 +3719,6 @@ int main () {
                 if (entries->end > 0) {
                     for (int x = 0; x < entries->end; x++) {
                         mvwprintw(miniwin, 1+x, 1, "%s [%c]  ", entries->item[x], (entries->value[x] == 1) ? 'X' : (entries->value[x] == 2) ? '#' : ' ');
-                    }
-                    for (int x = 0; x < query->end; x ++) {
-                        mvwprintw(miniwin, 1 + query->value[x], strlen(entries->item[query->value[x]]) + 6, "%d", x + 1);
                     }
                 } else {
                     mvwprintLines(miniwin, translated[1], 1, 1, 1, 1);
@@ -3801,18 +3770,6 @@ int main () {
                 break;
             }
             break;
-        case 2:
-            if (type == 0) {
-                if (cursor[0] == 0) {
-                    mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[0])/4), actionLenght[0], A_STANDOUT, 0, NULL);
-                } else{
-                    mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[1])*3/4), actionLenght[1], A_STANDOUT, 0, NULL);
-                }
-            } else {
-                mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[0])/2), actionLenght[0], A_STANDOUT, 0, NULL);
-            }
-
-            break;
         }
 
         wrefresh(action);
@@ -3841,17 +3798,6 @@ int main () {
                 break;
             }
             break;
-        case 2:
-            if (type == 0) {
-                if (cursor[0] == 0) {
-                    mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[0])/4), actionLenght[0], A_NORMAL, 0, NULL);
-                } else{
-                    mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[1])*3/4), actionLenght[1], A_NORMAL, 0, NULL);
-                }
-            } else {
-                mvwchgat(action, (getmaxy(action) - 2), ((getmaxx(action) - actionLenght[0])/2), actionLenght[0], A_NORMAL, 0, NULL);
-            }
-            break;
         }
 
         switch (input)
@@ -3874,54 +3820,42 @@ int main () {
                 cursor[0]--;
             }
             break;
-        case KEY_LEFT:
-            if (cursor[2] == 2) {
-                cursor[0] = !cursor[0];
-            }
-            break;
-        case KEY_RIGHT:
-            if (cursor[2] == 2) {
-                cursor[0] = !cursor[0];
-            }
-            break;
         case ENTER:
-            // Case focused on the sidebar, else subwin or else action panel
-            if (cursor[2] == 0) {
+            if (cursor[2] == 0) { // Focus on the sidebar
                 switch (cursor[1])
                 {
-                case 0:
-                    if (query->end > 0) {
-                        type = 0;
-                        relay_message = 5;
-                        wclear(action);
-                        confirmationDialog(translated[1], relay_message, actionLenght, type);
-                        cursor[0] = 0;
-                        cursor[2] = 2;
-                    }
+                case 0: // scanning folder from query
+					if (query->end > 0 && confirmationDialog(translated[1], 5, actionLenght, 0)) {
+						FOLDER* temp;
+						for (int x = 0; x < query->end; x++) {
+							temp = getFolder(path, query->value[x]);
+							addFolder(&targets, temp);
+							entries->value[query->value[x]] = 2;
+							temp = NULL;
+						}
+						
+						confirmationDialog(translated[1], 6, actionLenght, 0);
+						endQueue(query);
+						query = initQueue(8);
+					}
+					update = true;
+
                     break;
-                case 1:
-                    if (diretrix[0] == 1 || diretrix[1] == 1) {
-                        type = 0;
-                        relay_message = 10;
-                        confirmationDialog(translated[1], relay_message, actionLenght, type);
-                        cursor[0] = 0;
-                        cursor[2] = 2;
-                    } else {
-                        type = 1;
-                        relay_message = 14;
-                        confirmationDialog(translated[1], relay_message, actionLenght, type);
-                        cursor[0] = 0;
-                        cursor[2] = 2;
-                    }
+				case 1:
+					if (diretrix[1] == 1 && confirmationDialog(translated[1], 10, actionLenght, 0)) {
+						executeInstruct(&targets->subdir[0], &targets->subdir[1], NULL);
+						confirmationDialog(translated[1], 13, actionLenght, 1);
+					}
                     break;
                 case 3:
                     quit = true;
                     break;
                 }
-            } else if (cursor[2] == 1) {
+            } else if (cursor[2] == 1) { // Focus in the tab
+
                 switch (cursor[1])
                 {
-                case 0:
+                case 0: // Mounting folder query
                     if (entries->value[cursor[0]] == 2) {
                         break;
                     } else if (entries->value[cursor[0]] == 1) {
@@ -3947,8 +3881,9 @@ int main () {
                     }
                         
                     break;
-                case 1:
-                        switch (cursor[0])
+                case 1: // Tools option
+					
+					switch (cursor[0])
                     {
                     case 0:
                         if (query->value[0] != 2) {
@@ -3967,90 +3902,20 @@ int main () {
                     default:
                         break;
                     }
+					
                     break;
-                case 2:
+                case 2: // Change language
                     for (int x = 0; x < 3; x++) {
                         free(translated[x]);
                     }
                     free(translated);
                     translated = getLang(lang, cursor[0]);
-                    updateWindows();
+                    refreshWindows();
                     optLenght = mvwprintLines(NULL, translated[0], 0, 1, 0, -1);
 
                     update = true;
                     break;
                 default:
-                    break;
-                }
-            } else if (cursor[2] == 2) {
-                //Case the confirmation dialog is triggered, switch to different tabs actions
-                switch (cursor[1]) {
-                case 0:
-                    wclear(action);
-                    if (cursor[0] == 0 && query->end > 0) {
-                        type = 1;
-                        FOLDER* temp;
-
-                        for (int x = 0; x < query->end; x++) {
-                            temp = getFolder(path, query->value[x]);
-                            addFolder(&targets, temp);
-                            entries->value[query->value[x]] = 2;
-                            temp = NULL;
-                        }
-                        
-                        relay_message = 6;
-
-                        confirmationDialog(translated[1], relay_message, actionLenght, type);
-                        endQueue(query);
-                        query = initQueue(8);
-                    } else {
-                        cursor[2] = 0;
-                        update = true;
-                    }
-                    break;
-                case 1:
-                    if (relay_message == 13 || relay_message == 14) {
-                        wclear(action);
-                        cursor[2] = 0;
-                        update = true;
-                    } else if (cursor[0] == 0) {
-                        //Merge and Override
-                        if (diretrix[0] == 1) {
-                            for (int x = 0; x < (int)targets->subcount - 1; x++) {
-                                overrideFiles(&targets->subdir[0], &targets->subdir[x + 1]);
-                            }
-
-                            wclear(action);
-                            type = 1;
-                            relay_message = 12;
-                            confirmationDialog(translated[1], relay_message, actionLenght, 1);
-                        }
-                        //Diretrix execution
-                        if (diretrix[1] == 1) {
-                            for (int x = 0; x < (int)targets->subcount - 1; x++) {
-                                executeInstruct(&targets->subdir[0], &targets->subdir[x + 1], NULL);
-                            }
-
-                            wclear(action);
-                            type = 1;
-                            relay_message = 12;
-                            confirmationDialog(translated[1], relay_message, actionLenght, 1);
-                        }
-
-                        wclear(action);
-                        type = 1;
-                        relay_message = 13;
-                        confirmationDialog(translated[1], relay_message, actionLenght, type);
-                    } else if (cursor[1] == 1) {
-                        wclear(action);
-                        cursor[2] = 0;
-                        update = true;
-                    } else {
-                        wclear(action);
-                        type = 1;
-                        relay_message = 14;
-                        confirmationDialog(translated[1], relay_message, actionLenght, type);
-                    }
                     break;
                 }
             }
@@ -4078,13 +3943,14 @@ int main () {
             }
             break;
         case KEY_RESIZE:
-            updateWindows();
+            refreshWindows();
             update = true;
-
+			/* 
+			
             if (cursor[2] == 2) {
                 confirmationDialog(translated[1], relay_message, actionLenght, type);
             }
-            
+             */
             break;
         default:
             break;
