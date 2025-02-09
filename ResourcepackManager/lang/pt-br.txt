@@ -21,8 +21,12 @@ Terminado a xerox dos pacotes
 [Sim]
 [Nao]
 [Oky]
-Executar Edições?
 Mesclar e Empilhar
-Executar Diretrix
-Modificações finalizadas!
-Não Há Diretrix Selecionada
+Executar Instrucões
+Modificacões executadas em duplicata do pacote
+Não há instrucão selecionada
+Proceder
+Cancelar
+[Selecione os pacotes]
+[Selectione o arquivo de instruções]
+Você precisa selecionar mais um pacote!

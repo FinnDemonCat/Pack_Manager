@@ -23,8 +23,12 @@ Finished targets scan
 [Yes]
 [No]
 [Got it]
-Execute Edits?
 Merge and Stack
-Run Diretrix
-Finished edit query!
-No Diretrix Selected
+Run Instructions
+Instructions query saved on duplicate folder
+Instructions folder it's empy
+Done
+Cancel
+[Select the folders]
+[Select the instuctions file]
+You need to select one more resourcepack!

@@ -1,1 +1,1 @@
-getNextStr
+getPNGPixels
