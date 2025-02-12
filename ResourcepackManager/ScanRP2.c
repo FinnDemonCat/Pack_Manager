@@ -1388,8 +1388,10 @@ bool confirmationDialog(char* lang, int line, int* sizes, int type) {
 			box(action, 0, 0);
 
 			if (strlen(options[0]) > center - 2) {
-				pointer = strrchr(options[0], ' ');
-				size = (pointer - options[0]) - 1;
+				for (int x = center - 2; x > 0 && *pointer != ' '; x--) {
+					pointer = &options[0][x];
+				}
+				size = (pointer - options[0]);
 				mvwprintw(action, 1, ((center - size)/2), "%.*s", (int)size, options[0]);
 				mvwprintw(action, 2, ((center - (strlen(pointer) - 1))/2), "%.*s", strlen(pointer), pointer);
 			} else {
@@ -1437,13 +1439,13 @@ bool confirmationDialog(char* lang, int line, int* sizes, int type) {
 			}
 			break;
 		case KEY_LEFT:
-			if (choice < 1) {
-				choice++;
+			if (choice > 0) {
+				choice--;
 			}
 			break;
 		case KEY_RIGHT:
-			if (choice > 0) {
-				choice --;
+			if (choice < 1) {
+				choice++;
 			}
 			break;
 		case KEY_RESIZE:
@@ -1459,9 +1461,9 @@ bool confirmationDialog(char* lang, int line, int* sizes, int type) {
 			mvwchgat(action, getmaxy(action) - 2, ((center - strlen(options[3]))/2), strlen(options[3]), A_NORMAL, 0, NULL);
 		} else {
 			if (choice == 0) {
-				mvwchgat(action, getmaxy(action) - 2, ((center - sizes[0])/4), sizes[0], A_NORMAL, 0, NULL);
-			} else {
 				mvwchgat(action, getmaxy(action) - 2, ((center - sizes[1])*3/4), sizes[1], A_NORMAL, 0, NULL);
+			} else {
+				mvwchgat(action, getmaxy(action) - 2, ((center - sizes[0])/4), sizes[0], A_NORMAL, 0, NULL);
 			}
 		}
 	}
@@ -2784,6 +2786,19 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 		break;
 	}
 
+	overrides = overrides->parent->parent;
+	for (size_t x = 0; x < overrides->count; x++) {
+		if (strcmp(overrides->value[x].declaration, "\"overrides\"") == 0) {
+			delOBJ(&overrides, x);
+			break;
+		}
+	}
+
+	free(file[0]->tab);
+	file[0]->tab = printJSON(overrides);
+	indentJSON(&file[0]->tab);
+	freeOBJ(overrides);
+
 	ARCHIVE* item = (ARCHIVE*)malloc(sizeof(ARCHIVE));
 	item->name = strdup(file[0]->name);
 	item->tab = printJSON(placeholder);
@@ -2799,7 +2814,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	char *pointer, *checkpoint, *save, buffer[1024], namespace[512], command[256], name[256], *path = calloc(256, sizeof(char));
 	OBJECT *placeholder, *value, *query;
     int line_number = 0, type;
-	bool local;
+	bool file_location_moved = false;
 
 	struct FILEPTR {
 		FOLDER *container;
@@ -2818,14 +2833,13 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	while ((pointer = strchrs(pointer, 2, '>', '<')) != NULL) {
 		type = 0;
 
-		if (sscanf(pointer + 2, "%255[^:]", command) == 0) {
+		if (sscanf(pointer + 3, "%255[^\"]", command) == 0) {
 			logger("Error! Failed to scan file's path!\n");
 			return;
 		}
 		switch (pointer[0]) {
 			case '>':
 				navigator = localizeFolder(target, command, true);
-				local = true;
 
 				if (navigator == NULL) {
 					logger("Failed to find %s in %s!\n", command, target->name);
@@ -2834,7 +2848,6 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				break;
 			case '<':
 				navigator = localizeFolder(assets, command, true);
-				local = false;
 
 				if (navigator == NULL) {
 					logger("Failed to find %s in %s!\n", command, assets->name);
@@ -2878,23 +2891,25 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
             placeholder = processOBJ(file.container->content[file.index].tab); //Check if it's a json file
         }
 
-		pointer = strchr(pointer, ':');
+		pointer = strchr(pointer, '\n');
 		checkpoint = strchrs(pointer, 2, '>', '<');
 		snprintf(buffer, (int)(checkpoint - pointer) - 1, "%s", pointer + 1);
 
 		checkpoint = &buffer[0];
 
-		while (*checkpoint != '\0') {
-			checkpoint = strnotchr(checkpoint, 4, ';', ' ', '\n', '\t');
-
+		while (checkpoint != NULL && *checkpoint != '\0') {
+			if ((checkpoint = strnotchr(checkpoint, 4, ';', ' ', '\n', '\t')) == NULL) {
+				break;
+			}
+			
 			getNextStr(&checkpoint, command);
 
-			if (strstr(command, "move") != NULL || strstr(command, "copy") != NULL) {
+			if (strcmp(command, "move") == 0 || strcmp(command, "copy") == 0) {
 				logger("Executing move/copy on %s\n", file.container->content[file.index].name);
 				
-				getNextStr(&checkpoint, command);
-				if (sscanf(command + 1, "%511[^\"]", namespace) == 0) {
-					logger("Failed to scan destination path!\n");
+				getNextStr(&checkpoint, name);
+				if (sscanf(name + 1, "%[^\"]", namespace) == 0) {
+					logger("Error! Failed to get destination name from argument!\n");
 					continue;
 				}
 
@@ -2903,38 +2918,44 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					ARCHIVE* mirror = NULL;
 					save = strrchr(namespace, '/');
 
+					mirror = dupFile(&file.container->content[file.index]);
+
 					if (strlen(save) > 1) {
 						if (sscanf(save + 1, "%[^\"]255", name) == 0) {
 							logger("Error! Failed to scan file's name from path!\n");
+							free(mirror->tab);
+							free(mirror->name);
+							free(mirror);
 							continue;
-						}
-
-						for (size_t x = 0; x < cursor->count; x++) {
-							if (strcmp(name, cursor->content[x].name) == 0) {
-								logger("A matching file to %s was found, copying the override contents\n", name);
-								line_number++;
-								copyOverides(&file.container->content[file.index], &cursor->content[x]);
-
-								delFile(&cursor, x);
-								break;
-							}
+						} else {
+							free(mirror->name);
+							mirror->name = strdup(name);
 						}
 					}
 
-					if (strcmp(command, "copy") == 0) {
-						mirror = dupFile(&file.container->content[file.index]);
-						addFile(&cursor, mirror);
-					} else {
-						mirror = dupFile(&file.container->content[file.index]);
-						addFile(&cursor, mirror);
+					for (size_t x = 0; x < cursor->count; x++) {
+						if (strcmp(cursor->content[x].name, mirror->name) == 0) {
+							logger("A equivalent to %s was found at %s, copying override contents, if found\n", mirror->name, namespace);
+							copyOverides(mirror, &cursor->content[x]);
+
+							delFile(&cursor, x);
+						}
+					}
+					addFile(&cursor, mirror);
+
+					if (strcmp(command, "move") == 0) {
+						logger("File %s was moved! Skipping to next iteraction\n", file.container->content[file.index].name);
+						file_location_moved = true;
+						checkpoint = NULL;
 
 						for (size_t x = 0; x < navigator->count; x++) {
-							if (strcmp(navigator->content[x].name, name) == 0) {
+							if (strcmp(navigator->content[x].name, file.container->content[file.index].name) == 0) {
 								delFile(&navigator, x);
 								break;
 							}
 						}
 					}
+
 				}  else {
 					FOLDER *mirror = NULL;
 					if (strcmp(navigator->name, cursor->name) == 0) {
@@ -3010,20 +3031,20 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 
 					//Finding display type
-					for (size_t x = 0; x < query->count; x++) {
-						if (strcmp(query->value[x].declaration, value->value->declaration) == 0) {
-							OBJECT* temp = &query->value[x];
-							query->value[x] = *value->value;
-							
-							freeOBJ(temp);
-							value->value = NULL;
-							break;
-						}
-					}
+					for (size_t x = 0; x < value->count; x++) {
+						OBJECT* mirror = NULL;
+						mirror = dupOBJ(&value->value[x]);
 
-					if (value->value != NULL) {
-						addOBJ(&query, value->value);
-						value->value = NULL;
+						for (size_t y = 0; y < (query->count + 1); y++) {
+							if (y < query->count && strcmp(mirror->declaration, query->value[y].declaration) == 0) {
+								freeOBJ(&query->value[y]);
+								query->value[y] = *mirror;
+								break;
+							} else if (y == query->count) {
+								addOBJ(&query, mirror);
+								break;
+							}
+						}
 					}
 					freeOBJ(value);
 					
@@ -3071,26 +3092,25 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					checkpoint += strlen(namespace);
 					value = processOBJ(namespace);
 
-					if (strcmp(value->value->value->declaration, "\"self\"") == 0) {
-						logger("\"self\" was defined to %s", query->value[0].declaration); 
-						free(value->value->value->declaration);
-						value->value->value->declaration = strdup(query->value[0].value->declaration);
-					}
+					for (size_t x = 0; x < value->count; x++) {
+						OBJECT* mirror = NULL;
+						mirror = dupOBJ(&value->value[x]);
 
-					for (size_t x = 0; x < query->count; x++) {
-						if (strcmp(query->value[x].declaration, value->value->declaration) == 0) {
-							freeOBJ(&query->value[x]);
-							query->value[x] = *value;
-
-							value = NULL;
+						for (size_t y = 0; y < (query->count + 1); y++) {
+							if (y < query->count && strcmp(value->value[x].declaration, query->value[y].declaration) == 0) {
+								freeOBJ(&query->value[y]);
+								//logic to return file location path
+								
+								query->value[y] = *mirror;
+								break;
+							} else if (y == query->count) {
+								addOBJ(&query, mirror);
+								break;
+							}
 						}
 					}
 
-					if (value != NULL) {
-						addOBJ(&query, value->value);
-						value->value = NULL;
-						freeOBJ(value);
-					}
+					freeOBJ(value);
 				} else if (strcmp(command, "dimentions") == 0) {
 					/* 
 					getNextStr(&checkpoint, command);
@@ -3257,9 +3277,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				FOLDER* permutate_destination;
 				bool trim = false;
 
-				getNextStr(&checkpoint, command);
+				getNextStr(&checkpoint, namespace);
 
-				if (strcmp(command, "trim") == 0) {
+				if (strcmp(namespace, "trim") == 0) {
 					trim = true;
 
 					checkpoint = strchr(checkpoint + 1, '\"');
@@ -3267,7 +3287,12 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						logger("Error! Failed to get destination for disassembled model!\n");
 						continue;
 					} 
+				} else if (sscanf(namespace + 1, "%255[^\"]", command) == 0) {
+					logger("Failed to get disassemble parts destination path!\n");
+					continue;
 				}
+
+				permutate_destination = localizeFolder(navigator, command, true);
 
 				//Cleaning the reference
 				mirror = dupOBJ(placeholder);
@@ -3279,7 +3304,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 
 					} else if (strcmp(mirror->value[x].declaration, "\"groups\"") == 0) {
-						query = &mirror->value[x];
+						query = dupOBJ(&mirror->value[x]);
 						delOBJ(&mirror, x);
 
 					}
@@ -3373,6 +3398,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 					}
 
+
 					if (sscanf(groups->item[x], "\"%[^\"]s\"", file_name) == 0) {
 						logger("Error! Failed to get filename!\n");
 						return;
@@ -3387,16 +3413,18 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					logger("Created %s file at %s\n", permutate->name, command);
 
-					permutate_destination = localizeFolder(navigator, command, true);
 					addFile(&permutate_destination, permutate);
 					permutate = NULL;
 
 					freeOBJ(value);
-
 				}
+				freeOBJ(query);
 
+				navigator = file.container;
 				for (size_t x = 0; x < navigator->count && trim == true; x++) {
 					if (strcmp(navigator->content[x].name, file.container->content[file.index].name) == 0) {
+						file_location_moved = true;
+
 						delFile(&navigator, x);
 						break;
 					}
@@ -3409,6 +3437,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				int bit_depth, color_type;
 				int bpp[2];
 				png_bytep *texture, *pixels, *pallet;
+				FOLDER* location;
 
 				if (getPNGPixels(&file.container->content[file.index], &texture, &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
 					logger("Failed to read png file!\n");
@@ -3423,9 +3452,15 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					continue;
 				}
 
-				for (size_t x = 0; x < navigator->count; x++) {
-					if (strcmp(navigator->content[x].name, name) == 0) {
-						getPNGPixels(&navigator->content[x], &pixels, &collums, &lines, &color_type, &bit_depth, NULL, true);
+				if (strstr(name, "./") != NULL) {
+					location = localizeFolder(target, namespace, false);
+				} else {
+					location = localizeFolder(assets, namespace, false);
+				}
+
+				for (size_t x = 0; x < location->count; x++) {
+					if (strcmp(location->content[x].name, name) == 0) {
+						getPNGPixels(&location->content[x], &pixels, &collums, &lines, &color_type, &bit_depth, NULL, true);
 						break;
 					}
 				}
@@ -3438,11 +3473,16 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					logger("Error! Failed to get pallet file's name\n");
 					continue;
 				}
-				
 
-				for (size_t x = 0; x < navigator->count; x++) {
-					if (strcmp(navigator->content[x].name, name) == 0) {
-						getPNGPixels(&navigator->content[x], &pallet, NULL, NULL, NULL, NULL, NULL, true);
+				if (strstr(name, "./") != NULL) {
+					location = localizeFolder(target, namespace, false);
+				} else {
+					location = localizeFolder(assets, namespace, false);
+				}
+
+				for (size_t x = 0; x < location->count; x++) {
+					if (strcmp(location->content[x].name, name) == 0) {
+						getPNGPixels(&location->content[x], &pallet, NULL, NULL, NULL, NULL, NULL, true);
 						break;
 					}
 				}
@@ -3472,8 +3512,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 					}
 				}
-
+				
 				printPNGPixels(&file.container->content[file.index], texture);
+				logger("Painted %s\n", file.container->content[file.index].name);
 
 				free(pallet);
 				free(texture);
@@ -3517,17 +3558,16 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					if (sscanf(list->value[x].declaration, "\"%[^\"]\"", namespace) == 0) {
 						logger("Error! Failed to extract file pallet %d name!\n", x);
 						continue;
-					} 
-					
+					}
 
-					if (local) {
+					if (strstr(namespace, "./") != NULL) {
 						location = localizeFolder(target, namespace, false);
 					} else {
 						location = localizeFolder(assets, namespace, false);
 					}
 
 					if (location == NULL) {
-						logger("%s is an invalid path\n", namespace);
+						logger("%s is an invalid path!\n", namespace);
 						continue;
 					}
 
@@ -3632,9 +3672,10 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			}
 		}
 
-		if (strstr(file.container->content[file.index].name, ".json") != NULL) {
-			free(file.container->content[file.index].name);
-			file.container->content[file.index].name = printJSON(placeholder);
+		if (file_location_moved && strstr(file.container->content[file.index].name, ".json") != NULL) {
+			free(file.container->content[file.index].tab);
+			file.container->content[file.index].tab = printJSON(placeholder);
+			indentJSON(&file.container->content[file.index].tab);
 		}
 	}
 }
@@ -3817,7 +3858,7 @@ int main () {
 					}
 
 					for (int x = 0; x < query->end; x++) {
-						mvwprintw(miniwin, 1 + query->value[x], strlen(query->item[query->value[x]]) + 2, "%s", x == 0 ? "TARGET" : "ASSETS");
+						mvwprintw(miniwin, 1 + query->value[x], strlen(query->item[x]) + 2, "%s", x == 0 ? "TARGET" : "ASSETS");
 					}
 					
 					mvwprintLines(miniwin, translated[1], targets->subcount + 1, 1, 14, 15);
@@ -3832,8 +3873,8 @@ int main () {
 						optLenght = (int)strlen(instructions->content[x].name) > optLenght ? (int)strlen(instructions->content[x].name) : optLenght;
 					}
 
-					mvwprintLines(miniwin, translated[1], 1 + instructions->count, 1, 14, 15);
-					n_entries = instructions->count + 2;
+					mvwprintLines(miniwin, translated[1], 1 + instructions->count, 1, 15, 15);
+					n_entries = instructions->count + 1;
 				}
                 break;
             case 2:
@@ -3911,7 +3952,7 @@ int main () {
 					if (cursor[0] < (int)instructions->count) {
 						optLenght = strlen(instructions->content[cursor[0]].name);
 					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (14 + (cursor[0] - instructions->count)), (14 + (cursor[0] - instructions->count)));
+						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, 15, 15);
 					}
 				}
 				mvwchgat(miniwin, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
@@ -4039,7 +4080,7 @@ int main () {
 							cursor[0] = 0;
 						}
 					} else if (diretrix[0] == 0 && diretrix[1] == 2) { // Merge resourcepacks
-						if (cursor[0] == n_entries) {
+						if (cursor[0] == n_entries - 1) {
 							diretrix[1] = diretrix[0] = 0;
 							cursor[0] = 0;
 							break;
@@ -4050,12 +4091,8 @@ int main () {
 							cursor[0] = 0;
 						}
 					} else if (diretrix[0] == 1 && diretrix[1] == 2) { // Execute instructions
-						if (cursor[0] == n_entries) {
+						if (cursor[0] == n_entries - 1) {
 							diretrix[1] = diretrix[0] = 0;
-							cursor[0] = 0;
-							break;
-						} else if (cursor[0] == n_entries - 1) {
-							diretrix[1]++;
 							cursor[0] = 0;
 							break;
 						} else {
