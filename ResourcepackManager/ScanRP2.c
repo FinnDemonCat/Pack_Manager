@@ -2146,7 +2146,7 @@ int getPNGPixels(ARCHIVE* file, png_bytep** pixels, int* width, int* height, int
 	return 1;
 }
 
-void printPNGPixels(ARCHIVE* file, png_bytep *pixels) {
+void printPNGPixels(ARCHIVE* file, png_bytep *pixels, int width, int height) {
 	// Creating writing structs
 	png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 	if (png == NULL) {
@@ -2167,8 +2167,8 @@ void printPNGPixels(ARCHIVE* file, png_bytep *pixels) {
         return;
     }
 
-	int width, height, color_type, bit_depth;
-	getPNGPixels(file, NULL, &width, &height, &color_type, &bit_depth, NULL, false);
+	int color_type, bit_depth;
+	getPNGPixels(file, NULL, NULL, NULL, &color_type, &bit_depth, NULL, false);
 	
 	TEXTURE texture;
     texture.data = (char*)malloc(file->size);
@@ -2208,8 +2208,59 @@ void printPNGPixels(ARCHIVE* file, png_bytep *pixels) {
 	png_destroy_write_struct(&png, &info);
 } 
 
-// void resizePNGFile(ARCHIVE** image, size_t height, size_t width) {
-// }
+void resizePNGFile(ARCHIVE** image, int width, int height) {
+	int collums, lines, color_type, bit_deph, row_bytes, offset;
+	png_bytep *texture;
+
+	getPNGPixels(*image, &texture, &collums, &lines, &color_type, &bit_deph, &row_bytes, true);
+	offset = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+
+	png_bytep *resize = (png_bytep*)realloc(texture, height * sizeof(png_bytep));
+	if (resize == NULL) {
+		logger("Error! Failed to resizer %s! %s\n", image[0]->name, strerror(errno));
+		return;
+	}
+
+	// Allocating lines memory in case the new size it's bigger
+
+	for (int x = 0; x < height; x++) {
+		if (x < lines) {
+			resize[x] = (png_bytep)realloc(resize[x], row_bytes);
+		} else {
+			resize[x] = (png_bytep)malloc(row_bytes);
+		}
+
+		if (resize[x] == NULL) {
+			logger("Error while resizing png byte rows!\n", strerror(errno));
+
+			for (int a = 0; a < x; a++) {
+				free(resize[a]);
+			}
+			free(resize);
+			return;
+		}
+	}
+
+	if (offset == 3) {
+		logger("%s has no alpha channel, filling with white pixels\n", image[0]->name);
+	}
+
+	for (int x = 0; x < height; x++) {
+		for (int y = 0; y < width; y++) {
+			if (x > (lines - 1) || y > (collums - 1)) {
+				if (offset == 3) {
+					resize[x][(y * offset) + 0] = 255;
+					resize[x][(y * offset) + 1] = 255;
+					resize[x][(y * offset) + 2] = 255;
+				} else {
+					resize[x][(y * offset) + 3] = 0;
+				}
+			}
+		}
+	}
+
+	printPNGPixels(image[0], resize, width, height);
+}
 
 void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	OBJECT *placeholder, *overrides, *query, *value, *model, *temp;
@@ -2833,10 +2884,13 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	while ((pointer = strchrs(pointer, 2, '>', '<')) != NULL) {
 		type = 0;
 
-		if (sscanf(pointer + 3, "%255[^\"]", command) == 0) {
-			logger("Error! Failed to scan file's path!\n");
-			return;
+		save = strchr(pointer, '\n');
+		if (pointer[2] != '\"') {
+			logger("Warning! File path isn't in quotes! [%.*s]\n", (int)(save - pointer), pointer);
+			continue;
 		}
+		sprintf(command, "%.*s", (int)((save - pointer) - 4), pointer + 3);
+
 		switch (pointer[0]) {
 			case '>':
 				navigator = localizeFolder(target, command, true);
@@ -2939,6 +2993,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							copyOverides(mirror, &cursor->content[x]);
 
 							delFile(&cursor, x);
+							break;
 						}
 					}
 					addFile(&cursor, mirror);
@@ -3003,26 +3058,10 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					logger("Executing edit display on %s\n", file.container->content[file.index].name);
 					char par[1024];
 
-					checkpoint = strchr(checkpoint, '{');
-					for (int x = 1, y = 1; checkpoint[x] != '\0'; x++) {
-						switch (checkpoint[x]) {
-							case '{':
-								y++;
-								break;
-							case '}':
-								y--;
-								break;
-						}
-
-						if (y == 0) {
-							snprintf(par, x, "%s", checkpoint);
-							break;
-						}
+					if (*checkpoint != '{') {
+						getNextStr(&checkpoint, command);
 					}
 
-					value = processOBJ(par);
-					checkpoint += strlen(par);
-					
 					for (size_t x = 0; x < placeholder->count; x++) {
 						if (strcmp(placeholder->value[x].declaration, "\"display\"") == 0) {
 							query = placeholder->value[x].value;
@@ -3030,6 +3069,18 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 					}
 
+					if (strcmp(command, "set") == 0) {
+						while(query->count > 0) {
+							delOBJ(&query, 0);
+						}
+					}
+
+					checkpoint = strchr(checkpoint, '{');
+					sscanf(checkpoint, "%1024[^;]", par);
+
+					value = processOBJ(par);
+					checkpoint += strlen(par);
+					
 					//Finding display type
 					for (size_t x = 0; x < value->count; x++) {
 						OBJECT* mirror = NULL;
@@ -3112,17 +3163,18 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					freeOBJ(value);
 				} else if (strcmp(command, "dimentions") == 0) {
-					/* 
+					logger("Resizing %s\n", file.container->content[file.index].name);
 					getNextStr(&checkpoint, command);
-					size_t width = 0, height = 0;
-					sscanf(command, "%llux%llu", &width, &height);
-
-					resizePNGFile(&file, height, width);
-
-					// FILE* test = fopen("c:\\Users\\Calie\\Downloads\\test.png", "wb+"); // This paint job isn't working for some reason
-					// fwrite(file->tab, 1, file->size, test);
-					// fclose(test);
-					*/
+					int width = 0, height = 0;
+					sscanf(command, "%dx%d", &width, &height);
+					ARCHIVE* temp = &file.container->content[file.index];
+					resizePNGFile(&temp, width, height);
+					
+					FILE* test = fopen("c:\\Users\\Calie\\Downloads\\test.png", "wb+"); // This paint job isn't working for some reason
+					fwrite(file.container->content[file.index].tab, 1, file.container->content[file.index].size, test);
+					fclose(test);
+					// Continue debug of resize
+					// Find out why using Blocks instruct causes a crash
 				}
 
 			} else if (strstr(command, "autofill") != NULL) {
@@ -3513,7 +3565,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 				}
 				
-				printPNGPixels(&file.container->content[file.index], texture);
+				printPNGPixels(&file.container->content[file.index], texture, width, height);
 				logger("Painted %s\n", file.container->content[file.index].name);
 
 				free(pallet);
@@ -3655,7 +3707,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 				for (int x = 0; x < texture_count; x++) {
 					ARCHIVE *mirror = copies[x];
-					printPNGPixels(mirror, to_paint[x]);
+					printPNGPixels(mirror, to_paint[x], width, height);
 					addFile(&navigator, copies[x]);
 					logger("%s was added to the same location as the base file\n", mirror->name, navigator->name);
 
@@ -3672,7 +3724,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			}
 		}
 
-		if (file_location_moved && strstr(file.container->content[file.index].name, ".json") != NULL) {
+		if (!file_location_moved && strstr(file.container->content[file.index].name, ".json") != NULL) {
 			free(file.container->content[file.index].tab);
 			file.container->content[file.index].tab = printJSON(placeholder);
 			indentJSON(&file.container->content[file.index].tab);
