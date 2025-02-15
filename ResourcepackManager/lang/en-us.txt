@@ -25,6 +25,7 @@ Finished targets scan
 [Got it]
 Merge and Stack
 Run Instructions
+Print Resourcepacks
 Instructions query saved on duplicate folder
 Instructions folder it's empy
 Done
@@ -32,3 +33,4 @@ Cancel
 [Select the folders]
 [Select the instuctions file]
 You need to select one more resourcepack!
+Zipped pack to resourcepacks folder 

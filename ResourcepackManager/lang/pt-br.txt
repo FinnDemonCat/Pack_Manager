@@ -23,6 +23,7 @@ Terminado a xerox dos pacotes
 [Oky]
 Mesclar e Empilhar
 Executar Instrucões
+Imprimir Pacotes
 Modificacões executadas em duplicata do pacote
 Não há instrucão selecionada
 Proceder
@@ -30,3 +31,4 @@ Cancelar
 [Selecione os pacotes]
 [Selectione o arquivo de instruções]
 Você precisa selecionar mais um pacote!
+Pacote enviado a pasta compacta em "resourcepacks"

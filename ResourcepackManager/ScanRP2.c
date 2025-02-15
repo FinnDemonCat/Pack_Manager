@@ -212,8 +212,6 @@ void returnString (char** path, const char* argument) {
     }
 }
 
-
-
 char* returnPath (FOLDER* folder) {
     QUEUE* list = initQueue(16);
     char* path, *temp;
@@ -244,13 +242,20 @@ char* returnPath (FOLDER* folder) {
         sprintf(path + strlen(path), "%s/", list->item[x - 1]);
     }
 
-    temp = realloc(path, (strlen(path) + 1) * sizeof(char));
-    if (temp != NULL) {
-        path = temp;
-        temp = NULL;
-    } else {
-        logger("Failed to reallocate path string when trimming the path\n");
-    }
+	if (strlen(path) > 0) {
+		temp = realloc(path, (strlen(path) + 1) * sizeof(char));
+		if (temp != NULL) {
+			path = temp;
+			temp = NULL;
+		} else {
+			logger("Failed to reallocate path string when trimming the path\n");
+			return NULL;
+		}
+	} else {
+		free(path);
+		path = NULL;
+	}
+	endQueue(list);
 
     return path;
 }
@@ -1757,14 +1762,14 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
     char namespace[512], dir[512], buffer[256], *pointer = NULL, *checkpoint = NULL;
     FOLDER* navigator = folder;
 
-    memset(namespace, '0', sizeof(namespace));
-    memset(dir, '0', sizeof(dir));
-    sscanf(path, "%512[^:]:%512[^\"]", namespace, dir);
+	namespace[0] = '\0';
+	dir[0] = '\0';
+	buffer[0] = '\0';
+	
     if (strchr(path, ':') == NULL) {
-        // strcpy(dir, namespace);
-        // strcpy(namespace, "minecraft");
         return folder;
     }
+    sscanf(path, "%512[^:]:%512[^\"]", namespace, dir);
 
     for (int x = 0; x < (int)navigator->subcount + 1; x++) {
         if (x == (int)navigator->subcount) {
@@ -3326,7 +3331,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				logger("Executing model disassemble on %s\n", file.container->content[file.index].name);
 				OBJECT *mirror, *copy, *elements, *cube, *base = NULL, *children;
 				QUEUE *groups;
-				FOLDER* permutate_destination;
+				FOLDER* location;
 				bool trim = false;
 
 				getNextStr(&checkpoint, namespace);
@@ -3344,7 +3349,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					continue;
 				}
 
-				permutate_destination = localizeFolder(navigator, command, true);
+				location = localizeFolder(target, command, true);
 
 				//Cleaning the reference
 				mirror = dupOBJ(placeholder);
@@ -3465,7 +3470,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					logger("Created %s file at %s\n", permutate->name, command);
 
-					addFile(&permutate_destination, permutate);
+					addFile(&location, permutate);
 					permutate = NULL;
 
 					freeOBJ(value);
@@ -3499,10 +3504,11 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				bpp[0] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
 				// Map
 				checkpoint = strchr(checkpoint, '\"');
-				if (sscanf(checkpoint + 1, "%127[^\"]", name) == 0) {
+				if (sscanf(checkpoint + 1, "%127[^\"]", namespace) == 0) {
 					logger("Error! Failed to get map file's name\n");
 					continue;
 				}
+				checkpoint += strlen(namespace) + 2;
 
 				if (strstr(name, "./") != NULL) {
 					location = localizeFolder(target, namespace, false);
@@ -3519,7 +3525,6 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				bpp[1] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
 
 				// Pallet
-				checkpoint += strlen(name) + 2;
 				checkpoint = strchr(checkpoint, '\"');
 				if (sscanf(checkpoint + 1, "%127[^\"]", name) == 0) {
 					logger("Error! Failed to get pallet file's name\n");
@@ -3532,10 +3537,12 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					location = localizeFolder(assets, namespace, false);
 				}
 
-				for (size_t x = 0; x < location->count; x++) {
-					if (strcmp(location->content[x].name, name) == 0) {
+				for (size_t x = 0; x < (location->count + 1); x++) {
+					if (x < location->count && strcmp(location->content[x].name, name) == 0) {
 						getPNGPixels(&location->content[x], &pallet, NULL, NULL, NULL, NULL, NULL, true);
 						break;
+					} else if (x == location->count) {
+						logger("Failed to find %s!\n", name);
 					}
 				}
 
@@ -3732,36 +3739,88 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	}
 }
 
-void createZip(FOLDER* folder) {
-    char* path, location;
-    path = calloc(PATH_MAX, sizeof(char));
-    report = (char*)calloc(report_size, sizeof(char));
+void printZip(FOLDER* folder, char** path) {
+	int dirNumber, dirPosition[FOLDERCHUNK], input;
+	size_t pin = report_end;
+	char location[1024], *pointer;
+	bool done = false;
+	FOLDER* navigator = folder;
+	sprintf(location, "%s\\%s.zip", path[0], folder->name);
+	zipFile rp = zipOpen(location, APPEND_STATUS_CREATE);
+	if (rp == NULL) {
+		logger("Error creating zip file!\n");
+		return;
+	}
 
-    if (path == NULL) {
-        logger("Error allocating memory for start path, %s\n", strerror(errno));
-        return;
-    }
-    if ((getcwd(path, PATH_MAX)) == NULL) {
-        logger("getwcd() error, %s\n", strerror(errno));
-        return;
-    }
-    if (path != NULL) {
-        logger("Location Path <%s>\n", path);
-    } else {
-        logger("Invalid Path <%s>, %s\n", path, strerror(errno));
-        return;
-    }
+	for (int x = 0; x < FOLDERCHUNK; x++) {
+		dirPosition[x] = 0;
+	}
+	location[0] = '\0';
 
-    returnString(&path, "path");
-    returnString(&path, folder->name);
-    zipFile pack = zipOpen(folder->name, 0);
+	nodelay(window, true);
 
-    if (pack == NULL) {
-        logger("Failed to open a zip file for %s! %d", folder->name, ZIP_ERRNO);
-        return;
-    }
+	while (!done) {
+		input = wgetch(window);
+		wclear(miniwin);
 
-    //Loop through every content and print it
+		if (input == KEY_RESIZE) {
+			refreshWindows();
+		}
+
+		input = (report_end - pin) > (size_t)(getmaxy(miniwin) - 2) ? (report_end - (getmaxy(miniwin) - 2)) : pin;
+		mvwprintLines(miniwin, report, 1, 1, input, report_end);
+
+		box(miniwin, 0, 0);
+		wrefresh(miniwin);
+
+		while (navigator->subcount > 0) {
+			navigator = &navigator->subdir[dirPosition[dirNumber]];
+			snprintf(location + strlen(location), 1024 - strlen(location), "%s/", navigator->name);
+			
+			logger("%s: FOLDER <%s>\n", folder->name, location);
+
+			zipOpenNewFileInZip(rp, location, NULL, NULL, 0, NULL, 0, NULL, 0, 0);
+			zipCloseFileInZip(rp);
+
+			dirPosition[dirNumber]++;
+			dirNumber = (dirNumber < 16) ? (dirNumber + 1) : dirNumber;
+		}
+		pointer = &location[strlen(location)];
+
+		for (int x = 0; x < (int)navigator->count; x++) {
+			snprintf(pointer, 1024 - strlen(location), "%s", navigator->content[x].name);
+			logger("%s FILE: <%s>\n", folder->name, location);
+
+			if (zipOpenNewFileInZip(rp, location, NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_DEFAULT_COMPRESSION) != ZIP_OK) {
+				logger("Failed to create %s!\n");
+				zipClose(rp, NULL);
+				return;
+			}
+
+			zipWriteInFileInZip(rp, navigator->content[x].tab, navigator->content[x].size);
+			zipCloseFileInZip(rp);
+		}
+
+		pointer[0] = '\0';
+
+		while (dirPosition[dirNumber] == (int)navigator->subcount && dirNumber > 0) {
+			pointer = strrchr(location, '/');
+			pointer[0] = '\0';
+			pointer = strrchr(location, '/');
+			if (pointer != NULL) {
+				pointer[1] = '\0';
+			}
+
+			dirPosition[dirNumber] = 0;
+			dirNumber--;
+			navigator = navigator->parent;
+		}
+
+		done = dirNumber == 0 ? true : false;
+	}
+	nodelay(window, false);
+
+	zipClose(rp, NULL);
 }
 
 int main () {
@@ -3896,28 +3955,32 @@ int main () {
                     mvwprintLines(miniwin, translated[1], 1, 1, 3, 3);
                     n_entries = 0;
                 } else if (diretrix[0] == 0) { // Printing tool options
-					for (int x = 0; x < 2; x++) {
+					for (int x = 0; x < 3; x++) {
 						optLenght = mvwprintLines(miniwin, translated[1], (1 + x), 1, (10 + x), (10 + x));
 					}
-					n_entries = 2;
+					n_entries = 3;
                 } else if (diretrix[0] != 0 && diretrix[1] == 1) { // Printing scanned resourcepacks for selection
-					mvwprintLines(miniwin, translated[1], 0, 1, 16, 16);
+					mvwprintLines(miniwin, translated[1], 0, 1, 17, 17);
 
 					for (int x = 0; x < (int)targets->subcount; x++) {
-						mvwprintw(miniwin, 1 + x, 1, "%s", targets->subdir[x].name);
+						mvwprintw(miniwin, 1 + x, 1, "%s %s", targets->subdir[x].name, diretrix[0] == 2 ? "[ ]": "");
 
 						optLenght = (int)strlen(targets->subdir[x].name) > optLenght ? (int)strlen(targets->subdir[x].name) : optLenght; 
 					}
 
-					for (int x = 0; x < query->end; x++) {
+					for (int x = 0; diretrix[0] == 1 && x < query->end; x++) {
 						mvwprintw(miniwin, 1 + query->value[x], strlen(query->item[x]) + 2, "%s", x == 0 ? "TARGET" : "ASSETS");
 					}
+
+					for (int x = 0; diretrix[0] == 2 && x < query->end; x++) {
+						mvwprintw(miniwin, 1 + query->value[x], strlen(query->item[x]) + 2, "[X]");
+					}
 					
-					mvwprintLines(miniwin, translated[1], targets->subcount + 1, 1, 14, 15);
-					n_entries = instructions->count + 2;
+					mvwprintLines(miniwin, translated[1], targets->subcount + 1, 1, 15, 16);
+					n_entries = targets->subcount + 2;
 					
 				} else if (diretrix[0] == 1 && diretrix[1] == 2) { // Printing instructions file for selection
-					mvwprintLines(miniwin, translated[1], 0, 1, 17, 17);
+					mvwprintLines(miniwin, translated[1], 0, 1, 18, 18);
 
 					for (int x = 0; x < (int)instructions->count; x++) {
 						mvwprintw(miniwin, 1 + x, 1, "%s", instructions->content[x].name);
@@ -3925,7 +3988,7 @@ int main () {
 						optLenght = (int)strlen(instructions->content[x].name) > optLenght ? (int)strlen(instructions->content[x].name) : optLenght;
 					}
 
-					mvwprintLines(miniwin, translated[1], 1 + instructions->count, 1, 15, 15);
+					mvwprintLines(miniwin, translated[1], 1 + instructions->count, 1, 16, 16);
 					n_entries = instructions->count + 1;
 				}
                 break;
@@ -3957,13 +4020,13 @@ int main () {
 					if (cursor[0] < (int)targets->subcount) {
 						optLenght = strlen(targets->subdir[cursor[0]].name) + 1;
 					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (14 + (cursor[0] - targets->subcount)), (14 + (cursor[0] - targets->subcount)));
+						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (15 + (cursor[0] - targets->subcount)), (15 + (cursor[0] - targets->subcount)));
 					}
 				} if (diretrix[1] == 2) {
 					if (cursor[0] < (int)instructions->count) {
 						optLenght = strlen(instructions->content[cursor[0]].name);
 					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (14 + (cursor[0] - instructions->count)), (14 + (cursor[0] - instructions->count)));
+						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (15 + (cursor[0] - instructions->count)), (15 + (cursor[0] - instructions->count)));
 					}
 				}
                 mvwchgat(miniwin, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
@@ -3998,13 +4061,13 @@ int main () {
 					if (cursor[0] < (int)targets->subcount) {
 						optLenght = strlen(targets->subdir[cursor[0]].name) + 1;
 					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (14 + (cursor[0] - targets->subcount)), (14 + (cursor[0] - targets->subcount)));
+						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (15 + (cursor[0] - targets->subcount)), (15 + (cursor[0] - targets->subcount)));
 					}
 				} if (diretrix[1] == 2) {
 					if (cursor[0] < (int)instructions->count) {
 						optLenght = strlen(instructions->content[cursor[0]].name);
 					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, 15, 15);
+						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, 16, 16);
 					}
 				}
 				mvwchgat(miniwin, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
@@ -4050,7 +4113,7 @@ int main () {
 							temp = NULL;
 						}
 						
-						confirmationDialog(translated[1], 6, actionLenght, 0);
+						confirmationDialog(translated[1], 6, actionLenght, 1);
 						endQueue(query);
 						query = initQueue(8);
 					}
@@ -4105,47 +4168,56 @@ int main () {
 						if (cursor[0] == n_entries - 1) {
 							diretrix[1] = diretrix[0] = 0;
 							cursor[0] = 0;
+
+							endQueue(query);
+							query = initQueue(8);
 							break;
 						} else if (
 							cursor[0] == n_entries - 2
 							&& ((diretrix[0] == 0 && query->end < 2) 
-								|| (diretrix[0] == 1 && query->end > 0))
+								|| (diretrix[0] > 0 && query->end > 0))
 						) {
-							diretrix[1]++;
-							cursor[0] = 0;
+							if (diretrix[0] == 0) { // Merge resourcepacks
+								overrideFiles(&targets->subdir[query->value[0]], &targets->subdir[query->value[1]]);
+	
+								diretrix[1] = diretrix[0] = 0;
+								cursor[0] = 0;
+								endQueue(query);
+								query = initQueue(8);
+							} else if (diretrix[0] == 1) {
+								diretrix[1]++;
+								cursor[0] = 0;
+							} else if (diretrix[0] == 2) { // Export resourcepack
+								for (int x = 0; x < query->end; x++) {
+									printZip(&targets->subdir[query->value[x]], &path);
+								}
+								confirmationDialog(translated[1], 20, actionLenght, 1);
+		
+								diretrix[1] = diretrix[0] = 0;
+								cursor[0] = 0;
+								endQueue(query);
+								query = initQueue(8);
+							}
 							break;
-						}
-
-						for (int x = 0; x < query->end + 1; x++) {
-							if (x < query->end && strcmp(targets->subdir[cursor[0]].name, query->item[x]) == 0) {
-								deQueue(query, x);
-								break;
-							} else if (x == query->end) {
-								enQueue(query, targets->subdir[cursor[0]].name);
-								query->value[query->end-1] = cursor[0];
-								break;
-							} 
-						}
-
-						if (query->end == 2) {
-							diretrix[1]++;
-							cursor[0] = 0;
-						}
-					} else if (diretrix[0] == 0 && diretrix[1] == 2) { // Merge resourcepacks
-						if (cursor[0] == n_entries - 1) {
-							diretrix[1] = diretrix[0] = 0;
-							cursor[0] = 0;
-							break;
-						} else {
-							overrideFiles(&targets->subdir[query->value[0]], &targets->subdir[query->value[1]]);
-
-							diretrix[1] = diretrix[0] = 0;
-							cursor[0] = 0;
+						} else if (cursor[0] < n_entries - 2) {
+							for (int x = 0; x < query->end + 1; x++) {
+								if (x < query->end && strcmp(targets->subdir[cursor[0]].name, query->item[x]) == 0) {
+									deQueue(query, x);
+									break;
+								} else if (x == query->end) {
+									enQueue(query, targets->subdir[cursor[0]].name);
+									query->value[query->end-1] = cursor[0];
+									break;
+								}
+							}
 						}
 					} else if (diretrix[0] == 1 && diretrix[1] == 2) { // Execute instructions
 						if (cursor[0] == n_entries - 1) {
 							diretrix[1] = diretrix[0] = 0;
 							cursor[0] = 0;
+
+							endQueue(query);
+							query = initQueue(8);
 							break;
 						} else {
 							FOLDER *second, *recieve;
@@ -4159,10 +4231,13 @@ int main () {
 							executeInstruct(recieve, second, instructions->content[cursor[0]].tab);
 							addFolder(&targets, recieve);
 							logger("Executed %s instructions and saved into %s duplicated folder\n", instructions->content[cursor[0]].name, recieve->name);
-							confirmationDialog(translated[1], 12, actionLenght, 1);
+							confirmationDialog(translated[1], 13, actionLenght, 1);
 
 							diretrix[1] = diretrix[0] = 0;
 							cursor[0] = 0;
+							
+							endQueue(query);
+							query = initQueue(8);
 						}
 					}
 					
