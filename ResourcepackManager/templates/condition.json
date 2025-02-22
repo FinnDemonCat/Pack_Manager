@@ -1,7 +1,0 @@
-{
-	"type": "minecraft:condition",
-	"property": "minecraft:has_component",
-	"component": "minecraft:lodestone_tracker",
-	"on_true": {},
-	"on_false": "{\r\n\t\"type\": \"minecraft:condition\",\r\n\t\"property\": \"minecraft:has_component\",\r\n\t\"component\": \"minecraft:lodestone_tracker\",\r\n\t\"on_true\": {},\r\n\t\"on_false\": {}\r\n}"
-}

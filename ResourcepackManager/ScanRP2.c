@@ -262,6 +262,12 @@ char* returnPath (FOLDER* folder) {
 
 void printLog(char* path) {
     char date[1024];
+	sprintf(date, "%s\\log", path);
+	DIR* scan = opendir(path);
+	if (scan == NULL) {
+		logger("log folder it's missing! Recreating\n");
+		mkdir(date);
+	}
 
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
@@ -3849,12 +3855,6 @@ int main () {
         return 1;
     }
 
-    //Scanning the lang folder
-	logger("Getting lang text\n");
-    returnString(&path, "lang");
-    lang = getFolder(path, -1);
-    translated = getLang(lang, 0);
-
 	//Starting the menu;
     initscr();
     setlocale(LC_ALL|~LC_NUMERIC, "");
@@ -3891,6 +3891,11 @@ int main () {
     noecho();
     keypad(window, true);
 
+	logger("Getting lang text\n");
+    returnString(&path, "lang");
+    lang = getFolder(path, -1);
+    translated = getLang(lang, 0);
+
 	logger("Getting instructions from folder\n");
 	returnString(&path, "path");
     returnString(&path, "instructions");
@@ -3900,7 +3905,14 @@ int main () {
     returnString(&path, "path");
     returnString(&path, "resourcepacks");
     FOLDER* targets = createFolder(NULL, "targets");
-    
+
+	// Creating missing non essential folders
+	if (targets == NULL) {
+		logger("Warning! resourcepacks folders was missing on initialization, recreating the folder.\n");
+		mkdir(path);
+		targets = createFolder(NULL, "targets");
+	}
+
     refreshWindows();
     optLenght = mvwprintLines(NULL, translated[0], 0, 1, 0, -1);
 
@@ -3917,7 +3929,7 @@ int main () {
 
     while (!quit) {
         //Draw miniwindow
-		if (update == true) {
+		if (update == true || entries->end == 0) {
             wclear(miniwin);
             box(miniwin, 0, 0);
 
@@ -4108,9 +4120,15 @@ int main () {
 						FOLDER* temp;
 						for (int x = 0; x < query->end; x++) {
 							temp = getFolder(path, query->value[x]);
-							addFolder(&targets, temp);
-							entries->value[query->value[x]] = 2;
-							temp = NULL;
+							
+							if (temp != NULL) {
+								addFolder(&targets, temp);
+								entries->value[query->value[x]] = 2;
+								temp = NULL;
+							} else {
+								confirmationDialog(translated[1], 21, actionLenght, 1);
+								update = true;
+							}
 						}
 						
 						confirmationDialog(translated[1], 6, actionLenght, 1);
@@ -4146,13 +4164,8 @@ int main () {
                     }
                     entries->value[cursor[0]] = !entries->value[cursor[0]];
 
-                    mvwprintw(sidebar, 1, optLenght + 1, "%s", (query->end > 0) ? "[!]" : "");
-                    
                     for (int x = 0; x < entries->end; x++) {
                         mvwprintw(miniwin, 1+x, 1, "%s [%c]  ", entries->item[x], (entries->value[x] == 1) ? 'X' : (entries->value[x] == 2) ? '#' : ' ');
-                    }
-                    for (int x = 0; x < query->end; x++) {
-                        mvwprintw(miniwin, 1 + query->value[x], strlen(entries->item[query->value[x]]) + 6, "%d", x + 1);
                     }
                         
                     break;

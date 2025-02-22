@@ -14,7 +14,7 @@ Tools
 Language
 Quit
 [Messages]:
-No entries found in resourcepack folder! Press ENTER to update
+No entries found in resourcepack folder! Press any key to update
 [Select up to 8 resourcepacks to scan]
 No resourcepacks scanned
 No files selected
@@ -34,3 +34,4 @@ Cancel
 [Select the instuctions file]
 You need to select one more resourcepack!
 Zipped pack to resourcepacks folder 
+Error scanning a folder selected!
