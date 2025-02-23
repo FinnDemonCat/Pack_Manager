@@ -425,6 +425,10 @@ char* strnotchr(const char* str, int count, ...) {
     va_start(list, count);
     bool found = false;
 
+	if (str == NULL) {
+		return NULL;
+	}
+
     for (int x = 0; x < count; x++) {
         chars[x] = va_arg(list, int);
     }
@@ -455,6 +459,9 @@ char* strnotchr(const char* str, int count, ...) {
 }
 
 char* strchrs (const char* str, int count, ...) {
+	if (str == NULL) {
+		return NULL;
+	}
     char* chars = (char*)calloc(count, sizeof(char));
     va_list list;
     va_start(list, count);
@@ -1765,69 +1772,51 @@ FOLDER* getFolder(char* path, int position) {
 }
 
 FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
-    char namespace[512], dir[512], buffer[256], *pointer = NULL, *checkpoint = NULL;
+    char dir[16][256], *pointer, *checkpoint;
     FOLDER* navigator = folder;
+	int dirNumber = 0;
 
-	namespace[0] = '\0';
-	dir[0] = '\0';
-	buffer[0] = '\0';
-	
-    if (strchr(path, ':') == NULL) {
-        return folder;
-    }
-    sscanf(path, "%512[^:]:%512[^\"]", namespace, dir);
+	if (folder == NULL) {
+		logger("Warning! FOLDER passed is NULL!\n");
+		return NULL;
+	}
 
-    for (int x = 0; x < (int)navigator->subcount + 1; x++) {
-        if (x == (int)navigator->subcount) {
-            FOLDER* dummy = createFolder(NULL, "assets");
-            addFolder(&navigator, dummy);
-            dummy = NULL;
-            x = -1;
+	if ((pointer = strchr(path, ':')) != NULL) {
+		sprintf(dir[0], "assets");
+		sprintf(dir[1], "%.*s", (int)(pointer - path), path);
+		pointer++;
+		dirNumber = 2;
+	} else if (strstr(path, "./") != NULL) {
+		pointer = checkpoint = path + 2;
+	} else {
+		pointer = checkpoint = path;
+	}
+	for (int x = dirNumber; (checkpoint = strchr(pointer, '/')) != NULL && x < 16; x++) {
+		sprintf(dir[x], "%.*s", (int)(checkpoint - pointer), pointer);
+		pointer = checkpoint + 1;
+		dirNumber++;
+	}
 
-            logger("Created folder \"assets\" originaly missing\n");
-        } else if (strcmp(navigator->subdir[x].name, "assets") == 0) {
-            navigator = &navigator->subdir[x];
-            break;
-        }
-    }
+	for (int x = 0, y = 0; y < dirNumber && x < (int)(navigator->subcount + 1); x++) {
+		if (x < (int)navigator->subcount && strcmp(navigator->subdir[x].name, dir[y]) == 0) {
+			navigator = &navigator->subdir[x];
 
-    for (int x = 0; x < (int)navigator->subcount + 1; x++) {
-        if (x == (int)navigator->subcount) {
-            FOLDER* dummy = createFolder(NULL, namespace);
-            addFolder(&navigator, dummy);
-            dummy = NULL;
-            x = -1;
+			y++;
+			x = -1;
+		} else if (x == (int)navigator->subcount && recreate_path) {
+			logger("FOLDER \"%s\" was created\n", dir[y]);
+			FOLDER* temp = createFolder(NULL, dir[y]);
+			addFolder(&navigator, temp);
+			temp = NULL;
+			navigator = &navigator->subdir[x];
 
-            logger("Created folder \"%s\" originaly missing\n", namespace);
-        } else if (strcmp(navigator->subdir[x].name, namespace) == 0) {
-            navigator = &navigator->subdir[x];
-            break;
-        }
-    }
-
-    for (pointer = checkpoint = dir, pointer = strchr(pointer + 1, '/'); pointer && *pointer != '\0'; pointer = strchr(pointer + 1, '/')) {
-        memset(buffer, '0', sizeof(buffer));
-        sprintf(buffer, "%.*s", (int)(pointer - checkpoint), checkpoint);
-
-        for (int x = 0; x < (int)navigator->subcount + 1; x++) {
-            if (x == (int)navigator->subcount && !recreate_path) {
-                logger("Couldn't find %s! aborting\n", buffer);
-                return NULL;
-            } else if (x == (int)navigator->subcount && recreate_path) {
-                FOLDER* dummy = createFolder(NULL, buffer);
-                addFolder(&navigator, dummy);
-                dummy = NULL;
-                x = - 1;
-
-                logger("Created folder \"%s\" originaly missing\n", buffer);
-            } else if (strcmp(navigator->subdir[x].name, buffer) == 0) {
-                navigator = &navigator->subdir[x];
-                break;
-            }
-        }
-
-        checkpoint = pointer + 1;
-    }
+			y++;
+			x = -1;
+		} else if (x == (int)navigator->subcount && !recreate_path) {
+			logger("FOLDER %s <%s> wasn't found!\n", dir[y], path);
+			break;
+		}
+	}
 
     return navigator;
 }
@@ -2055,7 +2044,7 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         }
 
     }
-
+	nodelay(window, false);
     logger("Finished targets linking, starting the override process\n");
 }
 
@@ -2873,9 +2862,124 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 
 void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	FOLDER *navigator, *cursor, *templates;
+	char *pointer, *checkpoint, *save, buffer[1024], command[512], namespace[256], name[256], *path = calloc(256, sizeof(char));
+	int input, pin, line = 0, command_line = 0;
+	QUEUE *arguments;
+
+	struct FILEPTR {
+		FOLDER *container;
+		size_t index;
+	} file;
+
+	file.container = NULL;
+	file.index = -1;
+
+	getcwd(path, 256);
+	returnString(&path, "templates");
+
+	templates = getFolder(path, -1);
+
+	nodelay(window, true);
+	
+	for (pointer = instruct; pointer != NULL; pointer++, pointer = strchrs(pointer, 2, '>', '<')) {
+		input = (pointer[0] == '>') ? 0 : 1;
+		line++;
+
+		if (sscanf(pointer + 3, "%255[^\"]", namespace) == 0) {
+			logger("Error! Failed to get file path in line %d! Skipping to next iteraction\n", line);
+			continue;
+		}
+		pointer += strlen(namespace) + 4;
+		pointer = strnotchr(pointer, 3, ' ', '\n', '\t');
+
+		// Cropping file instruction
+		checkpoint = strchrs(pointer, 2, '>', '<');
+		snprintf(buffer, 1023, "%.*s", (int)(checkpoint - pointer), pointer);
+
+		switch (input) {
+		case 0:
+			navigator = localizeFolder(target, namespace, false);
+			if (navigator == NULL) {
+				logger("Failed to locate %s in target folder!\n", namespace);
+				continue;
+			}
+			break;
+		case 1:
+			navigator = localizeFolder(target, namespace, false);
+			if (navigator == NULL) {
+				logger("Failed to locate %s in assets folder!\n", namespace);
+				continue;
+			}
+			break;
+		}
+
+		// Linking folder and file
+		file.container = navigator;
+		save = strrchr(namespace, '/');
+		sscanf(save + 1, "%255[^\"]", name);
+		for (int x = 0; strlen(name) > 0 && x < (int)file.container->count; x++) {
+			if (strcmp(file.container->content[x].name, name) == 0) {
+				file.index = x;
+				break;
+			}
+		}
+
+		command_line = 0;
+		for (
+			checkpoint = &buffer[0];
+			checkpoint != NULL;
+			checkpoint = strchr(checkpoint, ';'), checkpoint = strnotchr(checkpoint, 4, ';', ' ', '\n', '\t')
+		) {
+			command_line++;
+			arguments = initQueue(8);
+
+			if (sscanf(checkpoint, "%511[^;]", command) == 0) {
+				logger("Error! Failure when copying command %d in iteraction %d\n", command_line, line);
+			}
+
+			if (file.index != -1) {
+				logger("FILE %s ", file.container->content[file.index].name);
+			}
+			// Processing line arguments into queue
+			for (save = &command[0]; save != NULL; save = strchr(save + 1, ' ')) {
+				if (save[1] == '{') {
+					char* backup;
+					for (int x = 2, y = 1; save[x] != '\0'; x++) {
+						if (save[x] == '{') {
+							y++;
+						} else if (save[x] == '}') {
+							y--;
+						}
+
+						if (y == 0) {
+							backup = &save[x + 1];
+							break;
+						}
+					}
+					
+					snprintf(name, (int)(backup - save), save + 1);
+					save += strlen(name);
+				} else if (sscanf(save, "%255s", name) == 0) {
+					logger("Warning! Failed to get argument in iteraction %d, line %d\n", line, command_line);
+					continue;
+				}
+
+				logger("<%s> ", name);
+				enQueue(arguments, name);
+			}
+			logger("\n");
+
+			endQueue(arguments);
+		}
+	}
+}
+/* 
+void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
+	FOLDER *navigator, *cursor, *templates;
 	char *pointer, *checkpoint, *save, buffer[1024], namespace[512], command[256], name[256], *path = calloc(256, sizeof(char));
 	OBJECT *placeholder, *value, *query;
-    int line_number = 0, type;
+    int line_number = 0, type, input;
+	size_t pin = report_end;
 	bool file_location_moved = false;
 
 	struct FILEPTR {
@@ -2892,12 +2996,27 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 	templates = getFolder(path, -1);
 	pointer = instruct;
+
+	nodelay(window, true);
+
 	while ((pointer = strchrs(pointer, 2, '>', '<')) != NULL) {
 		type = 0;
+		wclear(miniwin);
+
+		if (input == KEY_RESIZE) {
+			refreshWindows();
+		}
+
+		input = (report_end - pin) > (size_t)(getmaxy(miniwin) - 2) ? (report_end - (getmaxy(miniwin) - 2)) : pin;
+		mvwprintLines(miniwin, report, 1, 1, input, report_end);
+
+		box(miniwin, 0, 0);
+		wrefresh(miniwin);
 
 		save = strchr(pointer, '\n');
 		if (pointer[2] != '\"') {
 			logger("Warning! File path isn't in quotes! [%.*s]\n", (int)(save - pointer), pointer);
+			pointer++;
 			continue;
 		}
 		sprintf(command, "%.*s", (int)((save - pointer) - 4), pointer + 3);
@@ -2907,16 +3026,18 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				navigator = localizeFolder(target, command, true);
 
 				if (navigator == NULL) {
-					logger("Failed to find %s in %s!\n", command, target->name);
-					return;
+					logger("Failed to find %s!\n", command);
+					pointer++;
+					continue;
 				}
 				break;
 			case '<':
 				navigator = localizeFolder(assets, command, true);
 
 				if (navigator == NULL) {
-					logger("Failed to find %s in %s!\n", command, assets->name);
-					return;
+					logger("Failed to find %s!\n", command);
+					pointer++;
+					continue;
 				}
 				break;
 		}
@@ -2935,6 +3056,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			type = 1;
 			logger("Target is a folder\n");
 			line_number++;
+		} else {
+			type = 0;
 		}
 
 		for (size_t x = 0; x < navigator->count && type == 0; x++) {
@@ -2952,7 +3075,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			continue;
 		}
 
-		if (strstr(file.container->content[file.index].name, ".json") != NULL) {
+		if (type == 0 && strstr(file.container->content[file.index].name, ".json") != NULL) {
             placeholder = processOBJ(file.container->content[file.index].tab); //Check if it's a json file
         }
 
@@ -2975,6 +3098,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				getNextStr(&checkpoint, name);
 				if (sscanf(name + 1, "%[^\"]", namespace) == 0) {
 					logger("Error! Failed to get destination name from argument!\n");
+					checkpoint = NULL;
 					continue;
 				}
 
@@ -3022,7 +3146,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 					}
 
-				}  else {
+				} else {
 					FOLDER *mirror = NULL;
 					if (strcmp(navigator->name, cursor->name) == 0) {
 						logger("Folder destination has the same name, merging the contents\n");
@@ -3055,6 +3179,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					getNextStr(&checkpoint, command);
 					if (sscanf(command, "\"%255[^\"]\"", name) == 0) {
 						logger("Error! Failed to get file's name!\n");
+						checkpoint = NULL;
 						continue;
 					} 
 
@@ -3148,6 +3273,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					if (sscanf(checkpoint, "%511[^;]", namespace) == 0) {
 						logger("Error! Failed to scan display object!\n");
+						checkpoint = NULL;
 						continue;
 					} 
 					
@@ -3180,12 +3306,6 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					sscanf(command, "%dx%d", &width, &height);
 					ARCHIVE* temp = &file.container->content[file.index];
 					resizePNGFile(&temp, width, height);
-					
-					FILE* test = fopen("c:\\Users\\Calie\\Downloads\\test.png", "wb+"); // This paint job isn't working for some reason
-					fwrite(file.container->content[file.index].tab, 1, file.container->content[file.index].size, test);
-					fclose(test);
-					// Continue debug of resize
-					// Find out why using Blocks instruct causes a crash
 				}
 
 			} else if (strstr(command, "autofill") != NULL) {
@@ -3348,10 +3468,12 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					checkpoint = strchr(checkpoint + 1, '\"');
 					if (sscanf(checkpoint + 1, "%255[^\"]", command) == 0) {
 						logger("Error! Failed to get destination for disassembled model!\n");
+						checkpoint = NULL;
 						continue;
 					} 
 				} else if (sscanf(namespace + 1, "%255[^\"]", command) == 0) {
 					logger("Failed to get disassemble parts destination path!\n");
+					checkpoint = NULL;
 					continue;
 				}
 
@@ -3504,6 +3626,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 				if (getPNGPixels(&file.container->content[file.index], &texture, &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
 					logger("Failed to read png file!\n");
+					checkpoint = NULL;
 					continue;
 				}
 				
@@ -3512,14 +3635,26 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				checkpoint = strchr(checkpoint, '\"');
 				if (sscanf(checkpoint + 1, "%127[^\"]", namespace) == 0) {
 					logger("Error! Failed to get map file's name\n");
+					checkpoint = NULL;
 					continue;
 				}
 				checkpoint += strlen(namespace) + 2;
 
 				if (strstr(name, "./") != NULL) {
 					location = localizeFolder(target, namespace, false);
+
+					if (location == NULL) {
+						logger("Error! Couldn't find %s at target folder\n", namespace);
+						checkpoint = NULL;
+						continue;
+					}
 				} else {
 					location = localizeFolder(assets, namespace, false);
+					if (location == NULL) {
+						logger("Error! Couldn't find %s at assets folder", namespace);
+						checkpoint = NULL;
+						continue;
+					}
 				}
 
 				for (size_t x = 0; x < location->count; x++) {
@@ -3534,13 +3669,25 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				checkpoint = strchr(checkpoint, '\"');
 				if (sscanf(checkpoint + 1, "%127[^\"]", name) == 0) {
 					logger("Error! Failed to get pallet file's name\n");
+					checkpoint = NULL;
 					continue;
 				}
 
 				if (strstr(name, "./") != NULL) {
 					location = localizeFolder(target, namespace, false);
+
+					if (location == NULL) {
+						logger("Error! Couldn't find %s at target folder", namespace);
+						checkpoint = NULL;
+						continue;
+					}
 				} else {
 					location = localizeFolder(assets, namespace, false);
+					if (location == NULL) {
+						logger("Error! Couldn't find %s at assets folder", namespace);
+						checkpoint = NULL;
+						continue;
+					}
 				}
 
 				for (size_t x = 0; x < (location->count + 1); x++) {
@@ -3598,6 +3745,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				checkpoint = strchr(checkpoint, '\"');
 				if (sscanf(checkpoint + 1, "%127[^\"]", name) == 0) {
 					logger("Error! Failed to get map file's name\n");
+					checkpoint = NULL;
 					continue;
 				}
 				
@@ -3612,6 +3760,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				checkpoint = strchr(checkpoint, '{');
 				if (sscanf(checkpoint, "%[^;]255", namespace) == 0) {
 					logger("Error! Failed to get list of pallets\n");
+					checkpoint = NULL;
 					continue;
 				}
 				
@@ -3625,15 +3774,19 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						continue;
 					}
 
-					if (strstr(namespace, "./") != NULL) {
+					if (strstr(name, "./") != NULL) {
 						location = localizeFolder(target, namespace, false);
+	
+						if (location == NULL) {
+							logger("Error! Couldn't find %s at target folder", namespace);
+							continue;
+						}
 					} else {
 						location = localizeFolder(assets, namespace, false);
-					}
-
-					if (location == NULL) {
-						logger("%s is an invalid path!\n", namespace);
-						continue;
+						if (location == NULL) {
+							logger("Error! Couldn't find %s at assets folder", namespace);
+							continue;
+						}
 					}
 
 					if ((name_pointer = strrchr(namespace, '/')) == NULL) {
@@ -3737,13 +3890,16 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			}
 		}
 
-		if (!file_location_moved && strstr(file.container->content[file.index].name, ".json") != NULL) {
+		if (type == 0 && !file_location_moved && strstr(file.container->content[file.index].name, ".json") != NULL) {
 			free(file.container->content[file.index].tab);
 			file.container->content[file.index].tab = printJSON(placeholder);
 			indentJSON(&file.container->content[file.index].tab);
 		}
 	}
+
+	nodelay(window, false);
 }
+*/
 
 void printZip(FOLDER* folder, char** path) {
 	int dirNumber, dirPosition[FOLDERCHUNK], input;
@@ -3890,6 +4046,7 @@ int main () {
     curs_set(0);
     noecho();
     keypad(window, true);
+	nodelay(window, false);
 
 	logger("Getting lang text\n");
     returnString(&path, "lang");
