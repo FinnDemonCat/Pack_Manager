@@ -1,26 +1,23 @@
-< "saw.json"
-	copy "gregtech:models/tools/";
-	disassemble "gregtech:models/tools/";
-> "minecraft:models/items/music_disc_blocks.json"
+> "armors/helmet.json"
+	copy "minecraft:models/item/iron_helmet.json";
+	copy "minecraft:models/item/diamond_helmet.json";
+	copy "minecraft:models/item/gold_helmet.json";
+	copy "minecraft:models/item/netherite_helmet.json";
+	copy "minecraft:models/item/chainmail_helmet.json";
+> "minecraft:models/item/iron_helmet.json"
+	edit texture_path {
+		"0": "item/iron_layer1",
+		"particle": "item/iron_layer1"
+	};
 	edit display set {
 		"thirdperson_lefthand": {
 			"translation": [0, 8.75, 0.75],
 			"scale": [1.3, 1.3, 1.3]
 		}
 	};
-< "saw.png"
-	paint "saw_blade_map.png" "iron.png";
-	copy "gregtech:textures/tools/";
-< "gold_layer_1.png"
-	copy "minecraft:textures/models/armor/";
-	edit dimentions 64x64;
-< "diamond_layer_1.png"
-	copy "minecraft:textures/models/armor/";
+> "tools/wooden_axe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "armors/iron_layer_1.png"
 	edit dimentions 64x32;
-< "music_disc.json"
-	copy "minecraft:models/items/music_disc_13.json";
-	copy "minecraft:models/items/music_disc_blocks.json";
-> "minecraft:models/items/music_disc_13.json"
-	remove;
-> "minecraft:models/items/music_disc_13.json"
-	edit texture_path {"0": "items/music_disc_13", "1": "items/music_disc_13"};
+	copy "minecraft:textures/entity/equipment/humanoid/iron.png";

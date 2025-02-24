@@ -2927,13 +2927,21 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 		// Linking folder and file
 		file.container = navigator;
-		save = strrchr(namespace, '/');
-		sscanf(save + 1, "%255[^\"]", name);
+		if ((save = strrchr(namespace, '/')) != NULL) {
+			save++;
+		}
+		sscanf(save, "%255[^\"]", name);
+
 		for (int x = 0; strlen(name) > 0 && x < (int)file.container->count; x++) {
 			if (strcmp(file.container->content[x].name, name) == 0) {
 				file.index = x;
 				break;
 			}
+		}
+
+		if (namespace[strlen(namespace) - 1] != '/' && file.index == -1) {
+			logger("Warning! FILE <%s> wasn't found!\n", namespace);
+			continue;
 		}
 
 		command_line = 0;
@@ -2983,12 +2991,17 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				}
 
 				if ((save = strrchr(namespace, '/')) != NULL) {
-					sprintf(name, "%s", save);
+					sprintf(name, "%s", save + 1);
 				} else {
-					save[0] = '\0';
+					name[0] = '\0';
 				}
 
 				cursor = localizeFolder(target, namespace, true);
+				if (cursor == NULL) {
+					logger("Error! Failed to find <%s>!\n", namespace);
+					break;
+				}
+
 				if (file.index == -1) { // Target is a folder
 					FOLDER* mirror = dupFolder(navigator);
 
@@ -3012,7 +3025,11 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						logger("A match to <%s> was found at <%s>, merging contents\n", mirror->name, namespace);
 						overrideFiles(cursor, mirror);
 						freeFolder(mirror);
+					} else {
+						addFolder(&cursor, mirror);
 					}
+
+					mirror = NULL;
 				} else { // Target is a file
 					ARCHIVE* mirror = dupFile(&file.container->content[file.index]);
 					if (strlen(name) > 0) {
@@ -3027,7 +3044,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						logger("Moving <%s> to %s\n", file.container->content[file.index].name, cursor->name);
 						delFile(&navigator, file.index);
 					} else {
-						logger("Copying <%s> to %s\n", mirror->name, cursor->name);
+						logger("Copying <%s> to %s\n", name, cursor->name);
 					}
 				}
 			} else if (strcmp(arguments->item[0], "remove") == 0) {
@@ -3073,7 +3090,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					OBJECT *value, *placeholder, *query;
 					sprintf(name, "%s", (strcmp(arguments->item[1], "display") == 0) ? "\"display\"" : "\"textures\"");
 
-					logger("FILE <%s> %s updated\n", file.container->content[file.index]);
+					logger("FILE <%s> %s updated \n", file.container->content[file.index].name, name);
 
 					// Transforming file tab to json structure
 					placeholder = processOBJ(file.container->content[file.index].tab);
@@ -3082,6 +3099,11 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							query = placeholder->value[x].value;
 							break;
 						}
+					}
+
+					if (query == NULL) {
+						logger("Warning! Failed to find %s member in file model!", name);
+						break;
 					}
 					
 					// Executing display cleanup
@@ -3102,6 +3124,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						for (size_t y = 0; y < (query->count + 1); y++) {
 							if (y < query->count && strcmp(mirror->declaration, query->value[y].declaration) == 0) {
 								freeOBJ(&query->value[y]);
+								
+								mirror->parent = query;
 								query->value[y] = *mirror;
 								break;
 							} else if (y == query->count) {
@@ -3110,14 +3134,16 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							}
 						}
 					}
-					freeOBJ(value);
-					free(&file.container->content[file.index].tab);
-
 					char *model = printJSON(placeholder);
 					indentJSON(&model);
 
+					free(file.container->content[file.index].tab);
 					file.container->content[file.index].tab = model;
+					
 					model = NULL;
+
+					freeOBJ(value);
+					freeOBJ(placeholder);
 				} else if (strcmp(arguments->item[1], "dimentions") == 0) {
 					int width, height;
 					if (sscanf(arguments->item[2], "%dx%d", &width, &height) == 0) {
@@ -3664,9 +3690,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 			endQueue(arguments);
 		}
-
-		nodelay(window, false);
 	}
+	nodelay(window, false);
 }
 
 void printZip(FOLDER* folder, char** path) {
