@@ -1,0 +1,547 @@
+> "armors/iron_layer_1.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/iron.png";
+	copy "minecraft:textures/item/iron_layer1.png";
+> "armors/iron_layer_2.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/iron.png";
+	copy "minecraft:textures/item/iron_layer2.png";
+> "armors/diamond_layer_1.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/diamond.png";
+	copy "minecraft:textures/item/diamond_layer1.png";
+> "armors/diamond_layer_2.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/diamond.png";
+	copy "minecraft:textures/item/diamond_layer2.png";
+> "armors/gold_layer_1.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/gold.png";
+	copy "minecraft:textures/item/gold_layer1.png";
+> "armors/gold_layer_2.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/gold.png";
+	copy "minecraft:textures/item/gold_layer2.png";
+> "armors/netherite_layer_1.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/netherite.png";
+	copy "minecraft:textures/entity/item/netherite_layer1.png";
+> "armors/netherite_layer_2.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/netherite.png";
+	copy "minecraft:textures/entity/item/netherite_layer2.png";
+> "armors/chainmail_layer_1.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/chainmail.png";
+	copy "minecraft:textures/entity/item/chainmail_layer1.png";
+> "armors/chainmail_layer_2.png"
+	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/netherite.png";
+	copy "minecraft:textures/entity/item/chainmail_layer2.png";
+> "armors/helmet.json"
+	copy "minecraft:models/item/iron_helmet.json";
+	copy "minecraft:models/item/diamond_helmet.json";
+	copy "minecraft:models/item/gold_helmet.json";
+	copy "minecraft:models/item/netherite_helmet.json";
+	copy "minecraft:models/item/chainmail_helmet.json";
+> "minecraft:models/item/iron_helmet.json"
+	edit texture_path {
+		"0": "item/iron_layer1",
+		"particle": "item/iron_layer1"
+	};
+> "minecraft:models/item/diamond_helmet.json"
+	edit texture_path {
+		"0": "item/diamond_layer_1",
+		"particle": "item/diamond_layer1"
+	};
+> "minecraft:models/item/gold_helmet.json"
+	edit texture_path {
+		"0": "item/gold_layer1",
+		"particle": "item/gold_layer1"
+	};
+> "minecraft:models/item/netherite_helmet.json"
+	edit texture_path {
+		"0": "item/netherite_layer1",
+		"particle": "item/netherite_layer1"
+	};
+> "minecraft:models/item/chainmail_helmet.json"
+	edit texture_path {
+		"0": "item/chainmail_layer1",
+		"particle": "item/chainmail_layer1"
+	};
+> "armors/chestplate.json"
+	copy "minecraft:models/item/iron_chestplate.json";
+	copy "minecraft:models/item/diamond_chestplate.json";
+	copy "minecraft:models/item/gold_chestplate.json";
+	copy "minecraft:models/item/netherite_chestplate.json";
+	copy "minecraft:models/item/chainmail_chestplate.json";
+> "minecraft:models/item/iron_chestplate.json"
+	edit texture_path {
+		"0": "item/iron_layer1",
+		"particle": "item/iron_layer1"
+	};
+> "minecraft:models/item/diamond_chestplate.json"
+	edit texture_path {
+		"0": "item/diamond_layer_1",
+		"particle": "item/diamond_layer1"
+	};
+> "minecraft:models/item/gold_chestplate.json"
+	edit texture_path {
+		"0": "item/gold_layer1",
+		"particle": "item/gold_layer1"
+	};
+> "minecraft:models/item/netherite_chestplate.json"
+	edit texture_path {
+		"0": "item/netherite_layer1",
+		"particle": "item/netherite_layer1"
+	};
+> "minecraft:models/item/chainmail_chestplate.json"
+	edit texture_path {
+		"0": "item/chainmail_layer1",
+		"particle": "item/chainmail_layer1"
+	};
+> "armors/leggings.json"
+	copy "minecraft:models/item/iron_leggings.json";
+	copy "minecraft:models/item/diamond_leggings.json";
+	copy "minecraft:models/item/gold_leggings.json";
+	copy "minecraft:models/item/netherite_leggings.json";
+	copy "minecraft:models/item/chainmail_leggings.json";
+> "minecraft:models/item/iron_leggings.json"
+	edit texture_path {
+		"0": "item/iron_layer2",
+		"particle": "item/iron_layer2"
+	};
+> "minecraft:models/item/diamond_leggings.json"
+	edit texture_path {
+		"0": "item/diamond_layer_2",
+		"particle": "item/diamond_layer2"
+	};
+> "minecraft:models/item/gold_leggings.json"
+	edit texture_path {
+		"0": "item/gold_layer2",
+		"particle": "item/gold_layer2"
+	};
+> "minecraft:models/item/netherite_leggings.json"
+	edit texture_path {
+		"0": "item/netherite_layer2",
+		"particle": "item/netherite_layer2"
+	};
+> "minecraft:models/item/chainmail_leggings.json"
+	edit texture_path {
+		"0": "item/chainmail_layer2",
+		"particle": "item/chainmail_layer2"
+	};
+> "armors/boots.json"
+	copy "minecraft:models/item/iron_boots.json";
+	copy "minecraft:models/item/diamond_boots.json";
+	copy "minecraft:models/item/gold_boots.json";
+	copy "minecraft:models/item/netherite_boots.json";
+	copy "minecraft:models/item/chainmail_boots.json";
+> "minecraft:models/item/iron_boots.json"
+	edit texture_path {
+		"0": "item/iron_layer1",
+		"particle": "item/iron_layer1"
+	};
+> "minecraft:models/item/diamond_boots.json"
+	edit texture_path {
+		"0": "item/diamond_layer_1",
+		"particle": "item/diamond_layer1"
+	};
+> "minecraft:models/item/gold_boots.json"
+	edit texture_path {
+		"0": "item/gold_layer1",
+		"particle": "item/gold_layer1"
+	};
+> "minecraft:models/item/netherite_boots.json"
+	edit texture_path {
+		"0": "item/netherite_layer1",
+		"particle": "item/netherite_layer1"
+	};
+> "minecraft:models/item/chainmail_boots.json"
+	edit texture_path {
+		"0": "item/chainmail_layer1",
+		"particle": "item/chainmail_layer1"
+	};
+> "tools/wooden_axe.json"
+	edit texture_path {
+		"0": "item/wooden_axe",
+		"particle": "item/wooden_axe"
+	};
+	copy "minecraft:models/item/";
+> "tools/stone_axe.json"
+	edit texture_path {
+		"0": "item/stone_axe",
+		"particle": "item/stone_axe"
+	};
+	copy "minecraft:models/item/";
+> "tools/iron_axe.json"
+	edit texture_path {
+		"0": "item/iron_axe",
+		"particle": "item/iron_axe"
+	};
+	copy "minecraft:models/item/";
+> "tools/diamond_axe.json"
+	edit texture_path {
+		"0": "item/diamond_axe",
+		"particle": "item/diamond_axe"
+	};
+	copy "minecraft:models/item/";
+> "tools/gold_axe.json"
+	edit texture_path {
+		"0": "item/gold_axe",
+		"particle": "item/gold_axe"
+	};
+	copy "minecraft:models/item/";
+> "tools/netherite_axe.json"
+	edit texture_path {
+		"0": "item/netherite_axe",
+		"particle": "item/netherite_axe"
+	};
+	copy "minecraft:models/item/";
+> "tools/wooden_pickaxe.json"
+	edit texture_path {
+		"0": "item/wooden_pickaxe",
+		"particle": "item/wooden_pickaxe"
+	};
+	copy "minecraft:models/item/";
+> "tools/stone_pickaxe.json"
+	edit texture_path {
+		"0": "item/stone_pickaxe",
+		"particle": "item/stone_pickaxe"
+	};
+	copy "minecraft:models/item/";
+> "tools/iron_pickaxe.json"
+	edit texture_path {
+		"0": "item/iron_pickaxe",
+		"particle": "item/iron_pickaxe"
+	};
+	copy "minecraft:models/item/";
+> "tools/diamond_pickaxe.json"
+	edit texture_path {
+		"0": "item/diamond_pickaxe",
+		"particle": "item/diamond_pickaxe"
+	};
+	copy "minecraft:models/item/";
+> "tools/gold_pickaxe.json"
+	edit texture_path {
+		"0": "item/gold_pickaxe",
+		"particle": "item/gold_pickaxe"
+	};
+	copy "minecraft:models/item/";
+> "tools/netherite_pickaxe.json"
+	edit texture_path {
+		"0": "item/netherite_pickaxe",
+		"particle": "item/netherite_pickaxe"
+	};
+	copy "minecraft:models/item/";
+> "tools/wooden_hoe.json"
+	edit texture_path {
+		"0": "item/wooden_hoe",
+		"particle": "item/wooden_hoe"
+	};
+	copy "minecraft:models/item/";
+> "tools/stone_hoe.json"
+	edit texture_path {
+		"0": "item/stone_hoe",
+		"particle": "item/stone_hoe"
+	};
+	copy "minecraft:models/item/";
+> "tools/iron_hoe.json"
+	edit texture_path {
+		"0": "item/iron_hoe",
+		"particle": "item/iron_hoe"
+	};
+	copy "minecraft:models/item/";
+> "tools/gold_hoe.json"
+	edit texture_path {
+		"0": "item/gold_hoe",
+		"particle": "item/gold_hoe"
+	};
+	copy "minecraft:models/item/";
+> "tools/diamond_hoe.json"
+	edit texture_path {
+		"0": "item/diamond_hoe",
+		"particle": "item/diamond_hoe"
+	};
+	copy "minecraft:models/item/";
+> "tools/netherite_hoe.json"
+	edit texture_path {
+		"0": "item/netherite_hoe",
+		"particle": "item/netherite_hoe"
+	};
+	copy "minecraft:models/item/";
+> "tools/wooden_axe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "tools/stone_axe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "tools/iron_axe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/iron_map.png" "./materials/iron_material.png";
+	copy "minecraft:textures/item/";
+> "tools/gold_axe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/gold_map.png" "./materials/gold_material.png";
+	copy "minecraft:textures/item/";
+> "tools/diamond_axe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/diamond_map.png" "./materials/diamond_material.png";
+	copy "minecraft:textures/item/";
+> "tools/netherite_axe.png"
+	paint "./materials/crimsom_map.png" "./materials/crimsom_material.png";
+	paint "./materials/netherite_map.png" "./materials/netherite_material.png";
+	copy "minecraft:textures/item/";
+> "tools/wooden_pickaxe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "tools/stone_pickaxe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "tools/iron_pickaxe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/iron_map.png" "./materials/iron_material.png";
+	copy "minecraft:textures/item/";
+> "tools/gold_pickaxe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/gold_map.png" "./materials/gold_material.png";
+	copy "minecraft:textures/item/";
+> "tools/diamond_pickaxe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/diamond_map.png" "./materials/diamond_material.png";
+	copy "minecraft:textures/item/";
+> "tools/netherite_pickaxe.png"
+	paint "./materials/crimsom_map.png" "./materials/crimsom_material.png";
+	paint "./materials/netherite_map.png" "./materials/netherite_material.png";
+	copy "minecraft:textures/item/";
+> "tools/wooden_shovel.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "tools/stone_shovel.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "tools/iron_shovel.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/iron_map.png" "./materials/iron_material.png";
+	copy "minecraft:textures/item/";
+> "tools/gold_shovel.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/gold_map.png" "./materials/gold_material.png";
+	copy "minecraft:textures/item/";
+> "tools/diamond_shovel.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/diamond_map.png" "./materials/diamond_material.png";
+	copy "minecraft:textures/item/";
+> "tools/netherite_shovel.png"
+	paint "./materials/crimsom_map.png" "./materials/crimsom_material.png";
+	paint "./materials/netherite_map.png" "./materials/netherite_material.png";
+	copy "minecraft:textures/item/";
+> "tools/wooden_hoe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "tools/stone_hoe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:textures/item/";
+> "tools/iron_hoe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/iron_map.png" "./materials/iron_material.png";
+	copy "minecraft:textures/item/";
+> "tools/gold_hoe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/gold_map.png" "./materials/gold_material.png";
+	copy "minecraft:textures/item/";
+> "tools/diamond_hoe.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/diamond_map.png" "./materials/diamond_material.png";
+	copy "minecraft:textures/item/";
+> "tools/netherite_hoe.png"
+	paint "./materials/crimsom_map.png" "./materials/crimsom_material.png";
+	paint "./materials/netherite_map.png" "./materials/netherite_material.png";
+	copy "minecraft:textures/item/";
+> "tools/shears.json"
+	edit texture_path {
+		"0": "item/shears",
+		"particle": "item/shears"
+	};
+	copy "minecraft:models/item/";
+> "tools/shears.png"
+	paint "./materials/iron_map.png" "./materials/iron_material.png";
+	paint "./materials/wood_map.png" "./materials/wood_material.png;
+	copy "minecraft:textures/item/";
+> "tools/crossbow.json"
+	edit texture_path {
+		"0": "item/crossbow",
+		"particle": "item/crossbow"
+	};
+	copy "minecraft:models/item/";
+> "tools/crossbow_firework.json"
+	edit texture_path {
+		"0": "item/crossbow_firework",
+		"particle": "item/crossbow_firework"
+	};
+	copy "minecraft:models/item/";
+> "tools/crossbow_arrow.json"
+	edit texture_path {
+		"0": "item/crossbow_arrow",
+		"particle": "item/crossbow_arrow"
+	};
+	copy "minecraft:models/item/";
+> "tools/firework_rocket.json"
+	edit texture_path {
+		"0": "item/firework_rocket",
+		"particle": "item/firework_rocket"
+	};
+	copy "minecraft:models/item/";
+> "tools/crossbow.png"
+	copy "minecraft:textures/item/";
+> "tools/crossbow_firework.png"
+	copy "minecraft:textures/item/";
+> "tools/firework_rocket.png"
+	copy "minecraft:textures/item/";
+> "tools/bow.json"
+	edit texture_path {
+		"0": "item/bow",
+		"particle": "item/bow"
+	};
+	copy "minecraft:models/item/";
+> "tools/bow_pulling_0.json"
+	edit texture_path {
+		"0": "item/bow_pulling_0",
+		"particle": "item/bow_pulling_0"
+	};
+	copy "minecraft:models/item/";
+> "tools/bow_pulling_1.json"
+	edit texture_path {
+		"0": "item/bow_pulling_1",
+		"particle": "item/bow_pulling_1"
+	};
+	copy "minecraft:models/item/";
+> "tools/bow_pulling_2.json"
+	edit texture_path {
+		"0": "item/bow_pulling_2",
+		"particle": "item/bow_pulling_2"
+	};
+	copy "minecraft:models/item/";
+> "tools/arrow.json"
+	edit texture_path {
+		"0": "item/arrow",
+		"particle": "item/arrow"
+	};
+	copy "minecraft:models/item/";
+> "util/potion.json"
+	edit texture_path {
+		"0": "item/potion",
+		"particle": "item/potion"
+	};
+	copy "minecraft:models/item/";
+> "util/splash_potion.json"
+	edit texture_path {
+		"0": "item/splash_potion",
+		"particle": "item/splash_potion"
+	};
+	copy "minecraft:models/item/";
+> "util/lingering_potion.json"
+	edit texture_path {
+		"0": "item/lingering_potion",
+		"particle": "item/lingering_potion"
+	};
+	copy "minecraft:models/item/";
+> "util/experience_bottle.json"
+	edit texture_path {
+		"0": "item/experience_bottle",
+		"particle": "item/experience_bottle"
+	};
+	copy "minecraft:models/item/";
+> "util/honey_bottle.json"
+	edit texture_path {
+		"0": "item/honey_bottle",
+		"particle": "item/honey_bottle"
+	};
+	copy "minecraft:models/item/";
+> "util/potion.png"
+	copy "minecraft:textures/item/";
+> "util/potion_overlay.png"
+	copy "minecraft:textures/item/";
+> "util/lingering_potion.png"
+	copy "minecraft:textures/item/";
+> "util/experience_bottle.png"
+	copy "minecraft:textures/item/";
+> "util/honey_bottle.png"
+	copy "minecraft:textures/item/";
+> "util/potion.png.mcmeta"
+	copy "minecraft:textures/item";
+	copy "minecraft:textures/item/lingering_potion.png.mcmeta";
+> "foods/apple.json"
+	edit texture_path {
+		"0": "item/apple",
+		"particle": "item/apple"
+	};
+	copy "minecraft:models/item/";
+> "foods/golden_apple.json"
+	edit texture_path {
+		"0": "item/golden_apple",
+		"particle": "item/golden_apple"
+	};
+	copy "minecraft:models/item/";
+> "foods/enchanted_golden_apple.json"
+	edit texture_path {
+		"0": "item/golden_apple",
+		"particle": "item/golden_apple"
+	};
+	copy "minecraft:models/item/";
+> "foods/bread2.json"
+	edit texture_path {
+		"0": "item/bread",
+		"particle": "item/bread"
+	};
+	copy "minecraft:models/item/bread.json";
+> "foods/berries.json"
+	edit texture_path {
+		"0": "item/sweet_berries",
+		"particle": "item/sweet_berries"
+	};
+	copy "minecraft:models/item/sweet_berries.json";
+> "foods/glow_berries.json"
+	edit texture_path {
+		"0": "item/glow_berries",
+		"particle": "item/glow_berries"
+	};
+	copy "minecraft:models/item/glow_berries.json";
+> "foods/potato 2.json"
+	edit texture_path {
+		"0": "item/potato",
+		"particle": "item/potato"
+	};
+	copy "minecraft:models/item/potato.json";
+> "foods/baked_potato 2.json"
+	edit texture_path {
+		"0": "item/baked_potato",
+		"particle": "item/baked_potato"
+	};
+	copy "minecraft:models/item/baked_potato.json";
+> "foods/poisonous_potato2.json"
+	edit texture_path {
+		"0": "item/potato2",
+		"1": "item/poisonous_potato_root",
+		"particle": "item/potato2"
+	};
+	copy "minecraft:models/item/poisonous_potato.json";
+> "foods/apple.png"
+	copy "minecraft:textures/item/";
+> "foods/golden_apple.png"
+	paint "./materials/gold_map" "./materials/gold_material";
+	copy "minecraft:textures/item/";
+> "foods/golden_apple_glint.png"
+	copy "minecraft:textures/item/";
+> "foods/bread.png"
+	copy "minecraft:textures/item/";
+> "foods/berries.png"
+	copy "minecraft:textures/item/sweet_berries.png";
+> "foods/glow_berries.png"
+	copy "minecraft:textures/item/";
+> "foods/potato2.png"
+	copy "minecraft:textures/item/potato.png";
+> "foods/baked_potato2.png"
+	copy "minecraft:textures/item/baked_potato.png";
+> "foods/poisonous_potato_root.png"
+	copy "minecraft:textures/item/";
