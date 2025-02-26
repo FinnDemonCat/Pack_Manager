@@ -1562,17 +1562,7 @@ FOLDER* getFolder(char* path, int position) {
             } else {
                 mvwprintLines(miniwin, report, 1, 1, (report_end - (getmaxy(miniwin) - 2)), report_end);
             }
-            /* 
-            if (line_number < (getmaxy(miniwin) - 2)) {
-                for (int x = report_end - line_number, y = 1; x < (int)report_end && x > -1; x++, y++) {
-                    mvwprintLines(miniwin, report, y, 1, (x + 1));
-                }
-            } else {
-                for (int x = report_end - (getmaxy(miniwin) - 2), y = 1; x < (int)report_end && x > -1 && y < (getmaxy(miniwin) - 1); x++, y++) {
-                    mvwprintLines(miniwin, report, y, 1, (x + 1));
-                }
-            }
-            */
+
             box(miniwin, 0, 0);
             wrefresh(miniwin);
 
@@ -1683,17 +1673,6 @@ FOLDER* getFolder(char* path, int position) {
             } else {
                 mvwprintLines(miniwin, report, 1, 1, (report_end - (getmaxy(miniwin) - 2)), report_end);
             }
-            /* 
-            if (line_number < (getmaxy(miniwin) - 2)) {
-                for (int x = report_end - line_number, y = 1; x < (int)report_end && x > -1; x++, y++) {
-                    mvwprintLines(miniwin, report, y, 1, (x + 1));
-                }
-            } else {
-                for (int x = report_end - (getmaxy(miniwin) - 2), y = 1; x < (int)report_end && x > -1 && y < (getmaxy(miniwin) - 1); x++, y++) {
-                    mvwprintLines(miniwin, report, y, 1, (x + 1));
-                }
-            }
-            */
 
             box(miniwin, 0, 0);
             wrefresh(miniwin);
@@ -2882,6 +2861,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	nodelay(window, true);
 	
 	for (pointer = instruct; pointer != NULL; pointer++, pointer = strchrs(pointer, 2, '>', '<')) {
+		input = wgetch(window);
 		wclear(miniwin);
 
 		if (input == KEY_RESIZE) {
@@ -2932,6 +2912,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 		}
 		sscanf(save, "%255[^\"]", name);
 
+		file.index = -1;
 		for (int x = 0; strlen(name) > 0 && x < (int)file.container->count; x++) {
 			if (strcmp(file.container->content[x].name, name) == 0) {
 				file.index = x;
@@ -3139,6 +3120,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					free(file.container->content[file.index].tab);
 					file.container->content[file.index].tab = model;
+					file.container->content[file.index].size = strlen(model);
 					
 					model = NULL;
 
@@ -3441,9 +3423,15 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				png_bytep *texture, *pixels, *pallet;
 				FOLDER* location;
 
+				texture = pixels = pallet = NULL;
+
 				if (getPNGPixels(&file.container->content[file.index], &texture, &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
 					logger("Failed to read png file!\n");
 					checkpoint = NULL;
+					continue;
+				}
+
+				if (texture == NULL) {
 					continue;
 				}
 				
@@ -3454,7 +3442,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					break;
 				}
 
-				if (strstr(name, "./") != NULL) {
+				if (strstr(namespace, "./") != NULL) {
 					location = localizeFolder(target, namespace, false);
 
 					if (location == NULL) {
@@ -3471,11 +3459,23 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 				}
 
-				for (size_t x = 0; x < location->count; x++) {
-					if (strcmp(location->content[x].name, name) == 0) {
+				if ((save = strrchr(namespace, '/')) == NULL) {
+					sprintf(name, "%s", namespace);
+				} else {
+					sprintf(name, "%s", save + 1);
+				}
+
+				for (size_t x = 0; x < (location->count + 1); x++) {
+					if (x < location->count && strcmp(location->content[x].name, name) == 0) {
 						getPNGPixels(&location->content[x], &pixels, &collums, &lines, &color_type, &bit_depth, NULL, true);
 						break;
+					} else if (x == location->count) {
+						logger("Warning! Failed to find <%s>!\n", name);
 					}
+				}
+				if (pixels == NULL) {
+					free(texture);
+					continue;
 				}
 				bpp[1] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
 
@@ -3485,7 +3485,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					break;
 				}
 
-				if (strstr(name, "./") != NULL) {
+				if (strstr(namespace, "./") != NULL) {
 					location = localizeFolder(target, namespace, false);
 
 					if (location == NULL) {
@@ -3502,13 +3502,24 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 				}
 
+				if ((save = strrchr(namespace, '/')) == NULL) {
+					sprintf(name, "%s", namespace);
+				} else {
+					sprintf(name, "%s", save + 1);
+				}
+
 				for (size_t x = 0; x < (location->count + 1); x++) {
 					if (x < location->count && strcmp(location->content[x].name, name) == 0) {
 						getPNGPixels(&location->content[x], &pallet, NULL, NULL, NULL, NULL, NULL, true);
 						break;
 					} else if (x == location->count) {
-						logger("Failed to find %s!\n", name);
+						logger("Warning! Failed to find <%s>!\n", name);
 					}
+				}
+				if (pallet == NULL) {
+					free(texture);
+					free(pixels);
+					continue;
 				}
 
 				for (int x = 0; x < height; x++) {
@@ -3758,12 +3769,14 @@ void printZip(FOLDER* folder, char** path) {
 
 		pointer[0] = '\0';
 
-		while (dirPosition[dirNumber] == (int)navigator->subcount && dirNumber > 0) {
-			pointer = strrchr(location, '/');
-			pointer[0] = '\0';
-			pointer = strrchr(location, '/');
-			if (pointer != NULL) {
+		while (dirPosition[dirNumber] == (int)navigator->subcount && dirNumber > -1) {
+			if ((pointer = strrchr(location, '/')) != NULL) {
+				pointer[0] = '\0';
+			}
+			if ((pointer = strrchr(location, '/')) != NULL) {
 				pointer[1] = '\0';
+			} else {
+				location[0] = '\0';
 			}
 
 			dirPosition[dirNumber] = 0;
@@ -3771,7 +3784,7 @@ void printZip(FOLDER* folder, char** path) {
 			navigator = navigator->parent;
 		}
 
-		done = dirNumber == 0 ? true : false;
+		done = dirNumber < 0 ? true : false;
 	}
 	nodelay(window, false);
 
@@ -4187,8 +4200,9 @@ int main () {
 							second = query->end == 2 ? &targets->subdir[query->value[1]] : NULL;
 							recieve = dupFolder(&targets->subdir[query->value[0]]);
 							free(recieve->name);
-							char name[256];
-							sscanf(instructions->content[cursor[0]].name, "%255[^.]", name);
+							char name[256], *extension = strrchr(instructions->content[cursor[0]].name, '.');
+							extension++;
+							snprintf(name, (int)(extension - instructions->content[cursor[0]].name), "%s", instructions->content[cursor[0]].name);
 							recieve->name = strdup(name);
 
 							executeInstruct(recieve, second, instructions->content[cursor[0]].tab);
