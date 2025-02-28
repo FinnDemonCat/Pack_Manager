@@ -796,13 +796,23 @@ void addFolder(FOLDER** parent, FOLDER* subdir) {
             logger("Error allocating memory for new folder, %s\n", strerror(errno));
         }
     } else if (parent[0]->subcount >= parent[0]->capacity) {
-        parent[0]->capacity *= 2;
-        logger("Reallocating more memory for folder [%s], %d\n", parent[0]->subdir->name, (int)parent[0]->capacity);
-        parent[0]->subdir = (FOLDER*)realloc(parent[0]->subdir, (int)parent[0]->capacity*sizeof(FOLDER));
-
-        if (parent[0]->subdir == NULL) {
+		FOLDER* old = parent[0]->subdir;
+		size_t newCapacity = parent[0]->capacity * 2;
+        
+        FOLDER* temp = (FOLDER*)realloc(parent[0]->subdir, newCapacity * sizeof(FOLDER));
+        if (temp == NULL) {
             logger("Error reallocating memory for new folder, %s\n", strerror(errno));
+            return;
         }
+
+        parent[0]->subdir = temp;
+        parent[0]->capacity = newCapacity;
+
+		if (parent[0]->subdir != old) {
+			for (int x = 0; x < (int)parent[0]->subcount; x++) {
+				parent[0]->subdir[x].parent = parent[0];
+			}
+		}
     }
 
     subdir->parent = parent[0];
@@ -1490,264 +1500,255 @@ bool confirmationDialog(char* lang, int line, int* sizes, int type) {
 //Read from a target file into the memory
 //pack is the parent folder, path is the path to loop for and position is the file position. -1 Will take the path as target.
 FOLDER* getFolder(char* path, int position) {
-    int dirNumber = 0, result = 0, type = 0, folderCursor = FOLDERCHUNK, line_number = 0, input, folder_count = 0, file_count = 0;
-    long *dirPosition = (long*)calloc(folderCursor, sizeof(long));
-    struct dirent *entry;
-    char placeholder[1024], *location = strdup(path), name[1024];
-
-    if (translated != NULL) {
-        refreshWindows();
+	int dirNumber = 0, dirPosition[16], input, pin = report_end;
+	struct dirent *entry;
+	char namespace[512], name[256], *pointer;
+	FOLDER *folder, *navigator;
+	DIR* scanner;
+	bool result = false;
+	
+	if (translated != NULL) {
+		refreshWindows();
         nodelay(window, true);
     }
+	if ((scanner = opendir(path)) == NULL) {
+		logger("Error! Failed to open <%s>: %s\n", path, strerror(errno));
+		return NULL;
+	}
 
-    if (dirPosition == NULL) {
-        logger("%s: Error allocating memory for cursor,  %s\n", strerror(errno));
-
-        return NULL;
-    } else {
-        for (int x = 0; x < folderCursor; x++) {
-            dirPosition[x] = 2;
-        }
-    }
-
-    DIR* scanner = opendir(location);
-    if (scanner != NULL) {
-        if (position == -1) {
-            seekdir(scanner, 2);
-        } else {
-            seekdir(scanner, position + 2);
-        }
-        entry = readdir(scanner);
-		if (entry == NULL) {
-			logger("Warning! %s dir number %d it's empty!\n", path, position);
+	sprintf(namespace, "%s", path);
+	if (position != -1) {
+		// Openning target folder
+		seekdir(scanner, position + 2);
+		if ((entry = readdir(scanner)) == NULL) {
+			logger("Error! Failed to read <%s>: %s\n", path, strerror(errno));
 			return NULL;
 		}
-        strcpy(placeholder, entry->d_name);
-        returnString(&location, placeholder);
 
-        logger("Scanning: %s\n", placeholder);
+		snprintf(namespace + strlen(namespace), 512 - strlen(namespace), "\\%s", entry->d_name);
+		closedir(scanner);
+	}
 
-    } else {
-        logger("%s: Error acessing:  %s\n", placeholder);
+	struct stat fileStat;
+	if (stat(namespace, &fileStat) == 0) {
+		if (S_ISDIR(fileStat.st_mode)) {
+			input = 0;
+		} else if (S_ISREG(fileStat.st_mode)) {
+			if (strstr(namespace, ".zip") != NULL) {
+				input = 2;
+			} else {
+				input = 1;
+			}
+		}
+	} else {
+		logger("Error! Failed to get entry stat! <%s>: %s\n", namespace, strerror(errno));
+		return NULL;
+	}
+	if (input == 0) {
+		if ((scanner = opendir(namespace)) == NULL) {
+			logger("Error! Failed to open <%s>: %s\n", path, strerror(errno));
+			return NULL;
+		}
+	
+		seekdir(scanner, 2);
+		entry = readdir(scanner);
+	}
 
-        return NULL;
-    }
-    wrefresh(miniwin);
-    FOLDER* folder = createFolder(NULL, placeholder);
+	for (int x = 0; x < 16; x++) {
+		dirPosition[x] = 0;
+	}
 
-    strcpy(name, placeholder);
-    //Differentiate folder from zip file
-    type = fileType(location);
-    if ((type) == 0) {
-        logger("Started the scan process. The target is a folder\n");
+	pointer = strrchr(namespace, '\\');
+	sprintf(name, "%s", pointer + 1);
+	folder = createFolder(NULL, name);
 
-        //Create scoll function and input switch
-        line_number++;
+	navigator = folder;
 
-        closedir(scanner);
-        scanner = opendir(location);
-        if (scanner != NULL) {
-            seekdir(scanner, 2);
-        } else {
-            logger("%s: Could not open target, %s\n", name, strerror(errno));
-            return NULL;
-        }
-        
-        while(result == 0) {
-            input = wgetch(window);
+	nodelay(window, true);
+	// Test with a regular resourcepack
+	// Create folder tree printing method (for fun)
+	if (input == 0) { // Dir
+		logger("FOLDER: <%s> is a regular directory\n", navigator->name);
+		pointer = &namespace[strlen(namespace)];
+		
+		while (!result) {
+			input = wgetch(window);
+			wclear(miniwin);
 
-            wclear(miniwin);
-            if (line_number < (getmaxy(miniwin) - 2)) {
-                mvwprintLines(miniwin, report, 1, 1, (report_end - line_number), report_end);
-            } else {
-                mvwprintLines(miniwin, report, 1, 1, (report_end - (getmaxy(miniwin) - 2)), report_end);
-            }
+			if (input == KEY_RESIZE) {
+				refreshWindows();
+			}
 
-            box(miniwin, 0, 0);
-            wrefresh(miniwin);
+			input = (report_end - pin) > (size_t)(getmaxy(miniwin) - 2) ? (int)(report_end - (getmaxy(miniwin) - 2)) : pin;
+			mvwprintLines(miniwin, report, 1, 1, input, report_end);
 
-            if (input == KEY_RESIZE) {
-                refreshWindows();
-            }
+			box(miniwin, 0, 0);
+			wrefresh(miniwin);
 
-            entry = readdir(scanner);
+			sprintf(pointer, "\\%s", entry->d_name);
 
-            //Return logic
-            while(entry == NULL) {
-                //Reached end of contents
-                if ((dirPosition[dirNumber]-2) == (long)folder->subcount && folder->parent != NULL) {
-                    dirPosition[dirNumber] = 2;
-                    dirNumber--;
-                    returnString(&location, "path");
-                    logger("%s: Returning to <%s>\n", name, folder->name);
-                    folder = folder->parent;
-                }
-                //Entering new folder
-                if ((dirPosition[dirNumber]-2) < (long)folder->subcount) {
-                    folder = &folder->subdir[dirPosition[dirNumber]-2];
-                    dirPosition[dirNumber]++;
+			if (stat(namespace, &fileStat) == 0) {
+				if (S_ISDIR(fileStat.st_mode)) {
+					FOLDER* mirror = createFolder(NULL, pointer + 1);
+					addFolder(&navigator, mirror);
+
+					logger("FOLDER: <%s>\n", namespace);
+					mirror = NULL;
+				} else if (S_ISREG(fileStat.st_mode)) {
+					ARCHIVE* mirror = getFile(namespace);
+					addFile(&navigator, mirror);
+
+					logger("FILE: <%s>\n", namespace);
+					mirror = NULL;
+				}
+			}
+
+			pointer[0] = '\0';
+
+			if ((entry = readdir(scanner)) == NULL) {
+				while (dirPosition[dirNumber] == (int)navigator->subcount && dirNumber > -1) {
+					if ((pointer = strrchr(namespace, '\\')) != NULL) {
+						pointer[0] = '\0';
+					} else {
+						namespace[0] = '\0';
+					}
+		
+					dirPosition[dirNumber] = 0;
+					dirNumber--;
+					navigator = (navigator->parent != NULL) ? navigator->parent : navigator;
+				}
+
+				if (dirNumber == -1) {
+					result = true;
+					break;
+				}
+
+				navigator = &navigator->subdir[dirPosition[dirNumber]];
+
+				sprintf(pointer, "\\%s", navigator->name);
+				pointer = &namespace[strlen(namespace)];
+
+				closedir(scanner);
+				if ((scanner = opendir(namespace)) != NULL) {
+					seekdir(scanner, 2);
+					entry = readdir(scanner);
+
+					dirPosition[dirNumber]++;
                     dirNumber++;
-                    returnString(&location, folder->name);
+				} else {
+					logger("Error! Failed to open <%s>, %s\n", namespace, strerror(errno));
+					dirPosition[dirNumber] = 0;
+					dirNumber--;
+					navigator = navigator->parent;
+				}
+			}
+		}
 
-                }
-                //End of loop
-                if (dirNumber <= 0) {
-                    result = 1;
-                    break;
-                }
+	} else if (input == 2) { // Zip
+		logger("FOLDER: <%s> is a regular zip file\n", navigator->name);
+		char placeholder[512];
+		result = true;
 
-                closedir(scanner);
-                scanner = opendir(location);
-                if (scanner != NULL) {
-                    seekdir(scanner, dirPosition[dirNumber]);
-                    entry = readdir(scanner);
-                } else {
-                    logger("scanFolder: error openning %s: %s\n", location, strerror(errno));
-                    line_number++;
-                }
-            }
-
-            if ((result) == 1) {
-                break;
-            }
-
-            strcpy(placeholder, entry->d_name);
-            returnString(&location, placeholder);
-            type = fileType(location);
-
-            //0 is folder, 1 is file
-            if (type == 0) {
-                FOLDER* pointer = createFolder(folder, placeholder);
-                addFolder(&folder, pointer);
-                
-                logger("%s: FOLDER: <%s>\n", name, location);
-                folder_count++;
-                line_number++;
-            } else if (type == 1) {
-                ARCHIVE* pointer = getFile(location);
-                addFile(&folder, pointer);
-
-                logger("%s: FILE: <%s>\n", name, location);
-                file_count++;
-                line_number++;
-            }
-
-            returnString(&location, "path");
-            wrefresh(miniwin);
-        }
-
-        nodelay(window, false);
-
-        free(location);
-        logger("%s File Count: %d\n%s Folders Count: %d\n", name, file_count, name, folder_count);
-        return folder;
-        
-    } else if (type == 2) {
-
-        closedir(scanner);
-        unzFile rp = unzOpen(location);
+        unzFile rp = unzOpen(namespace);
         if (rp == NULL) {
-            logger("%s: Could not open zip folder, %s\n", name, strerror(errno));
+            logger("Error! Could not open zip folder, %s\n", folder->name, strerror(errno));
 
             wrefresh(miniwin);
             unzClose(rp);
             return NULL;
         }
 
-        result = unzGoToFirstFile(rp);
-        if (result != UNZ_OK) {
-            logger("%s: Could not go to first file, %s\n", name, strerror(errno));
+        if (unzGoToFirstFile(rp) != UNZ_OK) {
+            logger("Error! Could not go to first file, %s\n", folder->name, strerror(errno));
 
             wrefresh(miniwin);
             unzClose(rp);
             return NULL;
-        } //546
+        }
 
         unz_file_info zip_entry;
-        while (result == UNZ_OK) {
-            input = wgetch(window);
+		while (result) {
+			input = wgetch(window);
+			wclear(miniwin);
 
-            wclear(miniwin);
-            if (line_number < (getmaxy(miniwin) - 2)) {
-                mvwprintLines(miniwin, report, 1, 1, (report_end - line_number), report_end);
-            } else {
-                mvwprintLines(miniwin, report, 1, 1, (report_end - (getmaxy(miniwin) - 2)), report_end);
-            }
+			if (input == KEY_RESIZE) {
+				refreshWindows();
+			}
 
-            box(miniwin, 0, 0);
-            wrefresh(miniwin);
+			input = (report_end - pin) > (size_t)(getmaxy(miniwin) - 2) ? (int)(report_end - (getmaxy(miniwin) - 2)) : pin;
+			mvwprintLines(miniwin, report, 1, 1, input, report_end);
 
-            if (input == KEY_RESIZE) {
-                refreshWindows();
-            }
+			box(miniwin, 0, 0);
+			wrefresh(miniwin);
 
-            input = 0;
-            result = unzGetCurrentFileInfo(rp, &zip_entry, placeholder, sizeof(placeholder), NULL, 0, NULL, 0);
+			input = unzGetCurrentFileInfo(rp, &zip_entry, namespace, sizeof(namespace), NULL, 0, NULL, 0);
 
-            if (result != UNZ_OK) {
-                logger("%s: Error getting file info, %s\n", name, strerror(errno));
-                
-                wrefresh(miniwin);
+            if (input != UNZ_OK) {
+                logger("Error! Could not get file info, %s\n", name, strerror(errno));
+				freeFolder(folder);
                 return NULL;
             }
 
-            char* temp = strdup(placeholder);
-            returnString(&temp, "path");
-            returnString(&temp, "name");
-            while (strcmp(folder->name, temp) != 0 && dirNumber > 0) {
-                folder = folder->parent;
-                dirNumber--;
+			sprintf(placeholder, namespace);
+			if (placeholder[strlen(placeholder) - 1] == '/') {
+				placeholder[strlen(placeholder) - 1] = '\0';
+				input = 0;
+			} else {
+				input = 1;
+			}
+			if ((pointer = strrchr(placeholder, '/')) != NULL) {
+				pointer[0] = '\0';
+			}
+			if ((pointer = strrchr(placeholder, '/')) == NULL) {
+				pointer = &placeholder[0];
+			} else {
+				pointer++;
+			}
 
-                logger("%s: Return to <%s>\n", name, folder->name);
-                
-                line_number++;
-                wrefresh(miniwin);
-            }
-            
-            type = fileType(placeholder);
-            if (type == 0) {
-                FOLDER* pointer = createFolder(folder, placeholder);
-                returnString(&pointer->name, "name");
-                addFolder(&folder, pointer);
-                folder = &folder->subdir[folder->subcount-1];
-                dirNumber++;
+			while (strcmp(navigator->name, pointer) != 0 && dirNumber > 0) {
+				navigator = (navigator->parent != NULL) ? navigator->parent : navigator;
 
-                logger("%s: FOLDER: <%s>\n", name, placeholder);
-                folder_count++;
-                line_number++;
-            } else if (type == 1) {
-                ARCHIVE* pointer = getUnzip(rp, placeholder);
-                addFile(&folder, pointer);
+				logger("FOLDER: Return to <%s>\n", navigator->name);
+				dirNumber--;
+			}
 
-                logger("%s: FILE: <%s>\n", name, placeholder);
-                file_count++;
-                line_number++;
-            }
+			if (input == 0) { // Folder
+				sprintf(placeholder, namespace);
+				if ((pointer = strrchr(placeholder, '/')) != NULL) {
+					pointer[0] = '\0';
+				}
+				if ((pointer = strrchr(placeholder, '/')) == NULL) {
+					pointer = &placeholder[0];
+				} else {
+					pointer++;
+				}
 
-            free(temp);
-            result = unzGoToNextFile(rp);
-        }
+				FOLDER* mirror = createFolder(NULL, pointer);
+				addFolder(&navigator, mirror);
+				navigator = &navigator->subdir[navigator->subcount - 1];
 
-        nodelay(window, false);
+				dirNumber++;
 
+				logger("FOLDER: <%s>\n", namespace);
+				mirror = NULL;
+			} else if (input == 1) { // File
+				ARCHIVE* mirror = getUnzip(rp, namespace);
+                addFile(&navigator, mirror);
 
-        free(location);
-        logger("%s File Count: %d\n%s Folders Count: %d\n", name, file_count, name, folder_count);
-        return folder;
-    } else if (type == 1) {
-        while(entry != NULL) {
-            strcpy(placeholder, entry->d_name);
-            returnString(&location, "path");
-            returnString(&location, placeholder);
-            ARCHIVE* file = getFile(location);
-            addFile(&folder, file);
-            entry = readdir(scanner);
-        }
+				logger("FOLDER: <%s>\n", namespace);
+				mirror = NULL;
+			}
 
-        free(location);
-        return folder;
-    }
-    return NULL;
+			input = unzGoToNextFile(rp);
+			result = (input == UNZ_OK) ? true : false;
+		}
+	} else {
+		free(folder);
+		folder = NULL;	
+	}
+
+	nodelay(window, false);
+	return folder;
 }
 
 FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
@@ -3019,14 +3020,14 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 
 					addFile(&cursor, mirror);
-					mirror = NULL;
 
 					if (strcmp(arguments->item[0], "move") == 0) {
 						logger("Moving <%s> to %s\n", file.container->content[file.index].name, cursor->name);
 						delFile(&navigator, file.index);
 					} else {
-						logger("Copying <%s> to %s\n", name, cursor->name);
+						logger("Copying <%s> to %s\n", mirror->name, cursor->name);
 					}
+					mirror = NULL;
 				}
 			} else if (strcmp(arguments->item[0], "remove") == 0) {
 				if (file.index == -1) {

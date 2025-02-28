@@ -1,42 +1,46 @@
+> "equipment/"
+	copy "assets/minecraft/";
+> "blockstates/"
+	copy "assets/minecraft/";
 > "armors/iron_layer_1.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid/iron.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/iron_layer1.png";
 > "armors/iron_layer_2.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/iron.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/iron_layer2.png";
 > "armors/diamond_layer_1.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid/diamond.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/diamond_layer1.png";
 > "armors/diamond_layer_2.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/diamond.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/diamond_layer2.png";
 > "armors/gold_layer_1.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid/gold.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/gold_layer1.png";
 > "armors/gold_layer_2.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/gold.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/gold_layer2.png";
 > "armors/netherite_layer_1.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid/netherite.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/netherite_layer1.png";
 > "armors/netherite_layer_2.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/netherite.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/netherite_layer2.png";
 > "armors/chainmail_layer_1.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid/chainmail.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/chainmail_layer1.png";
 > "armors/chainmail_layer_2.png"
-	edit dimentions 64x32;
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/chainmail.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/chainmail_layer2.png";
 > "armors/helmet.json"
 	copy "minecraft:models/item/iron_helmet.json";
@@ -186,10 +190,10 @@
 		"particle": "item/diamond_axe"
 	};
 	copy "minecraft:models/item/";
-> "tools/gold_axe.json"
+> "tools/golden_axe.json"
 	edit texture_path set {
-		"0": "item/gold_axe",
-		"particle": "item/gold_axe"
+		"0": "item/golden_axe",
+		"particle": "item/golden_axe"
 	};
 	copy "minecraft:models/item/";
 > "tools/netherite_axe.json"
@@ -222,10 +226,10 @@
 		"particle": "item/diamond_pickaxe"
 	};
 	copy "minecraft:models/item/";
-> "tools/gold_pickaxe.json"
+> "tools/golden_pickaxe.json"
 	edit texture_path set {
-		"0": "item/gold_pickaxe",
-		"particle": "item/gold_pickaxe"
+		"0": "item/golden_pickaxe",
+		"particle": "item/golden_pickaxe"
 	};
 	copy "minecraft:models/item/";
 > "tools/netherite_pickaxe.json"
@@ -252,10 +256,10 @@
 		"particle": "item/iron_hoe"
 	};
 	copy "minecraft:models/item/";
-> "tools/gold_hoe.json"
+> "tools/golden_hoe.json"
 	edit texture_path set {
-		"0": "item/gold_hoe",
-		"particle": "item/gold_hoe"
+		"0": "item/golden_hoe",
+		"particle": "item/golden_hoe"
 	};
 	copy "minecraft:models/item/";
 > "tools/diamond_hoe.json"
@@ -280,7 +284,7 @@
 	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	paint "./materials/iron_map.png" "./materials/iron_material.png";
 	copy "minecraft:textures/item/";
-> "tools/gold_axe.png"
+> "tools/golden_axe.png"
 	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	paint "./materials/gold_map.png" "./materials/gold_material.png";
 	copy "minecraft:textures/item/";
@@ -302,7 +306,7 @@
 	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	paint "./materials/iron_map.png" "./materials/iron_material.png";
 	copy "minecraft:textures/item/";
-> "tools/gold_pickaxe.png"
+> "tools/golden_pickaxe.png"
 	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	paint "./materials/gold_map.png" "./materials/gold_material.png";
 	copy "minecraft:textures/item/";
@@ -324,7 +328,7 @@
 	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	paint "./materials/iron_map.png" "./materials/iron_material.png";
 	copy "minecraft:textures/item/";
-> "tools/gold_shovel.png"
+> "tools/golden_shovel.png"
 	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	paint "./materials/gold_map.png" "./materials/gold_material.png";
 	copy "minecraft:textures/item/";
@@ -340,18 +344,18 @@
 	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	copy "minecraft:textures/item/";
 > "tools/stone_hoe.png"
-	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/wood2_map.png" "./materials/wood_material.png";
 	copy "minecraft:textures/item/";
 > "tools/iron_hoe.png"
-	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/wood2_map.png" "./materials/wood_material.png";
 	paint "./materials/iron_map.png" "./materials/iron_material.png";
 	copy "minecraft:textures/item/";
-> "tools/gold_hoe.png"
-	paint "./materials/wood_map.png" "./materials/wood_material.png";
+> "tools/golden_hoe.png"
+	paint "./materials/wood2_map.png" "./materials/wood_material.png";
 	paint "./materials/gold_map.png" "./materials/gold_material.png";
 	copy "minecraft:textures/item/";
 > "tools/diamond_hoe.png"
-	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	paint "./materials/wood2_map.png" "./materials/wood_material.png";
 	paint "./materials/diamond_map.png" "./materials/diamond_material.png";
 	copy "minecraft:textures/item/";
 > "tools/netherite_hoe.png"
@@ -469,8 +473,175 @@
 > "util/honey_bottle.png"
 	copy "minecraft:textures/item/";
 > "util/potion.png.mcmeta"
-	copy "minecraft:textures/item";
+	copy "minecraft:textures/item/";
 	copy "minecraft:textures/item/lingering_potion.png.mcmeta";
+	copy "minecraft:textures/item/torch.png.mcmeta";
+> "util/music_disc.json"
+	copy "minecraft:models/item/music_disc_5.json"
+	copy "minecraft:models/item/music_disc_13.json"
+	copy "minecraft:models/item/music_disc_blocks.json"
+	copy "minecraft:models/item/music_disc_cat.json"
+	copy "minecraft:models/item/music_disc_chirp.json"
+	copy "minecraft:models/item/music_disc_creator.json"
+	copy "minecraft:models/item/music_disc_creator_music_box.json"
+	copy "minecraft:models/item/music_disc_far.json"
+	copy "minecraft:models/item/music_disc_mall.json"
+	copy "minecraft:models/item/music_disc_mellohi.json"
+	copy "minecraft:models/item/music_disc_otherside.json"
+	copy "minecraft:models/item/music_disc_pigstep.json"
+	copy "minecraft:models/item/music_disc_precipice.json"
+	copy "minecraft:models/item/music_disc_relic.json"
+	copy "minecraft:models/item/music_disc_stal.json"
+	copy "minecraft:models/item/music_disc_strad.json"
+	copy "minecraft:models/item/music_disc_wait.json"
+	copy "minecraft:models/item/music_disc_ward.json"
+> "minecraft:models/item/music_disc_5.json"
+	edit texture_path set {
+		"0":"item/music_disc_5",
+		"particle":"item/music_disc_5"
+	};
+> "minecraft:models/item/music_disc_13.json"
+	edit texture_path set {
+		"0":"item/music_disc_13",
+		"particle":"item/music_disc_13"
+	};
+> "minecraft:models/item/music_disc_blocks.json"
+	edit texture_path set {
+		"0":"item/music_disc_blocks",
+		"particle":"item/music_disc_blocks"
+	};
+> "minecraft:models/item/music_disc_cat.json"
+	edit texture_path set {
+		"0":"item/music_disc_cat",
+		"particle":"item/music_disc_cat"
+	};
+> "minecraft:models/item/music_disc_chirp.json"
+	edit texture_path set {
+		"0":"item/music_disc_chirp",
+		"particle":"item/music_disc_chirp"
+	};
+> "minecraft:models/item/music_disc_creator.json"
+	edit texture_path set {
+		"0":"item/music_disc_creator",
+		"particle":"item/music_disc_creator"
+	};
+> "minecraft:models/item/music_disc_creator_music_box.json"
+	edit texture_path set {
+		"0":"item/music_disc_creator_music_box",
+		"particle":"item/music_disc_creator_music_box"
+	};
+> "minecraft:models/item/music_disc_far.json"
+	edit texture_path set {
+		"0":"item/music_disc_far",
+		"particle":"item/music_disc_far"
+	};
+> "minecraft:models/item/music_disc_mall.json"
+	edit texture_path set {
+		"0":"item/music_disc_mall",
+		"particle":"item/music_disc_mall"
+	};
+> "minecraft:models/item/music_disc_mellohi.json"
+	edit texture_path set {
+		"0":"item/music_disc_mellohi",
+		"particle":"item/music_disc_mellohi"
+	};
+> "minecraft:models/item/music_disc_otherside.json"
+	edit texture_path set {
+		"0":"item/music_disc_otherside",
+		"particle":"item/music_disc_otherside"
+	};
+> "minecraft:models/item/music_disc_pigstep.json"
+	edit texture_path set {
+		"0":"item/music_disc_pigstep",
+		"particle":"item/music_disc_pigstep"
+	};
+> "minecraft:models/item/music_disc_precipice.json"
+	edit texture_path set {
+		"0":"item/music_disc_precipice",
+		"particle":"item/music_disc_precipice"
+	};
+> "minecraft:models/item/music_disc_relic.json"
+	edit texture_path set {
+		"0":"item/music_disc_relic",
+		"particle":"item/music_disc_relic"
+	};
+> "minecraft:models/item/music_disc_stal.json"
+	edit texture_path set {
+		"0":"item/music_disc_stal",
+		"particle":"item/music_disc_stal"
+	};
+> "minecraft:models/item/music_disc_strad.json"
+	edit texture_path set {
+		"0":"item/music_disc_strad",
+		"particle":"item/music_disc_strad"
+	};
+> "minecraft:models/item/music_disc_wait.json"
+	edit texture_path set {
+		"0":"item/music_disc_wait",
+		"particle":"item/music_disc_wait"
+	};
+> "minecraft:models/item/music_disc_ward.json"
+	edit texture_path set {
+		"0":"item/music_disc_ward",
+		"particle":"item/music_disc_ward"
+	};
+> "util/music_disc.png"
+	copy "minecraft:models/item/music_disc_5.png"
+	copy "minecraft:models/item/music_disc_13.png"
+	copy "minecraft:models/item/music_disc_blocks.png"
+	copy "minecraft:models/item/music_disc_cat.png"
+	copy "minecraft:models/item/music_disc_chirp.png"
+	copy "minecraft:models/item/music_disc_creator.png"
+	copy "minecraft:models/item/music_disc_creator_music_box.png"
+	copy "minecraft:models/item/music_disc_far.png"
+	copy "minecraft:models/item/music_disc_mall.png"
+	copy "minecraft:models/item/music_disc_mellohi.png"
+	copy "minecraft:models/item/music_disc_otherside.png"
+	copy "minecraft:models/item/music_disc_pigstep.png"
+	copy "minecraft:models/item/music_disc_precipice.png"
+	copy "minecraft:models/item/music_disc_relic.png"
+	copy "minecraft:models/item/music_disc_stal.png"
+	copy "minecraft:models/item/music_disc_strad.png"
+	copy "minecraft:models/item/music_disc_wait.png"
+	copy "minecraft:models/item/music_disc_ward.png"
+> "minecraft:textures/item/music_disc_5.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_5_pallet.png"
+> "minecraft:textures/item/music_disc_13.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_13_pallet.png"
+> "minecraft:textures/item/music_disc_blocks.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_blocks_pallet.png"
+> "minecraft:textures/item/music_disc_cat.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_cat_pallet.png"
+> "minecraft:textures/item/music_disc_chirp.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_chirp_pallet.png"
+> "minecraft:textures/item/music_disc_creator.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_creator_pallet.png"
+> "minecraft:textures/item/music_disc_creator_music_box.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_creator_music_box_pallet.png"
+> "minecraft:textures/item/music_disc_far.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_far_pallet.png"
+> "minecraft:textures/item/music_disc_mall.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_mall_pallet.png"
+> "minecraft:textures/item/music_disc_mellohi.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_mellohi_pallet.png"
+> "minecraft:textures/item/music_disc_otherside.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_otherside_pallet.png"
+> "minecraft:textures/item/music_disc_pigstep.png"
+	paint "./materials/iron2_map.png" "./materials/crimsom_material.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_pigstep_pallet.png"
+> "minecraft:textures/item/music_disc_precipice.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_precipice_pallet.png"
+> "minecraft:textures/item/music_disc_relic.png"
+	paint "./materials/iron2_map.png" "./materials/clay2_material.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_relic_pallet.png"
+> "minecraft:textures/item/music_disc_stal.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_stal_pallet.png"
+> "minecraft:textures/item/music_disc_strad.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_strad_pallet.png"
+> "minecraft:textures/item/music_disc_wait.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_wait_pallet.png"
+> "minecraft:textures/item/music_disc_ward.png"
+	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_ward_pallet.png"
 > "foods/apple.json"
 	edit texture_path set {
 		"0": "item/apple",
@@ -545,3 +716,45 @@
 	copy "minecraft:textures/item/baked_potato.png";
 > "foods/poisonous_potato_root.png"
 	copy "minecraft:textures/item/";
+> "blocks/torch.json"
+	edit texture_path set {
+		"0": "block/torch",
+		"particle": "block/torch"
+	};
+	copy "minecraft:models/block/";
+> "blocks/wall_torch.json"
+	edit texture_path set {
+		"0": "block/torch",
+		"particle": "block/torch"
+	};
+	copy "minecraft:models/block/";
+> "blocks/redstone_torch.json"
+	edit texture_path set {
+		"0": "block/torch",
+		"particle": "block/torch"
+	};
+	copy "minecraft:models/block/";
+> "blocks/redstone_torch_off.json"
+	edit texture_path set {
+		"0": "block/torch",
+		"particle": "block/torch"
+	};
+	copy "minecraft:models/block/";
+> "blocks/redstone_wall_torch.json"
+	edit texture_path set {
+		"0": "block/torch",
+		"particle": "block/torch"
+	};
+	copy "minecraft:models/block/";
+> "blocks/redstone_wall_torch_off.json"
+	edit texture_path set {
+		"0": "block/torch",
+		"particle": "block/torch"
+	};
+	copy "minecraft:models/block/";
+> "blocks/redstone_torch_off.png"
+	copy "minecraft:textures/block/";
+> "blocks/redstone_torch_on.png"
+	copy "minecraft:textures/block/";
+> "blocks/torch.png"
+	copy "minecraft:textures/block/";
