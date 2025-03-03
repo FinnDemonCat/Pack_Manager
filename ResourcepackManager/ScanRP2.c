@@ -455,42 +455,35 @@ char* strchrs (const char* str, int count, ...) {
 }
 
 OBJECT* processJSON (char* json) {
-	char *pointer, *checkpoint, buffer[1024];
-	OBJECT *file, *value, *temp;
+	char *pointer, *checkpoint, buffer[1024], type[2];
+	OBJECT *file, *value;
 	size_t length;
-	file = createOBJ("placeholder");
+	file = createOBJ("obj");
 
-	for (size_t x = 0; x < strlen(json); x++) {
+	type[0] = type[1] = ' ';
+	for (size_t x = 1; x < strlen(json); x++) {
+		pointer = strnotchr((json + x), 3, ' ', '\n', '\t');
+		if (pointer == NULL) {
+			break;
+		}
+		x += (pointer - (json + x));
+
 		switch (json[x])
 		{
 		case '{':
-			for (size_t a = 1, b = 1; a < strlen(json); a++) {
-				if (json[a] == '{') {
-					b++;
-				} else if (json[a] == '}') {
-					b--;
-				}
-				if (b == 0) {
-					pointer = &json[b + 1];
-					break;
-				}
-			}
-			value = createOBJ("obj");
-
-			length = (pointer - (json + x));
-			snprintf(buffer, 1024 - length, "%.*s", (int)length, (json + x));
-
-			temp = processJSON(buffer);
-			addOBJ(file, &temp);
-			x += length + 2;
-			temp = NULL;
-
-			break;
+			type[0] = '{';
+			type[1] = '}';
+			/*fallthrough*/
 		case '[':
-			for (size_t a = 1, b = 1; a < strlen(json); a++) {
-				if (json[a] == '[') {
+			if (type[0] != ' ') {
+				type[0] = '[';
+				type[1] = ']';
+			}	
+
+			for (size_t a = x + 1, b = 1; a < strlen(json); a++) {
+				if (json[a] == type[0]) {
 					b++;
-				} else if (json[a] == ']') {
+				} else if (json[a] == type[1]) {
 					b--;
 				}
 				if (b == 0) {
@@ -498,19 +491,18 @@ OBJECT* processJSON (char* json) {
 					break;
 				}
 			}
-			value = createOBJ("array");
+			if (type[0] == '{') {
+				value = createOBJ("obj");
+			} else {
+				value = createOBJ("array");
+			}
 
-			length = (pointer - (json + x));
-			snprintf(buffer, 1024 - length, "%.*s", (int)length, (json + x));
-
-			temp = processJSON(buffer);
-			addOBJ(file, &temp);
-			x += length + 2;
-			temp = NULL;
+			addOBJ(file, &value);
 			
+			type[0] = type[1] = ' ';
 			break;
 		case '\t':
-			value->indent = true;
+			file->indent = true;
 			break;
 		case '\"':
 			pointer = strchr(&json[x + 1], '\"');
@@ -518,26 +510,71 @@ OBJECT* processJSON (char* json) {
 			snprintf(buffer, 1024 - length, "%.*s", (int)length, (json + x));
 			value = createOBJ(buffer);
 			addOBJ(file, &value);
+			x += length - 1;
 
 			break;
 		case ':':
 			pointer = strnotchr(&json[x], 4, ':', ' ', '\n', '\t');
-			checkpoint = strchrs(pointer, 6, '\"', '}', ']', ' ', ',', '\n');
-			length = (checkpoint - pointer) + 1;
-			snprintf(buffer, 1024 - length, "%.*s", (int)length, pointer);
-			value = createOBJ(buffer);
-			addOBJ(file, &value);
-			
+			x += (int)(pointer - (json + x));
+			if (pointer[0] == '{' || pointer[0] == '[') {
+				char type[2];
+				type[0] = pointer[0];
+				type[1] = (pointer[0] == '{') ? '}' : ']';
+
+				for (size_t a = x + 1, b = 1; a < strlen(json); a++) {
+					if (json[a] == type[0]) {
+						b++;
+					} else if (json[a] == type[1]) {
+						b--;
+					}
+					if (b == 0) {
+						pointer = &json[a + 1];
+						break;
+					}
+				}
+				x++;
+
+				length = (pointer - (json + x)) - 1;
+				snprintf(buffer, 1024 - length, " %.*s", (int)length, (json + x));
+				value = processJSON(buffer);
+
+				x += length + 1;
+			} else if (pointer[0] == '\"') {
+				checkpoint = strchr(pointer + 1, '\"');
+				length = (checkpoint - pointer) + 1;
+				snprintf(buffer, 1024 - length, "%.*s", (int)length, pointer);
+				value = createOBJ(buffer);
+
+				x = (checkpoint - json) + 1;
+			} else {
+				checkpoint = strchrs(pointer + 1, 6, '\"', '}', ']', ' ', ',', '\n');
+				length = (checkpoint - pointer) + 1;
+				snprintf(buffer, 1024 - length, "%.*s", (int)length, pointer);
+				value = createOBJ(buffer);
+
+				x = (checkpoint - json) + 1;
+			}
+			addOBJ(file->value[file->count - 1], &value);
+
 			break;
 		default:
+			pointer = strchrs((json + x), 5, ' ', ',', '\n', '}', ']');
+			if (pointer == NULL) {
+				length = strlen(json + x) + 1;
+			} else {
+				length = (pointer - (json + x)) + 1;
+			}
+
+			snprintf(buffer, length, "%s", (json + x));
+			value = createOBJ(buffer);
+			addOBJ(file, &value);
+			value = NULL;
+			x += strlen(buffer);
 			break;
 		}
 	}
 
-	value = file->value[0];
-	file->value[0] = NULL;
-	freeOBJ(&file);
-	return value;
+	return file;
 }
 
 void indentJSON (char** file) {
@@ -2968,13 +3005,14 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						file.container->content[file.index].name = strdup(name);
 					}
 				} else if (strcmp(arguments->item[1], "display") == 0 || strcmp(arguments->item[1], "texture_path") == 0) {
-					/* 
 					OBJECT *value, *placeholder, *query;
 					sprintf(name, "%s", (strcmp(arguments->item[1], "display") == 0) ? "\"display\"" : "\"textures\"");
 
 					logger("FILE <%s> %s updated \n", file.container->content[file.index].name, name);
 
-					placeholder = processOBJ(file.container->content[file.index].tab);
+					placeholder = processJSON(file.container->content[file.index].tab);
+					char* debug = printJSON(placeholder);
+					/* 
 					for (size_t x = 0; x < placeholder->count; x++) {
 						if (strcmp(placeholder->value[x].declaration, name) == 0) {
 							query = placeholder->value[x].value;
