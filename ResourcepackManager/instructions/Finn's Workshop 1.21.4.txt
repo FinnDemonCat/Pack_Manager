@@ -370,7 +370,7 @@
 	copy "minecraft:models/item/";
 > "tools/shears.png"
 	paint "./materials/iron_map.png" "./materials/iron_material.png";
-	paint "./materials/wood_map.png" "./materials/wood_material.png;
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	copy "minecraft:textures/item/";
 > "tools/crossbow.json"
 	edit texture_path set {

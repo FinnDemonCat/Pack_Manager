@@ -54,7 +54,7 @@ typedef struct RESOLUTION {
 
 typedef struct OBJECT {
     char* declaration;
-    struct OBJECT* value;
+    struct OBJECT** value;
     struct OBJECT* parent;
     size_t count;
     size_t capacity;
@@ -289,136 +289,6 @@ void pngWarningLogger(png_structp png_ptr, png_const_charp message) {
     logger("PNG > Warning! %s\n", message);
 }
 
-
-//Check for the filetype, counting zip file
-int fileType(const char* path) {
-    char* pointer = strrchr(path, '/');
-    if (pointer == NULL) {
-        struct stat fileStat;
-
-        if (stat(path, &fileStat) == 0) {
-            if (S_ISDIR(fileStat.st_mode)) {
-                return 0;
-            } else if (S_ISREG(fileStat.st_mode)) {
-                if (strstr(path, ".zip") != NULL) {
-                    return 2;
-                }
-                return 1;
-            } else {
-                logger("%s isn't a directorr nor file \n", path);
-                return -1;
-            }
-        } else {
-            return 1;
-        }
-    } else if (pointer != NULL){
-        if (path[strlen(path)-1] == '/') {
-            return 0;
-        } else {
-            return 1;
-        }
-    } else {
-        logger("%s\n", strerror(errno));
-        return -1;
-    }
-    return -1;
-}
-
-OBJECT* createOBJ (char* key) {
-    OBJECT* file = (OBJECT*)malloc(sizeof(OBJECT));
-    file->capacity = 1;
-    file->count = 0;
-    file->declaration = strdup(key);
-    file->parent = NULL;
-    file->value = NULL;
-    file->indent = false;
-
-    return file;
-}
-
-void addOBJ (OBJECT** file, OBJECT* value) {
-    if (file[0]->count == 0) {
-        file[0]->value = (OBJECT*)calloc(file[0]->capacity, sizeof(OBJECT));
-        if (file[0] == NULL) {
-            logger("Error allocating memory for new obj, %s\n", strerror(errno));
-        }
-    }
-    if (file[0]->count == file[0]->capacity) {
-        file[0]->capacity *= 2;
-
-        OBJECT* temp = (OBJECT*)realloc(file[0]->value, file[0]->capacity * sizeof(OBJECT));
-        if (temp == NULL) {
-            logger("Error reallocating memory for %s\n", file[0]->declaration);
-            return;
-        } else {
-            file[0]->value = temp;
-        }
-    }
-
-    value->parent = file[0];
-    file[0]->value[file[0]->count] = *value;
-    file[0]->count++;
-}
-
-void delOBJ (OBJECT** file, size_t key) {
-    while (file[0]->value[key].count > 0) {
-		OBJECT* temp = &file[0]->value[key];
-        delOBJ(&temp, 0);
-    }
-
-    free(file[0]->value[key].declaration);
-    
-    file[0]->count--;
-    
-    if (file[0]->value[key].value != NULL) {
-        if (file[0]->value[key].count == 0) {
-            free(file[0]->value[key].value); // It may not be working
-        } else if (file[0]->value[key].count < file[0]->value[key].capacity / 2 && file[0]->value[key].capacity > 1) {
-            file[0]->value[key].capacity /= 2;
-            OBJECT* temp = realloc(file[0]->value[key].value, file[0]->value[key].capacity * sizeof(OBJECT));
-            if (temp != NULL) {
-                file[0]->value[key].value = temp;
-            } else {
-                logger("Failed to shrink memory when deleting an obj! %s\n", strerror(errno));
-            }
-        }
-    }
-    
-    for (int x = key, y = file[0]->count; x < y; x++) {
-        file[0]->value[x] = file[0]->value[x + 1];
-    }
-}
-
-OBJECT* dupOBJ (OBJECT* target) {
-    OBJECT* mirror = createOBJ(target->declaration);
-	mirror->indent = target->indent;
-    OBJECT* temp;
-    for (int x = 0; x < (int) target->count; x++) {
-        temp = dupOBJ(&target->value[x]);
-        addOBJ(&mirror, temp);
-        temp = NULL;
-    }
-
-    return mirror;
-}
-
-void freeOBJ (OBJECT* file) { // Fix to make this a double pointer
-    if (file == NULL) {
-        return;
-    }
-
-    while (file[0].count > 0) {
-        freeOBJ(&file[0].value[file[0].count - 1]);
-        file[0].count--;
-    }
-
-    if (file[0].declaration != NULL) {
-        free(file[0].declaration);
-    }
-
-	// free(file);
-}
-
 char* strnotchr(const char* str, int count, ...) {
     char* chars = (char*)calloc(count, sizeof(char));
     va_list list;
@@ -458,6 +328,97 @@ char* strnotchr(const char* str, int count, ...) {
     }
 }
 
+OBJECT* createOBJ (char* key) {
+    OBJECT* file = (OBJECT*)malloc(sizeof(OBJECT));
+    file->capacity = 1;
+    file->count = 0;
+    file->declaration = strdup(key);
+    file->parent = NULL;
+    file->value = NULL;
+    file->indent = false;
+
+    return file;
+}
+
+void freeOBJ (OBJECT **file) {
+	if (*file == NULL) {
+		return;
+	}
+
+	OBJECT *pointer = *file;
+	if (pointer->declaration != NULL) {
+		free(pointer->declaration);
+		pointer->declaration = NULL;
+	}
+
+	while (pointer->count > 0) {
+		OBJECT *temp = pointer->value[pointer->count];
+		freeOBJ(&temp);
+		pointer->count--;
+	}
+
+	if (pointer->value != NULL) {
+		free(pointer->value);
+		pointer->value = NULL;
+	}
+}
+
+void addOBJ (OBJECT* file, OBJECT** value) {
+	if (file->count == 0) {
+		OBJECT **temp = (OBJECT**)calloc(file->capacity, sizeof(OBJECT*));
+		
+		if (temp == NULL) {
+			logger("addOBJ: Error! Failed to alloc memory for struct, <%s>!\n", strerror(errno));
+			return;
+		}
+		file->value = temp;
+	}
+	if (file->count == file->capacity) {
+		file->capacity += 8;
+		OBJECT **temp = (OBJECT**)realloc(file->value, file->capacity * sizeof(OBJECT*));
+
+		if (temp == NULL) {
+			logger("addOBJ: Error! Failed to alloc memory for struct, <%s>!\n", strerror(errno));
+			return;
+		}
+		file->value = temp;
+	}
+	file->value[file->count] = *value;
+	file->count++;
+}
+
+void delOBJ (OBJECT* file, size_t key) {
+	freeOBJ(&file->value[key]);
+
+	for (size_t x = key; x < (file->count - 1); x++) {
+		file->value[x] = file->value[x + 1];
+	}
+
+	if (file->count <= file->capacity / 2) {
+		file->capacity /= 2;
+
+		OBJECT** temp = (OBJECT**)realloc(file->value, file->capacity * sizeof(OBJECT*));
+		if (temp == NULL) {
+			logger("addOBJ: Error! Failed to trim memory for struct, <%s>!\n", strerror(errno));
+			return;
+		}
+		file->value = temp;
+	}
+}
+
+OBJECT* dupOBJ (OBJECT* target) {
+    OBJECT* mirror = createOBJ(target->declaration);
+	mirror->indent = target->indent;
+
+	for (size_t x = 0; x < target->count; x++) {
+		OBJECT* pointer = target->value[x];
+		addOBJ(mirror, &pointer);
+		pointer = NULL;
+	}
+
+	return mirror;
+}
+
 char* strchrs (const char* str, int count, ...) {
 	if (str == NULL) {
 		return NULL;
@@ -493,150 +454,90 @@ char* strchrs (const char* str, int count, ...) {
     }
 }
 
-void getNextStr (char** str, char* dest) {
-	char *pointer = *str, *checkpoint;
-	checkpoint = strchrs(pointer, 4, ' ', '\n', '\t', ';');
+OBJECT* processJSON (char* json) {
+	char *pointer, *checkpoint, buffer[1024];
+	OBJECT *file, *value, *temp;
+	size_t length;
+	file = createOBJ("placeholder");
 
-	if (checkpoint != NULL) {
-		snprintf(dest, (size_t)(checkpoint - pointer) + 1, "%s", pointer);
-		checkpoint = strnotchr(checkpoint, 4, ' ', '\n', '\t', ';');
-		*str = checkpoint;
-	} else {
-		sscanf(pointer, "%s", dest);
-		*str += strlen(pointer);
-		return;
-	}
-}
+	for (size_t x = 0; x < strlen(json); x++) {
+		switch (json[x])
+		{
+		case '{':
+			for (size_t a = 1, b = 1; a < strlen(json); a++) {
+				if (json[a] == '{') {
+					b++;
+				} else if (json[a] == '}') {
+					b--;
+				}
+				if (b == 0) {
+					pointer = &json[b + 1];
+					break;
+				}
+			}
+			value = createOBJ("obj");
 
-OBJECT* processOBJ (char* obj) {
-    char *pointer, *checkpoint, buffer[512];
-    OBJECT *compass, *entry;
-    size_t length;
-    bool array = false;
+			length = (pointer - (json + x));
+			snprintf(buffer, 1024 - length, "%.*s", (int)length, (json + x));
 
-    //An obj contains key-value. The value *can* be another object
-    //An array can contain objects
+			temp = processJSON(buffer);
+			addOBJ(file, &temp);
+			x += length + 2;
+			temp = NULL;
 
-    //continue debugging. The value scan jump fixed, now it's leaving to parent key after finished current object
-    compass = createOBJ("obj");
-    for (int x = 1; x < (int)strlen(obj); x++) {
-        switch (obj[x])
-        {
-        case '{':
-            entry = createOBJ("obj");
-            addOBJ(&compass, entry);
-            entry = NULL;
-            compass = &compass->value[compass->count - 1];
-            break;
-        case '}':
-            break;
-        case '\"':
-            pointer = strchr(obj + x + 1, '\"');
-            pointer++;
+			break;
+		case '[':
+			for (size_t a = 1, b = 1; a < strlen(json); a++) {
+				if (json[a] == '[') {
+					b++;
+				} else if (json[a] == ']') {
+					b--;
+				}
+				if (b == 0) {
+					pointer = &json[b + 1];
+					break;
+				}
+			}
+			value = createOBJ("array");
 
-            length = (pointer - (obj + x));
-            sprintf(buffer, "%.*s", (int)length, obj + x);
-            entry = createOBJ(buffer);
-            addOBJ(&compass, entry);
-            entry = NULL;
+			length = (pointer - (json + x));
+			snprintf(buffer, 1024 - length, "%.*s", (int)length, (json + x));
 
-            x += length - 1;
-            break;
-        case '\t':
-            compass->indent = true;
-            break;
-        case ':':
-            compass = &compass->value[compass->count - 1];
-            x += 2;
-            array = false;
+			temp = processJSON(buffer);
+			addOBJ(file, &temp);
+			x += length + 2;
+			temp = NULL;
+			
+			break;
+		case '\t':
+			value->indent = true;
+			break;
+		case '\"':
+			pointer = strchr(&json[x + 1], '\"');
+			length = (pointer - (json + x)) + 1;
+			snprintf(buffer, 1024 - length, "%.*s", (int)length, (json + x));
+			value = createOBJ(buffer);
+			addOBJ(file, &value);
 
-            while (true) {
-                pointer = strnotchr((obj + x), 3, ' ', ',', '\n');
-
-                switch (*pointer)
-                {
-                case '[':
-                    entry = createOBJ("array");
-                    addOBJ(&compass, entry);
-                    entry = NULL;
-                    compass = &compass->value[compass->count - 1];
-
-                    x++;
-                    array = true;
-
-                    break;
-                case '{':
-                    for (int alpha = 1, beta = 1; alpha < (int)strlen(obj); alpha++) {
-                        if (pointer[alpha] == '{') {
-                            beta++;
-                        } else if (pointer[alpha] == '}') {
-                            beta--;
-                        }
-                        if (beta == 0) {
-                            checkpoint = &pointer[alpha + 1];
-                            x = (checkpoint - obj);
-                            break;
-                        }
-                    }
-
-                    length = (checkpoint - pointer);
-                    checkpoint = NULL;
-                    checkpoint = (char*)calloc(length + 1, sizeof(char));
-                    sprintf(checkpoint, "%.*s", (int)length, pointer);
-
-                    entry = processOBJ(checkpoint);
-                    addOBJ(&compass, entry);
-                    entry = NULL;
-                    free(checkpoint);
-                    checkpoint = NULL;
-
-                    break;
-                case ']':
-                    compass = compass->parent;
-                    /* fallthrough */
-                case '}':
-                    x = (pointer - obj);
-                    array = false;
-
-                    break;
-                case '\t':
-                    compass->indent = true;
-                    pointer = strnotchr((obj + x), 4, ',', '\t', ' ', '\n');
-                    x = (pointer - obj);
-                    break;
-                default:
-                    x = (pointer - obj);
-
-                    if (*pointer == '\"') {
-                        pointer = strchr(obj + x + 1, '\"');
-                        pointer++;
-                    } else {
-                        pointer = strchrs(pointer, 6, ' ', ',', '\n', '\t', ']', '}');
-                    }
-
-                    length = (pointer - (obj + x));
-                    sprintf(buffer, "%.*s", (int)length, obj + x);
-
-                    entry = createOBJ(buffer);
-                    addOBJ(&compass, entry);
-                    entry = NULL;
-
-                    x += length;
-                    break;
-                }
-                
-                if (!array) {
-                    compass = compass->parent;
-                    break;
-                }
-            }
-            break;
+			break;
+		case ':':
+			pointer = strnotchr(&json[x], 4, ':', ' ', '\n', '\t');
+			checkpoint = strchrs(pointer, 6, '\"', '}', ']', ' ', ',', '\n');
+			length = (checkpoint - pointer) + 1;
+			snprintf(buffer, 1024 - length, "%.*s", (int)length, pointer);
+			value = createOBJ(buffer);
+			addOBJ(file, &value);
+			
+			break;
 		default:
-		break;
-        }
-    }
-    
-    return compass;
+			break;
+		}
+	}
+
+	value = file->value[0];
+	file->value[0] = NULL;
+	freeOBJ(&file);
+	return value;
 }
 
 void indentJSON (char** file) {
@@ -667,94 +568,88 @@ void indentJSON (char** file) {
 }
 
 char* printJSON (OBJECT* json) {
-    char *pointer, *checkpoint, *buffer, *placeholder, *temp = NULL;
+	char *file, *placeholder;
     size_t length = 0, size = 1024;
-    OBJECT* navigator;
-    temp = (char*)calloc(size, sizeof(char));
-    *temp = '\0';
-    
-    //Printing current obj in placeholder
-    navigator = json;
-	if (strcmp(navigator->declaration, "obj") == 0 || strcmp(navigator->declaration, "array") == 0) {
-        length = snprintf (NULL, 0,
-            "%c%s%s%s%c",
-            (strcmp(navigator->declaration, "obj") == 0) ? '{' : '[',
-            (navigator->indent == true) ? "\n" : "", 
-            "%s",
-            (navigator->indent == true) ? "\n" : "",
-            (strcmp(navigator->declaration, "obj") == 0) ? '}' : ']'
-        );
+    OBJECT* navigator = json;
+    file = (char*)calloc(size, sizeof(char));
+    *file = '\0';
 
-        placeholder = (char*)calloc(length + 1, sizeof(char));
-        
-        sprintf (
-            placeholder, 
-            "%c%s%s%s%c",
-            (strcmp(navigator->declaration, "obj") == 0) ? '{' : '[',
-            (navigator->indent == true) ? "\n" : "", 
-            "%s",
-            (navigator->indent == true) ? "\n" : "",
-            (strcmp(navigator->declaration, "obj") == 0) ? '}' : ']'
-        );
-    } else {
-        if (navigator->count == 1) {
-            length = snprintf(NULL, 0, "%s: %s", navigator->declaration, "%s");
-            placeholder = (char*)calloc(length + 1, sizeof(char));
-            sprintf(placeholder, "%s: %s", navigator->declaration, "%s");
-        } else {
-            placeholder = strdup(navigator->declaration);
-        }
-    }
+	if (strcmp(navigator->declaration, "obj") == 0 || strcmp(navigator->declaration, "obj") == 0) {
+		snprintf(
+			file + size,
+			1024 - size,
+			"%c%s",
+			(strcmp(navigator->declaration, "obj") == 0) ? '{' : '[',
+			(navigator->indent == true) ? "\n" : ""
+		);
 
-    //Printing current obj values into temp
-    for (int x = 0; x < (int)json->count; x++) {
-        navigator = &json->value[x];
-        pointer = printJSON(navigator);
+		for (size_t x = 0; x < navigator->count; x++) {
+			placeholder = printJSON(navigator->value[x]);
+			indentJSON(&placeholder);
+			length = strlen(placeholder);
 
-        if (navigator->indent == true) {
-            indentJSON(&pointer);
-        }
+			if (strlen(file) + length >= (size - 1)) {
+				size += length + 1024;
+				char* temp = (char*)realloc(file, size * sizeof(char));
 
-        length = snprintf (
-            NULL, 0,
-            "%s%s",
-            pointer,
-            ((size_t)x == json->count - 1) ? "" : (json->indent == true) ? ",\n" : ", "
-        );
+				if (temp == NULL) {
+					logger("Error resizing array while printing json! %s\n", strerror(errno));
+					free(placeholder);
+					continue;
+				} else {
+					file = temp;
+					temp = NULL;
+				}
+			}
 
-        if (strlen(temp) + length >= size - 1) {
-            while (strlen(temp) + length >= size - 1) {
-                size *= 2;
-            }
-            checkpoint = realloc(temp, (size + 1) * sizeof(char));
+			snprintf(
+				file + size,
+				size - length,
+				"%s%s",
+				placeholder,
+				(x == (navigator->count - 1)) ? "" : (navigator->indent == false) ? ",\n" : ", "
+			);
+			free(placeholder);
+		}
+	} else {
+		sprintf(file, "%s", navigator->declaration);
+	
+		if (navigator->count > 0) {
+			if (strcmp(navigator->value[0]->declaration, "obj") == 0 || strcmp(navigator->value[0]->declaration, "obj") == 0) {
+				placeholder = printJSON(navigator->value[0]);
+				indentJSON(&placeholder);
+				length = strlen(placeholder);
+			}
+		
+			if (strlen(file) + length >= (size - 1)) {
+				size += length + 1024;
+				char* temp = (char*)realloc(file, size * sizeof(char));
+		
+				if (temp == NULL) {
+					logger("Error resizing array while printing json! %s\n", strerror(errno));
+					free(placeholder);
+					return NULL;
+				} else {
+					file = temp;
+					temp = NULL;
+				}
+			}
 
-            if (checkpoint == NULL) {
-                logger("Error reallocating memory while printing the json file: %s\n", strerror(errno));
-                free(placeholder);
-                return NULL;
-            } else {
-                temp = checkpoint;
-                checkpoint = NULL;
-            }
-        }
+			sprintf(file + strlen(file), ": %s", placeholder);
+			free(placeholder);
+		}
+	}
 
-        sprintf (
-            temp + strlen(temp),
-            "%s%s",
-            pointer,
-            ((size_t)x == json->count - 1) ? "" : (json->indent == true) ? ",\n" : ", "
-        );
+	char* temp = (char*)realloc(file, (strlen(file) + 1) * sizeof(char));
+	if (temp == NULL) {
+		logger("Error resizing array while printing json! %s\n", strerror(errno));
+		return NULL;
+	} else {
+		file = temp;
+		temp = NULL;
+	}
 
-        free(pointer);
-    }
-    
-    length = snprintf(NULL, 0, placeholder, temp);
-    buffer = (char*)calloc(length + 1, sizeof(char));
-    sprintf(buffer, placeholder, temp);
-    free(temp);
-    free(placeholder);
-
-    return buffer;
+	return file;
 }
 
 void freeFolder(FOLDER* folder) {
@@ -948,7 +843,7 @@ ARCHIVE* getFile(const char* path) {
         }
     }
 
-    placeholder = (char*)realloc(buffer, length*sizeof(char));
+    placeholder = (char*)realloc(buffer, (length + 1) * sizeof(char));
     if (placeholder != NULL) {
         buffer = placeholder;
     } else {
@@ -969,17 +864,19 @@ ARCHIVE* getFile(const char* path) {
 void addFile (FOLDER** folder, ARCHIVE* model) {
     if (folder[0]->count == 0) {
         folder[0]->content = (ARCHIVE*)calloc(folder[0]->file_capacity, sizeof(ARCHIVE));
+
         if (folder[0]->content == NULL) {
             logger("Error allocating memory for new file, %s\n", strerror(errno));
+			return;
         }
     }
     if (folder[0]->count >= (folder[0]->file_capacity - 1)) {
         folder[0]->file_capacity *= 2;
         ARCHIVE* temp = (ARCHIVE*)realloc(folder[0]->content, folder[0]->file_capacity * sizeof(ARCHIVE));
-        // folder[0]->content = (ARCHIVE*)realloc(folder[0]->content, folder[0]->file_capacity * sizeof(ARCHIVE));
 
         if (temp == NULL) {
             logger("Error reallocating memory for new file, %s\n", strerror(errno));
+			return;
         } else {
             folder[0]->content = temp;
         }
@@ -1010,7 +907,6 @@ void delFile (FOLDER** folder, int target) {
 
 ARCHIVE* dupFile(ARCHIVE* file) {
     ARCHIVE* dup = (ARCHIVE*)malloc(sizeof(ARCHIVE));
-
     dup->name = strdup(file->name);
     dup->size = file->size;
 
@@ -1802,6 +1698,7 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
 }
 
 void copyOverides (ARCHIVE* file, ARCHIVE* overrides) {
+	/* 
     OBJECT *base, *predicates, *pointer, *checkpoint;
     QUEUE *matches;
 
@@ -1867,6 +1764,7 @@ void copyOverides (ARCHIVE* file, ARCHIVE* overrides) {
         freeOBJ(predicates);
 
     }
+	*/
 }
 
 void overrideFiles(FOLDER* base, FOLDER* override) {
@@ -2242,7 +2140,7 @@ void resizePNGFile(ARCHIVE** image, int width, int height) {
 	printPNGPixels(image[0], resize, width, height);
 }
 
-void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
+void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {/* 
 	OBJECT *placeholder, *overrides, *query, *value, *model, *temp;
 	QUEUE *types, *list;
 	FOLDER* location;
@@ -2838,7 +2736,8 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 
 	addFile(&location, item);
 	item = NULL;
-}
+	*/
+} 
 
 void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	FOLDER *navigator, *cursor, *templates;
@@ -3069,12 +2968,12 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						file.container->content[file.index].name = strdup(name);
 					}
 				} else if (strcmp(arguments->item[1], "display") == 0 || strcmp(arguments->item[1], "texture_path") == 0) {
+					/* 
 					OBJECT *value, *placeholder, *query;
 					sprintf(name, "%s", (strcmp(arguments->item[1], "display") == 0) ? "\"display\"" : "\"textures\"");
 
 					logger("FILE <%s> %s updated \n", file.container->content[file.index].name, name);
 
-					// Transforming file tab to json structure
 					placeholder = processOBJ(file.container->content[file.index].tab);
 					for (size_t x = 0; x < placeholder->count; x++) {
 						if (strcmp(placeholder->value[x].declaration, name) == 0) {
@@ -3127,6 +3026,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					freeOBJ(value);
 					freeOBJ(placeholder);
+					*/
 				} else if (strcmp(arguments->item[1], "dimentions") == 0) {
 					int width, height;
 					if (sscanf(arguments->item[2], "%dx%d", &width, &height) == 0) {
@@ -3139,6 +3039,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					temp = NULL;
 				}
 			} else if (strcmp(arguments->item[0], "autofill") == 0) {
+				/* 
 				logger("FILE <%s> Executing atlas autofill\n", file.container->content[file.index].name);
 				QUEUE* folders;
 				int dirnumber = 0, position[16];
@@ -3262,7 +3163,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                 file.container->content[file.index].tab = printJSON(placeholder);
 				indentJSON(&file.container->content[file.index].tab);
                 file.container->content[file.index].size = strlen(file.container->content[file.index].tab);
+				*/
 			} else if (strcmp(arguments->item[0], "disassemble") == 0) {
+				/* 
 				OBJECT *mirror, *copy, *elements, *cube, *base = NULL, *children, *placeholder, *query, *value;
 				QUEUE *groups;
 				FOLDER* location;
@@ -3415,6 +3318,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				free(file.container->content[file.index].tab);
 				file.container->content[file.index].tab = printJSON(placeholder);
 				indentJSON(&file.container->content[file.index].tab);
+				 */
 			} else if (strcmp(arguments->item[0], "paint") == 0) {
 				logger("Executing texture paint on %s\n", file.container->content[file.index].name);
 				int width, height;
@@ -3556,6 +3460,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				free(texture);
 				free(pixels);
 			} else if (strcmp(arguments->item[0], "permutate_texture") == 0) {
+				/* 
 				int width, height, texture_count = 0, bit_deph, color_type[2], bpp[2];
 				int lines, collums;
 				ARCHIVE *map, *copies[32];
@@ -3693,6 +3598,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					mirror = NULL;
 				}
+				*/
 			} else if (strcmp(arguments->item[0], "convert_overrides") == 0) {
 				logger("FILE <%s> translating overrides\n", file.container->content[file.index].name);
 				ARCHIVE* temp = &file.container->content[file.index];
