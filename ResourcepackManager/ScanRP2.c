@@ -330,7 +330,7 @@ char* strnotchr(const char* str, int count, ...) {
 
 OBJECT* createOBJ (char* key) {
     OBJECT* file = (OBJECT*)malloc(sizeof(OBJECT));
-    file->capacity = 1;
+    file->capacity = 8;
     file->count = 0;
     file->declaration = strdup(key);
     file->parent = NULL;
@@ -455,13 +455,15 @@ char* strchrs (const char* str, int count, ...) {
 }
 
 OBJECT* processJSON (char* json) {
-	char *pointer, *checkpoint, buffer[1024], type[2];
+	char *pointer, *checkpoint, *buffer, type[2];
 	OBJECT *file, *value;
-	size_t length;
-	file = createOBJ("obj");
+	size_t length, size = 1024;
+	file = value = NULL;
+
+	buffer = (char*)calloc(size, sizeof(char));
 
 	type[0] = type[1] = ' ';
-	for (size_t x = 1; x < strlen(json); x++) {
+	for (size_t x = 0; x < strlen(json); x++) {
 		pointer = strnotchr((json + x), 3, ' ', '\n', '\t');
 		if (pointer == NULL) {
 			break;
@@ -470,12 +472,16 @@ OBJECT* processJSON (char* json) {
 
 		switch (json[x])
 		{
+		case '}':
+			/*fallthrough*/
+		case ']':
+			break;
 		case '{':
 			type[0] = '{';
 			type[1] = '}';
 			/*fallthrough*/
 		case '[':
-			if (type[0] != ' ') {
+			if (type[0] == ' ') {
 				type[0] = '[';
 				type[1] = ']';
 			}	
@@ -497,8 +503,13 @@ OBJECT* processJSON (char* json) {
 				value = createOBJ("array");
 			}
 
-			addOBJ(file, &value);
-			
+			if (file == NULL) {
+				file = value;
+			} else {
+				addOBJ(file, &value);
+			}
+			value = NULL;
+
 			type[0] = type[1] = ' ';
 			break;
 		case '\t':
@@ -507,7 +518,21 @@ OBJECT* processJSON (char* json) {
 		case '\"':
 			pointer = strchr(&json[x + 1], '\"');
 			length = (pointer - (json + x)) + 1;
-			snprintf(buffer, 1024 - length, "%.*s", (int)length, (json + x));
+
+			if (length > size) {
+				size += length;
+
+				char* temp = (char*)realloc(buffer, size * sizeof(char));
+				if (temp == NULL) {
+					logger("Error! Failed to resize buffer for json process! %s\n", strerror(errno));
+					free(buffer);
+					break;
+				}
+				buffer = temp;
+				temp = NULL;
+			}
+
+			snprintf(buffer, size - length, "%.*s", (int)length, (json + x));
 			value = createOBJ(buffer);
 			addOBJ(file, &value);
 			x += length - 1;
@@ -516,8 +541,8 @@ OBJECT* processJSON (char* json) {
 		case ':':
 			pointer = strnotchr(&json[x], 4, ':', ' ', '\n', '\t');
 			x += (int)(pointer - (json + x));
+
 			if (pointer[0] == '{' || pointer[0] == '[') {
-				char type[2];
 				type[0] = pointer[0];
 				type[1] = (pointer[0] == '{') ? '}' : ']';
 
@@ -532,24 +557,48 @@ OBJECT* processJSON (char* json) {
 						break;
 					}
 				}
-				x++;
 
-				length = (pointer - (json + x)) - 1;
-				snprintf(buffer, 1024 - length, " %.*s", (int)length, (json + x));
+				length = (pointer - (json + x));
+
+				if (length > (size - 1)) {
+					size += length;
+	
+					char* temp = (char*)realloc(buffer, size * sizeof(char));
+					if (temp == NULL) {
+						logger("Error! Failed to resize buffer for json process! %s\n", strerror(errno));
+						free(buffer);
+						break;
+					}
+					buffer = temp;
+					temp = NULL;
+				}
+
+				sprintf(buffer, "%.*s", (int)length, (json + x));
 				value = processJSON(buffer);
 
 				x += length + 1;
-			} else if (pointer[0] == '\"') {
-				checkpoint = strchr(pointer + 1, '\"');
-				length = (checkpoint - pointer) + 1;
-				snprintf(buffer, 1024 - length, "%.*s", (int)length, pointer);
-				value = createOBJ(buffer);
-
-				x = (checkpoint - json) + 1;
 			} else {
-				checkpoint = strchrs(pointer + 1, 6, '\"', '}', ']', ' ', ',', '\n');
+				if (pointer[0] == '\"') {
+					checkpoint = strchr(pointer + 1, '\"');
+				} else {
+					checkpoint = strchrs(pointer + 1, 5, '\"', '}', ']', ' ', ',', '\n');
+				}
 				length = (checkpoint - pointer) + 1;
-				snprintf(buffer, 1024 - length, "%.*s", (int)length, pointer);
+
+				if (length > (size - 1)) {
+					size += length;
+	
+					char* temp = (char*)realloc(buffer, size * sizeof(char));
+					if (temp == NULL) {
+						logger("Error! Failed to resize buffer for json process! %s\n", strerror(errno));
+						free(buffer);
+						break;
+					}
+					buffer = temp;
+					temp = NULL;
+				}
+
+				sprintf(buffer, "%.*s", (int)length, pointer);
 				value = createOBJ(buffer);
 
 				x = (checkpoint - json) + 1;
@@ -558,7 +607,7 @@ OBJECT* processJSON (char* json) {
 
 			break;
 		default:
-			pointer = strchrs((json + x), 5, ' ', ',', '\n', '}', ']');
+			pointer = strchrs((json + x), 6, ' ', ',', '\n', '}', ']');
 			if (pointer == NULL) {
 				length = strlen(json + x) + 1;
 			} else {
@@ -574,6 +623,7 @@ OBJECT* processJSON (char* json) {
 		}
 	}
 
+	free(buffer);
 	return file;
 }
 
