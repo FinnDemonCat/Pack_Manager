@@ -1,3 +1,8 @@
+> "util/test.json"
+	edit texture_path {
+		"0": "item/iron_layer1",
+		"particle": "item/iron_layer1"
+	};
 > "armors/helmet.json"
 	copy "minecraft:models/item/iron_helmet.json";
 	copy "minecraft:models/item/diamond_helmet.json";

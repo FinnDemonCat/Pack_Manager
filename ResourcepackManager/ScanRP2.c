@@ -352,7 +352,7 @@ void freeOBJ (OBJECT **file) {
 	}
 
 	while (pointer->count > 0) {
-		OBJECT *temp = pointer->value[pointer->count];
+		OBJECT *temp = pointer->value[pointer->count - 1];
 		freeOBJ(&temp);
 		pointer->count--;
 	}
@@ -383,6 +383,7 @@ void addOBJ (OBJECT* file, OBJECT** value) {
 		}
 		file->value = temp;
 	}
+	value[0]->parent = file;
 	file->value[file->count] = *value;
 	file->count++;
 }
@@ -463,8 +464,8 @@ OBJECT* processJSON (char* json) {
 	buffer = (char*)calloc(size, sizeof(char));
 
 	type[0] = type[1] = ' ';
-	for (size_t x = 0; x < strlen(json); x++) {
-		pointer = strnotchr((json + x), 3, ' ', '\n', '\t');
+	for (size_t x = 0; x < strlen(json); x++, value = NULL) {
+		pointer = strnotchr((json + x), 3, ' ', '\t', ',');
 		if (pointer == NULL) {
 			break;
 		}
@@ -475,6 +476,7 @@ OBJECT* processJSON (char* json) {
 		case '}':
 			/*fallthrough*/
 		case ']':
+			file = (file->parent != NULL) ? file->parent : file;
 			break;
 		case '{':
 			type[0] = '{';
@@ -484,19 +486,8 @@ OBJECT* processJSON (char* json) {
 			if (type[0] == ' ') {
 				type[0] = '[';
 				type[1] = ']';
-			}	
-
-			for (size_t a = x + 1, b = 1; a < strlen(json); a++) {
-				if (json[a] == type[0]) {
-					b++;
-				} else if (json[a] == type[1]) {
-					b--;
-				}
-				if (b == 0) {
-					pointer = &json[b + 1];
-					break;
-				}
 			}
+
 			if (type[0] == '{') {
 				value = createOBJ("obj");
 			} else {
@@ -507,12 +498,13 @@ OBJECT* processJSON (char* json) {
 				file = value;
 			} else {
 				addOBJ(file, &value);
+				file = value;
 			}
 			value = NULL;
 
 			type[0] = type[1] = ' ';
 			break;
-		case '\t':
+		case '\n':
 			file->indent = true;
 			break;
 		case '\"':
@@ -580,10 +572,11 @@ OBJECT* processJSON (char* json) {
 			} else {
 				if (pointer[0] == '\"') {
 					checkpoint = strchr(pointer + 1, '\"');
+					checkpoint++;
 				} else {
-					checkpoint = strchrs(pointer + 1, 5, '\"', '}', ']', ' ', ',', '\n');
+					checkpoint = strchrs(pointer + 1, 5, '}', ']', ' ', ',', '\n');
 				}
-				length = (checkpoint - pointer) + 1;
+				length = (checkpoint - pointer);
 
 				if (length > (size - 1)) {
 					size += length;
@@ -606,15 +599,15 @@ OBJECT* processJSON (char* json) {
 			addOBJ(file->value[file->count - 1], &value);
 
 			break;
-		default:
-			pointer = strchrs((json + x), 6, ' ', ',', '\n', '}', ']');
+		default: // Issue getting commas at end
+			pointer = strchrs((json + x), 5, ' ', ',', '\n', '}', ']');
 			if (pointer == NULL) {
-				length = strlen(json + x) + 1;
+				length = strlen(json + x);
 			} else {
-				length = (pointer - (json + x)) + 1;
+				length = (pointer - (json + x));
 			}
 
-			snprintf(buffer, length, "%s", (json + x));
+			snprintf(buffer, size, "%.*s", (int)length, (json + x));
 			value = createOBJ(buffer);
 			addOBJ(file, &value);
 			value = NULL;
@@ -631,9 +624,8 @@ void indentJSON (char** file) {
     char *pointer = *file, *temp;
     size_t count = 0;
 
-    while ((pointer = strchr(pointer, '\n')) != NULL) {
+    while ((pointer = strchr(pointer + 1, '\n')) != NULL) {
         count++;
-        pointer = strnotchr(pointer, 1, '\n');
     }
 
     if (count == 0) {
@@ -645,10 +637,15 @@ void indentJSON (char** file) {
         *file = temp;
         temp = NULL;
     } else {
-        logger("Error while reallocating memory when indenting file: %s\n", strerror(errno));
+        logger("Error! Couldn't expand string size for indentation, %s\n", strerror(errno));
+		return;
     }
 
-    for (pointer = strchr(*file, '\n'); pointer != NULL && count > 1; pointer = strnotchr(pointer + 1, 1, '\t'), pointer = strchr(pointer, '\n'), count--) {
+    for (
+		pointer = strchr(*file, '\n');
+		pointer != NULL && count > 1;
+		pointer = strnotchr(pointer + 1, 1, '\t'), pointer = strchr(pointer, '\n'), count--
+	) {
         memmove(pointer + 1, pointer, strlen(pointer) + 1);
         pointer[1] = '\t';
     }
@@ -661,22 +658,42 @@ char* printJSON (OBJECT* json) {
     file = (char*)calloc(size, sizeof(char));
     *file = '\0';
 
-	if (strcmp(navigator->declaration, "obj") == 0 || strcmp(navigator->declaration, "obj") == 0) {
+	if (strcmp(navigator->declaration, "obj") == 0 || strcmp(navigator->declaration, "array") == 0) {
 		snprintf(
-			file + size,
-			1024 - size,
+			file,
+			1024,
 			"%c%s",
 			(strcmp(navigator->declaration, "obj") == 0) ? '{' : '[',
 			(navigator->indent == true) ? "\n" : ""
 		);
-
+		
 		for (size_t x = 0; x < navigator->count; x++) {
 			placeholder = printJSON(navigator->value[x]);
-			indentJSON(&placeholder);
-			length = strlen(placeholder);
+
+			if (navigator->indent == true) {
+				indentJSON(&placeholder);
+			}
+			
+			length += snprintf (
+				NULL,
+				0,
+				"%s%s",
+				placeholder,
+				(x == (navigator->count - 1))
+					? (navigator->indent == true)
+						? "\n"
+						: ""
+					: (navigator->indent == true)
+						? ",\n"
+						: ", "
+			);
+			
+			if (x == (navigator->count - 1)) {
+				length++;
+			}
 
 			if (strlen(file) + length >= (size - 1)) {
-				size += length + 1024;
+				size += length;
 				char* temp = (char*)realloc(file, size * sizeof(char));
 
 				if (temp == NULL) {
@@ -689,23 +706,35 @@ char* printJSON (OBJECT* json) {
 				}
 			}
 
-			snprintf(
-				file + size,
-				size - length,
+			snprintf (
+				file + strlen(file),
+				size - strlen(file),
 				"%s%s",
 				placeholder,
-				(x == (navigator->count - 1)) ? "" : (navigator->indent == false) ? ",\n" : ", "
+				(x == (navigator->count - 1))
+					? (navigator->indent == true)
+						? "\n"
+						: ""
+					: (navigator->indent == true)
+						? ",\n"
+						: ", "
 			);
+
+			if (x == (navigator->count - 1)) {
+				sprintf(file + strlen(file), "%c", (strcmp(navigator->declaration, "obj") == 0) ? '}' : ']');
+			}
+
 			free(placeholder);
 		}
 	} else {
 		sprintf(file, "%s", navigator->declaration);
 	
-		if (navigator->count > 0) {
-			if (strcmp(navigator->value[0]->declaration, "obj") == 0 || strcmp(navigator->value[0]->declaration, "obj") == 0) {
-				placeholder = printJSON(navigator->value[0]);
-				indentJSON(&placeholder);
-				length = strlen(placeholder);
+		for (size_t x = 0; x < navigator->count; x++) {
+			if (strcmp(navigator->value[x]->declaration, "obj") == 0 || strcmp(navigator->value[x]->declaration, "array") == 0) {
+				placeholder = printJSON(navigator->value[x]);
+				length += strlen(placeholder);
+			} else {
+				placeholder = strdup(navigator->value[x]->declaration);
 			}
 		
 			if (strlen(file) + length >= (size - 1)) {
