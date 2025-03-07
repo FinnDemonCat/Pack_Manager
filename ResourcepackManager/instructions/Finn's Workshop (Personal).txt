@@ -1,3 +1,7 @@
+> "bow.json"
+	convert_overrides;
+> "compass.json"
+	convert_overrides;
 > "armors/helmet.json"
 	copy "minecraft:models/item/iron_helmet.json";
 	copy "minecraft:models/item/diamond_helmet.json";
