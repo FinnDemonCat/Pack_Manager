@@ -341,6 +341,9 @@ OBJECT* createOBJ (char* key) {
 }
 
 void freeOBJ (OBJECT **file) {
+	if (file == NULL) {
+		return;
+	}
 	if (*file == NULL) {
 		return;
 	}
@@ -361,9 +364,19 @@ void freeOBJ (OBJECT **file) {
 		free(pointer->value);
 		pointer->value = NULL;
 	}
+
+	free(*file);
+	*file = NULL;
 }
 
 void addOBJ (OBJECT* file, OBJECT** value) {
+	if (value == NULL || file == NULL) {
+		return;
+	}
+	if (*value == NULL) {
+		return;
+	}
+
 	if (file->count == 0) {
 		OBJECT **temp = (OBJECT**)calloc(file->capacity, sizeof(OBJECT*));
 		
@@ -405,6 +418,8 @@ void delOBJ (OBJECT* file, size_t key) {
 		}
 		file->value = temp;
 	}
+
+	file->count--;
 }
 
 OBJECT* dupOBJ (OBJECT* target) {
@@ -412,7 +427,7 @@ OBJECT* dupOBJ (OBJECT* target) {
 	mirror->indent = target->indent;
 
 	for (size_t x = 0; x < target->count; x++) {
-		OBJECT* pointer = target->value[x];
+		OBJECT* pointer = dupOBJ(target->value[x]);
 		addOBJ(mirror, &pointer);
 		pointer = NULL;
 	}
@@ -594,7 +609,7 @@ OBJECT* processJSON (char* json) {
 				sprintf(buffer, "%.*s", (int)length, pointer);
 				value = createOBJ(buffer);
 
-				x = (checkpoint - json) + 1;
+				x = (checkpoint - json);
 			}
 			addOBJ(file->value[file->count - 1], &value);
 
@@ -2275,28 +2290,29 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	placeholder->count--;
 
 	// Locating the overrides
-	for (size_t x = 0; x < overrides->count; x++) {
-		if (strcmp(overrides->value[x]->declaration, "\"overrides\"") == 0) {
+	for (size_t x = 0; x < (overrides->count + 1); x++) {
+		if (x < overrides->count && strcmp(overrides->value[x]->declaration, "\"overrides\"") == 0) {
 			overrides = overrides->value[x];
 			break;
+		} else if (x >= overrides->count) {
+			logger("Warning! <%s> doesn't contain predicates!\n", file[0]->name);
+			return;
 		}
-	}
-
-	if (strcmp(overrides->declaration, "\"overrides\"") != 0) {
-		logger("Failed to locate \"overrides\" at %s", file[0]->name);
-		return;
 	}
 	
 	overrides = overrides->value[0];
 	types = initQueue(overrides->count);
 
 	logger("Starting components translation for %s\n", file[0]->name);
-	for (size_t x = 0; x < overrides->count; x++) { // It didn't process overrides array correctly
+	for (size_t x = 0; x < overrides->count; x++) {
 		for (size_t y = 0; y < overrides->value[x]->count; y++) {
 			// Pointing to the predicates
-			if (strcmp(overrides->value[x]->value[y]->declaration, "\"predicate\"") == 0) {
+			if (y < overrides->value[x]->count && strcmp(overrides->value[x]->value[y]->declaration, "\"predicate\"") == 0) {
 				query = overrides->value[x]->value[y]->value[0];
 				break;
+			} else if (y >= overrides->value[x]->count) {
+				logger("Error! Failed to locate predicates!\n");
+				continue;
 			}
 		}
 
@@ -2366,7 +2382,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 		}
 
 		// Sorting models
-		for (size_t x = 0; x < overrides->count; x++) {
+		for (size_t x = 0; x < overrides->count; x++, model = NULL, query = NULL) {
 			index = -1;
 			pulling = false;
 
@@ -2376,6 +2392,15 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 				} else if (strcmp(overrides->value[x]->value[y]->declaration, "\"predicate\"") == 0) {
 					query = overrides->value[x]->value[y]->value[0];
 				}
+			}
+
+			if (model == NULL) {
+				logger("Error! Couldn't find \"model\" member in overrides!\n");
+				continue;
+			}
+			if (query == NULL) {
+				logger("Error! Couldn't find \"predicate\" member in overides!\n");
+				continue;
 			}
 
 			for (size_t y = 0; y < query->count; y++) {
@@ -2550,13 +2575,11 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 		break;
 	case 2:
 		OBJECT* cases, *mirror;
-		if (strcmp(file[0]->name, "compass->json") == 0) {
+		if (strcmp(file[0]->name, "compass.json") == 0) {
 			sprintf(buffer, "{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:has_component\",\n\t\"component\": \"minecraft:lodestone_tracker\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
 			temp = processJSON(buffer);
-			freeOBJ(temp->value[3]->value);
-			freeOBJ(temp->value[4]->value);
-			temp->value[3]->value = NULL;
-			temp->value[4]->value = NULL;
+			freeOBJ(&temp->value[3]->value[0]); // "on_true"
+			freeOBJ(&temp->value[4]->value[0]); // "on_false"
 			temp->value[3]->count--;
 			temp->value[4]->count--;
 
@@ -2566,13 +2589,13 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			placeholder = placeholder->value[0]->value[4]; // "on_false"
 		}
 
-		if (strcmp(file[0]->name, "recovery_compass->json") != 0) {
+		if (strcmp(file[0]->name, "recovery_compass.json") != 0) {
 			// "recovery_compass" doesn't have select "context dimention" property
 			sprintf(buffer, "{\n\t\"type\": \"minecraft:select\",\n\t\"property\": \"minecraft:context_dimension\",\n\t\"cases\": [\n\t],\n\t\"fallback\": {}\n}");
 			temp = processJSON(buffer);
-			free(temp->value[3]->value);
+
+			freeOBJ(&temp->value[3]->value[0]);
 			temp->value[3]->count--;
-			temp->value[3]->value = NULL;
 
 			addOBJ(placeholder, &temp);
 			placeholder = placeholder->value[0];
@@ -2600,6 +2623,15 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 				}
 			}
 
+			if (model == NULL) {
+				logger("Error! Couldn't find \"model\" member in overrides!\n");
+				continue;
+			}
+			if (query == NULL) {
+				logger("Error! Couldn't find \"predicate\" member in overides!\n");
+				continue;
+			}
+
 			for (size_t y = 0; y < query->count; y++) {
 				if (strcmp(query->value[y]->declaration, "\"angle\"")  == 0 || strcmp(query->value[y]->declaration, "\"time\"") == 0) {
 					index = strtof(query->value[y]->value[0]->declaration, NULL);
@@ -2621,17 +2653,17 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 		if (strcmp(file[0]->name, "recovery_compass.json") != 0) {
 			// adding the target to "range_dispatch"
 			if (strcmp(file[0]->name, "compass.json") == 0) {
-				sprintf(buffer, " \"target\": \"spawn\"");
+				sprintf(buffer, " {\"target\": \"spawn\"}");
 			} else {
-				sprintf(buffer, " \"source\": \"daytime\"");
+				sprintf(buffer, " {\"source\": \"daytime\"}");
 			}
 			mirror = processJSON(buffer);
 			addOBJ(temp, &mirror->value[0]);
-			mirror->value = NULL;
+			mirror->value[0] = NULL;
 			freeOBJ(&mirror);
 
 			// preparing case
-			sprintf(buffer, "{\n\t\"model\": {\n\t},\n\t\"when\": \"overworld\"\n}");
+			sprintf(buffer, " {\n\t\"model\": {\n\t},\n\t\"when\": \"overworld\"\n}");
 			cases = processJSON(buffer);
 			freeOBJ(&cases->value[0]->value[0]);
 			cases->value[0]->count--;
@@ -2650,9 +2682,9 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			// preparing fallback
 			// adding the target to "range_dispatch"
 			if (strcmp(file[0]->name, "compass.json") == 0) {
-				sprintf(buffer, " \"target\": \"none\"");
+				sprintf(buffer, " {\"target\": \"none\"}");
 			} else {
-				sprintf(buffer, " \"source\": \"random\"");
+				sprintf(buffer, " {\"source\": \"random\"}");
 			}
 			delOBJ(temp, (temp->count - 1));
 			mirror = processJSON(buffer);
@@ -2668,35 +2700,35 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 			addOBJ(value, &mirror);
 			mirror = NULL;
 			value = NULL;
-
-			placeholder = placeholder->parent->parent;
 		} else {
-			sprintf(buffer, " \"target\": \"recovery\"");
+			sprintf(buffer, " {\"target\": \"recovery\"}");
 			mirror = processJSON(buffer);
 			addOBJ(temp, &mirror->value[0]);
 			addOBJ(placeholder, &temp);
 
 			temp = NULL;
-			mirror->value = NULL;
+			mirror->value[0] = NULL;
 			freeOBJ(&mirror);
 			mirror = NULL;
-
-			placeholder = placeholder->parent;
 		}
 
 		if (strcmp(file[0]->name, "compass.json") == 0) {
 			placeholder = placeholder->parent->parent;
 			delOBJ(temp, (temp->count - 1));
-			sprintf(buffer, " \"target\": \"lodestone\"");
+			sprintf(buffer, " {\"target\": \"lodestone\"}");
 
 			mirror = processJSON(buffer);
 			addOBJ(temp, &mirror->value[0]);
-			mirror->value = NULL;
+			mirror->value[0] = NULL;
 			freeOBJ(&mirror);
 			
-			mirror = placeholder->value[3];
+			mirror = placeholder->value[3]; // Pointing to wrong place
 			addOBJ(mirror, &temp);
 			mirror = NULL;
+		}
+
+		while (placeholder->parent != NULL) {
+			placeholder = placeholder->parent;
 		}
 
 		break;
@@ -2721,6 +2753,15 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 				} else if (strcmp(overrides->value[x]->value[y]->declaration, "\"predicate\"") == 0) {
 					query = overrides->value[x]->value[y]->value[0];
 				}
+			}
+
+			if (model == NULL) {
+				logger("Error! Couldn't find \"model\" member in overrides!\n");
+				continue;
+			}
+			if (query == NULL) {
+				logger("Error! Couldn't find \"predicate\" member in overides!\n");
+				continue;
 			}
 
 			for (size_t y = 0; custom_model_data && y < (query->count + 1); y++) {

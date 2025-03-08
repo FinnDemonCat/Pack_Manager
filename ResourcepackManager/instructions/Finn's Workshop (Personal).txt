@@ -1,5 +1,3 @@
-> "bow.json"
-	convert_overrides;
 > "compass.json"
 	convert_overrides;
 > "armors/helmet.json"
