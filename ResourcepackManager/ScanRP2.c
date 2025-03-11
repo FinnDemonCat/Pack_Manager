@@ -38,12 +38,12 @@ typedef struct ARCHIVE {
 typedef struct FOLDER {
     char* name;
     struct FOLDER* parent;
-    struct FOLDER* subdir;
-    size_t subcount;
+    struct FOLDER* subdir; // This needs to be updated to maybe get rid of memory leak
+    size_t dir_count;
     size_t count;
+    size_t dir_capacity;
     size_t capacity;
-    size_t file_capacity;
-    ARCHIVE* content;
+    ARCHIVE** content; // First change
 } FOLDER;
 
 typedef struct RESOLUTION {
@@ -136,24 +136,30 @@ void endQueue(QUEUE* queue) {
 void logger(char* format, ...) {
     char* buffer;
     size_t size;
-    va_list arguments, reflection;
+    va_list arguments;
     va_start(arguments, format);
-    va_copy(reflection, arguments);
 
     size = vsnprintf(NULL, 0, format, arguments);
-    report_lenght += size + 1;
-    if ((report_lenght + size) > (report_size - 2)) {
+    report_lenght += size;
+    if ((report_lenght + size) > (report_size - 1)) {
         report_size *= 2;
-        report = (char*)realloc(report, report_size * sizeof(char));
+
+		char* temp = (char*)realloc(report, report_size * sizeof(char)); 
+		if (temp == NULL) {
+			return;
+		}
+        report = temp;
     }
 
     buffer = (char*)calloc((size + 1), sizeof(char));
     vsnprintf(buffer, size + 1, format, arguments);
 
     va_end(arguments);
-    va_end(reflection);
-    strcat(report, buffer);
-    report_end++;
+	
+	sprintf(report + strlen(report), "%s", buffer);
+	for (char* pointer = strchr(buffer, '\n'); pointer != NULL; pointer = strchr(pointer + 1, '\n')) {
+		report_end++;
+	}
 
     free(buffer);
 }
@@ -275,7 +281,7 @@ void printLog(char* path) {
     sprintf(date, "%s\\log\\log_%02d-%02d_%02d-%02d.txt", path, tm.tm_mday, tm.tm_mon + 1, tm.tm_hour, tm.tm_min);
     
     FILE* reporting = fopen(date, "w+");
-    fprintf(reporting, report);
+    fprintf(reporting, "%s", report);
     fclose(reporting);
 }
 
@@ -785,13 +791,14 @@ char* printJSON (OBJECT* json) {
 
 void freeFolder(FOLDER* folder) {
     for (;folder->count > 0; folder->count--) {
-        ARCHIVE* file = &folder->content[folder->count-1];
-        free(file->name);
-        free(file->tab);
+        free(folder->content[folder->count-1]->name);
+        free(folder->content[folder->count-1]->tab);
+		free(folder->content[folder->count-1]);
     }
     free(folder->content);
-    for (;folder->subcount > 0; folder->subcount--) {
-        freeFolder(&folder->subdir[folder->subcount-1]);
+
+    for (;folder->dir_count > 0; folder->dir_count--) {
+        freeFolder(&folder->subdir[folder->dir_count-1]);
     }
     free(folder->subdir);
     free(folder->name);
@@ -806,24 +813,24 @@ FOLDER* createFolder(FOLDER* parent, const char* name) {
     folder->name = strdup(name);
     folder->content = NULL;
     folder->subdir = NULL;
-    folder->count = folder->subcount = 0;
-    folder->capacity = FOLDERCHUNK;
-    folder->file_capacity = FILECHUNK;
+    folder->count = folder->dir_count = 0;
+    folder->dir_capacity = FOLDERCHUNK;
+    folder->capacity = FILECHUNK;
     folder->parent = parent;
     
     return folder;
 }
 
 void addFolder(FOLDER** parent, FOLDER* subdir) {
-    if (parent[0]->subcount == 0) {
-        parent[0]->subdir = (FOLDER*)calloc(parent[0]->capacity, sizeof(FOLDER));
+    if (parent[0]->dir_count == 0) {
+        parent[0]->subdir = (FOLDER*)calloc(parent[0]->dir_capacity, sizeof(FOLDER));
 
         if (parent[0]->subdir == NULL) {
             logger("Error allocating memory for new folder, %s\n", strerror(errno));
         }
-    } else if (parent[0]->subcount >= parent[0]->capacity) {
+    } else if (parent[0]->dir_count >= parent[0]->dir_capacity) {
 		FOLDER* old = parent[0]->subdir;
-		size_t newCapacity = parent[0]->capacity * 2;
+		size_t newCapacity = parent[0]->dir_capacity * 2;
         
         FOLDER* temp = (FOLDER*)realloc(parent[0]->subdir, newCapacity * sizeof(FOLDER));
         if (temp == NULL) {
@@ -832,35 +839,35 @@ void addFolder(FOLDER** parent, FOLDER* subdir) {
         }
 
         parent[0]->subdir = temp;
-        parent[0]->capacity = newCapacity;
+        parent[0]->dir_capacity = newCapacity;
 
 		if (parent[0]->subdir != old) {
-			for (int x = 0; x < (int)parent[0]->subcount; x++) {
+			for (int x = 0; x < (int)parent[0]->dir_count; x++) {
 				parent[0]->subdir[x].parent = parent[0];
 			}
 		}
     }
 
     subdir->parent = parent[0];
-    parent[0]->subdir[parent[0]->subcount] = *subdir;
-    parent[0]->subcount++;
+    parent[0]->subdir[parent[0]->dir_count] = *subdir;
+    parent[0]->dir_count++;
 }
 
 // Pass the folder with the target and it's index to free and move the array foward
 void delFolder (FOLDER** folder, int index) {
 	freeFolder(&folder[0]->subdir[index]);
 	
-	for (int x = index; x < (int)(folder[0]->subcount - 1); x++) {
+	for (int x = index; x < (int)(folder[0]->dir_count - 1); x++) {
 		folder[0]->subdir[x] = folder[0]->subdir[x + 1];
 	}
-	folder[0]->subcount--;
+	folder[0]->dir_count--;
 
-	if (folder[0]->subcount == 0) {
+	if (folder[0]->dir_count == 0) {
 		free(folder[0]->subdir);
 	}
-	if (folder[0]->subcount == folder[0]->capacity / 2 && folder[0]->capacity > 0) {
-		folder[0]->capacity /= 2;
-		FOLDER* backup = realloc(folder[0]->subdir, folder[0]->capacity * sizeof(FOLDER));
+	if (folder[0]->dir_count == folder[0]->dir_capacity / 2 && folder[0]->dir_capacity > 0) {
+		folder[0]->dir_capacity /= 2;
+		FOLDER* backup = realloc(folder[0]->subdir, folder[0]->dir_capacity * sizeof(FOLDER));
 
 		if (backup == NULL) {
 			logger("Couldn't trim %s folder capacity! %s\n", folder[0]->name, strerror(errno));
@@ -934,104 +941,121 @@ ARCHIVE* getUnzip(unzFile* file, const char* name) {
     return model;
 }
 
-//Read a file into a buffer and return the ARCHIVE pointer
+//Read a file into a ARCHIVE pointer
 ARCHIVE* getFile(const char* path) {
-    char *buffer, *placeholder;
+    char buffer[1024], *temp, *placeholder;
     size_t bytesRead, length = 0, capacity = 1024;
     FILE *file;
     ARCHIVE* model = (ARCHIVE*)malloc(sizeof(ARCHIVE));
-    buffer = (char*)calloc(1025, sizeof(char));
+	placeholder = malloc(capacity);
 
-	if (strstr(path, ".png") != NULL) {
-		file = fopen(path, "rb");
-	} else {
-		file = fopen(path, "r");
+	file = fopen(path, (strstr(path, ".png") ? "rb" : "r"));
+
+    if (model == NULL) {
+		logger("getFile: Could not allocate memory to ARCHIVE, %s\n", strerror(errno));
+    }
+	if (file == NULL) {
+		logger("getFile: Could not open %s due to %s\n", path, strerror(errno));
+		free(model);
+		return NULL;
+	}
+	if (placeholder == NULL) {
+        logger("getFile: Could not allocate memory to tab, %s\n", strerror(errno));
+		fclose(file);
+        free(model);
+        return NULL;
+    }
+
+	while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+		if (length + bytesRead > capacity) {
+			capacity *= 2;
+			temp = realloc(placeholder, capacity * sizeof(char));
+
+			if (temp == NULL) {
+				logger("getFile: Error! Couldn't resize tab of contents's size!\n");
+				free(placeholder);
+				free(model);
+				fclose(file);
+
+				return NULL;
+			}
+
+			placeholder = temp;
+			temp = NULL;
+		}
+
+		memcpy(placeholder + length, buffer, bytesRead);
+		length += bytesRead;
 	}
 
-    if (file == NULL) {
-        logger("getFile: Could not open %s due to %s\n", path, strerror(errno));
-        return NULL;
-    }
-    if (buffer == NULL) {
-        logger("getFile: Could not allocate memory for buffer, %s\n", strerror(errno));
-    }
-    if (model == NULL) {
-        logger("getFile: Could not allocate memory to ARCHIVE, %s\n", strerror(errno));
-    }
+    temp = realloc(placeholder, length);
+    if (temp == NULL || length == 0) {
+		logger("getFile: Error! Couldn't resize tab of contents's size!\n");
+		placeholder = temp;
+		free(model);
+		fclose(file);
 
-    while ((bytesRead = fread(buffer+length, sizeof(char), 1024, file)) > 0) {
-        length += bytesRead;
-        if (length >= capacity-1) {
-            capacity *= 2;
-            placeholder = (char*)realloc(buffer, (capacity+1)*sizeof(char));
-            
-            if (placeholder == NULL) {
-                logger("getFile: Could not resize buffer, %s\n", strerror(errno));
-            } else {
-                buffer = placeholder;
-                placeholder = NULL;
-            }
-        }
-    }
+		return NULL;
+	}
 
-    placeholder = (char*)realloc(buffer, (length + 1) * sizeof(char));
-    if (placeholder != NULL) {
-        buffer = placeholder;
-    } else {
-        logger("getFile: Could realloc string, %s\n", strerror(errno));
-        return NULL;
-        placeholder = NULL;
-    }
+	placeholder = temp;
+	char* name;
+	if ((temp = strrchr(path, '\\')) != NULL) {
+		name = strdup(temp + 1);
+	} else {
+		name = strdup(path);
+	}
 
-    model->name = strdup(path);
-    returnString(&model->name, "name");
+    model->name = name;
     model->size = length;
-    model->tab = buffer;
+    model->tab = placeholder;
 
     fclose(file);
     return model;
 }
 
-void addFile (FOLDER** folder, ARCHIVE* model) {
-    if (folder[0]->count == 0) {
-        folder[0]->content = (ARCHIVE*)calloc(folder[0]->file_capacity, sizeof(ARCHIVE));
+void addFile (FOLDER* folder, ARCHIVE** model) {
+    if (folder->count == 0) {
+        folder->content = (ARCHIVE**)calloc(folder->capacity, sizeof(ARCHIVE*));
 
-        if (folder[0]->content == NULL) {
+        if (folder->content == NULL) {
             logger("Error allocating memory for new file, %s\n", strerror(errno));
 			return;
         }
     }
-    if (folder[0]->count >= (folder[0]->file_capacity - 1)) {
-        folder[0]->file_capacity *= 2;
-        ARCHIVE* temp = (ARCHIVE*)realloc(folder[0]->content, folder[0]->file_capacity * sizeof(ARCHIVE));
+    if (folder->count >= (folder->capacity - 1)) {
+        folder->capacity *= 2;
+        ARCHIVE** temp = (ARCHIVE**)realloc(folder->content, folder->capacity * sizeof(ARCHIVE*));
 
         if (temp == NULL) {
             logger("Error reallocating memory for new file, %s\n", strerror(errno));
 			return;
         } else {
-            folder[0]->content = temp;
+            folder->content = temp;
         }
     }
-    folder[0]->content[folder[0]->count] = *model;
-    folder[0]->count++;
+    folder->content[folder->count] = model[0];
+    folder->count++;
 }
 
-void delFile (FOLDER** folder, int target) {
-    free(folder[0]->content[target].name);
-    free(folder[0]->content[target].tab);
-    for (int x = target; x < (int)folder[0]->count; x++) {
-        folder[0]->content[x] = folder[0]->content[x + 1];
-    }
-	folder[0]->count--;
+void delFile (FOLDER* folder, int target) {
+    free(folder->content[target]->name);
+    free(folder->content[target]->tab);
+	free(folder->content[target]);
 
+    for (size_t x = target; x < (folder->count - 1); x++) {
+        folder->content[x] = folder->content[x + 1];
+    }
+	folder->count--;
     
-    if (folder[0]->count == folder[0]->file_capacity/2 && folder[0]->file_capacity/2 > 0) {
-		folder[0]->file_capacity /= 2;
-        ARCHIVE* backup = (ARCHIVE*)realloc(folder[0]->content, folder[0]->file_capacity * sizeof(ARCHIVE));
+    if (folder->count == folder->capacity/2 && folder->capacity/2 > 0) {
+		folder->capacity /= 2;
+
+        ARCHIVE** backup = (ARCHIVE**)realloc(folder->content, folder->capacity * sizeof(ARCHIVE*));
         if (backup == NULL) {
-            logger("Couldn't trim %s content size\n", folder[0]->name);
+            logger("Couldn't trim %s content size\n", folder->name);
         } else {
-            folder[0]->content = backup;
+            folder->content = backup;
         }
     }
 }
@@ -1054,18 +1078,13 @@ ARCHIVE* dupFile(ARCHIVE* file) {
 FOLDER* dupFolder (FOLDER* base) {
     FOLDER* dup = createFolder(NULL, base->name);
 
-    dup->capacity = base->capacity;
-    dup->file_capacity = base->file_capacity;
-    dup->content = (ARCHIVE*)calloc(dup->file_capacity, sizeof(ARCHIVE));
-    dup->subdir = (FOLDER*)calloc(dup->capacity, sizeof(FOLDER));
-
-    for (int x = 0; x < (int)base->count; x++) {
-        ARCHIVE* mirror = dupFile(&base->content[x]);
-        addFile(&dup, mirror);
+    for (size_t x = 0; x < base->count; x++) {
+        ARCHIVE* mirror = dupFile(base->content[x]);
+        addFile(dup, &mirror);
         mirror = NULL;
     }
 
-    for (int x = 0; x < (int)base->subcount; x++) {
+    for (size_t x = 0; x < base->dir_count; x++) {
         FOLDER* mirror = dupFolder(&base->subdir[x]);
         addFolder(&dup, mirror);
         mirror = NULL;
@@ -1076,20 +1095,20 @@ FOLDER* dupFolder (FOLDER* base) {
 
 char** getLang(FOLDER* lang, int file) {
     char *pointer, *checkpoint, *temp, **translated = (char**)calloc(3, sizeof(char*));
-    size_t lenght;
+    size_t length;
 
     //First options
     //Second messages
     //Third Logo
 
     //Getting logo
-    pointer = strstr(lang->content[file].tab, "[Options]");
-    checkpoint = &lang->content[file].tab[0];
+    pointer = strstr(lang->content[file]->tab, "[Options]");
+    checkpoint = lang->content[file]->tab;
     checkpoint += 8;
-    lenght = (pointer - checkpoint) + 1;
+    length = (pointer - checkpoint) + 1;
 
-    temp = (char*)calloc(lenght, sizeof(char));
-    strncpy(temp, checkpoint, lenght-1);
+    temp = (char*)calloc(length, sizeof(char));
+    sprintf(temp, "%.*s", (int)(length - 1), checkpoint);
 
     translated[2] = temp;
     temp = NULL;
@@ -1098,19 +1117,19 @@ char** getLang(FOLDER* lang, int file) {
     pointer += 11;
     checkpoint = pointer;
     pointer = strstr(pointer, "[Messages]");
-    lenght = (pointer - checkpoint) + 1;
+    length = (pointer - checkpoint) + 1;
 
-    temp = (char*)calloc(lenght, sizeof(char));
-    strncpy(temp, checkpoint, lenght-1);
+    temp = (char*)calloc(length, sizeof(char));
+	sprintf(temp, "%.*s", (int)(length - 1), checkpoint);
 
     translated[0] = temp;
     temp = NULL;
 
     //Getting Messages
     pointer += 12;
-    lenght = (strlen(lang->content[file].tab) + 1) - (pointer - lang->content[file].tab);
-    temp = (char*)calloc(lenght, sizeof(char));
-    strncpy(temp, pointer, lenght-1);
+    length = strlen(pointer);
+    temp = (char*)calloc(length + 1, sizeof(char));
+	sprintf(temp, "%s", pointer);
 
     translated[1] = temp;
     temp = NULL;
@@ -1120,48 +1139,27 @@ char** getLang(FOLDER* lang, int file) {
 
 //Print lines that contain \n in the curses screen
 size_t mvwprintLines(WINDOW* window, char* list, int y, int x, int from, int to) {
-    size_t lenght, big = 0;
+    size_t length, big = 0;
+	int limit;
     char *pointer = list, *checkpoint = list;
 
-    if (to == -1) {
-        for (int x = 1; x < from; x++) {
-            pointer = strchr(pointer, '\n');
-            pointer++;
-        }
-        
-        while ((pointer = strchr(pointer, '\n')) != NULL) {
-            pointer++;
-            lenght = (pointer - checkpoint);
-            mvwprintw(window, y, x, "%.*s", lenght-1, checkpoint);
+	for (int x = 0; x < from && pointer != NULL; x++) {
+		pointer = strchr(pointer + 1, '\n');
+	}
+	pointer = (from == 0) ? pointer : (pointer + 1);
+	checkpoint = pointer;
+	pointer = strchr(pointer, '\n');
 
-            y++;
-            checkpoint = pointer;
+	limit = (to == -1) ? getmaxy(window) : (to + 1);
 
-            if (big < lenght) {
-                big = lenght;
-            }
+	for (int a = from; a < limit && pointer != NULL; a++, pointer = strchr(pointer + 1, '\n')) {
+		pointer++;
+		length = (pointer - checkpoint);
+		mvwaddnstr(window, y + (a - from), x, checkpoint, (length - 1));
 
-        }
-    } else {
-        for (int x = 1; x < from; x++) {
-            pointer = strchr(pointer, '\n');
-            pointer++;
-        }
-
-        for (int z = from - 1; z < to; z++, y++) {
-            checkpoint = pointer;
-            pointer = strchr(pointer, '\n');
-            pointer++;
-
-            lenght = (pointer - checkpoint);
-            mvwprintw(window, y, x, "%.*s", lenght - 1, checkpoint);
-
-            if (lenght > big) {
-                big = lenght;
-            }
-        }
-
-    }
+		checkpoint = pointer;
+		big = (big < length) ? length : big;
+	}
     return big;
 }
 
@@ -1623,7 +1621,7 @@ FOLDER* getFolder(char* path, int position) {
 					mirror = NULL;
 				} else if (S_ISREG(fileStat.st_mode)) {
 					ARCHIVE* mirror = getFile(namespace);
-					addFile(&navigator, mirror);
+					addFile(navigator, &mirror);
 
 					logger("FILE: <%s>\n", namespace);
 					mirror = NULL;
@@ -1633,7 +1631,7 @@ FOLDER* getFolder(char* path, int position) {
 			pointer[0] = '\0';
 
 			if ((entry = readdir(scanner)) == NULL) {
-				while (dirPosition[dirNumber] == (int)navigator->subcount && dirNumber > -1) {
+				while (dirPosition[dirNumber] == (int)navigator->dir_count && dirNumber > -1) {
 					if ((pointer = strrchr(namespace, '\\')) != NULL) {
 						pointer[0] = '\0';
 					} else {
@@ -1716,7 +1714,7 @@ FOLDER* getFolder(char* path, int position) {
                 return NULL;
             }
 
-			sprintf(placeholder, namespace);
+			sprintf(placeholder, "%s", namespace);
 			if (placeholder[strlen(placeholder) - 1] == '/') {
 				placeholder[strlen(placeholder) - 1] = '\0';
 				input = 0;
@@ -1740,7 +1738,7 @@ FOLDER* getFolder(char* path, int position) {
 			}
 
 			if (input == 0) { // Folder
-				sprintf(placeholder, namespace);
+				sprintf(placeholder, "%s", namespace);
 				if ((pointer = strrchr(placeholder, '/')) != NULL) {
 					pointer[0] = '\0';
 				}
@@ -1752,7 +1750,7 @@ FOLDER* getFolder(char* path, int position) {
 
 				FOLDER* mirror = createFolder(NULL, pointer);
 				addFolder(&navigator, mirror);
-				navigator = &navigator->subdir[navigator->subcount - 1];
+				navigator = &navigator->subdir[navigator->dir_count - 1];
 
 				dirNumber++;
 
@@ -1760,7 +1758,7 @@ FOLDER* getFolder(char* path, int position) {
 				mirror = NULL;
 			} else if (input == 1) { // File
 				ARCHIVE* mirror = getUnzip(rp, namespace);
-                addFile(&navigator, mirror);
+                addFile(navigator, &mirror);
 
 				logger("FOLDER: <%s>\n", namespace);
 				mirror = NULL;
@@ -1804,13 +1802,13 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
 		dirNumber++;
 	}
 
-	for (int x = 0, y = 0; y < dirNumber && x < (int)(navigator->subcount + 1); x++) {
-		if (x < (int)navigator->subcount && strcmp(navigator->subdir[x].name, dir[y]) == 0) {
+	for (int x = 0, y = 0; y < dirNumber && x < (int)(navigator->dir_count + 1); x++) {
+		if (x < (int)navigator->dir_count && strcmp(navigator->subdir[x].name, dir[y]) == 0) {
 			navigator = &navigator->subdir[x];
 
 			y++;
 			x = -1;
-		} else if (x == (int)navigator->subcount && recreate_path) {
+		} else if (x == (int)navigator->dir_count && recreate_path) {
 			logger("FOLDER \"%s\" was created\n", dir[y]);
 			FOLDER* temp = createFolder(NULL, dir[y]);
 			addFolder(&navigator, temp);
@@ -1819,7 +1817,7 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
 
 			y++;
 			x = -1;
-		} else if (x == (int)navigator->subcount && !recreate_path) {
+		} else if (x == (int)navigator->dir_count && !recreate_path) {
 			logger("FOLDER %s <%s> wasn't found!\n", dir[y], path);
 			break;
 		}
@@ -1927,9 +1925,9 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         wrefresh(miniwin);
 
         //Entering matching folder
-        for (int x = position[dirNumber]; x < (int)navigator->subcount; x++) {
+        for (int x = position[dirNumber]; x < (int)navigator->dir_count; x++) {
 
-            for (int y = coordinade[dirNumber]; y < (int)cursor->subcount;) {
+            for (int y = coordinade[dirNumber]; y < (int)cursor->dir_count;) {
 
                 if (strcmp(navigator->subdir[x].name, cursor->subdir[y].name) == 0) {
                     logger("> %s\n", navigator->subdir[x].name);
@@ -1954,20 +1952,20 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
             files = initQueue(cursor->count);
             for (int x = 0; x < (int)cursor->count; x++) {
                 files->value[files->end] = x;
-                enQueue(files, cursor->content[x].name);
+                enQueue(files, cursor->content[x]->name);
             }
             
             for (int x = 0; x < (int)navigator->count; x++) {
 
                 for (int y = 0; y < files->end;) {
                     
-                    if (strcmp(navigator->content[x].name, files->item[y]) == 0) {
+                    if (strcmp(navigator->content[x]->name, files->item[y]) == 0) {
                         //Create a queue with the cursor's contents location and compare from it.
                         //Matches will be merged and the exclusives will be added.
-                        logger("*%s\n", navigator->content[x].name);
+                        logger("*%s\n", navigator->content[x]->name);
                         line_number++;
                         
-                        copyOverides(&cursor->content[files->value[y]], &navigator->content[x]);
+                        copyOverides(cursor->content[files->value[y]], navigator->content[x]);
 
                         deQueue(files, y);
                         break;
@@ -1980,11 +1978,11 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
             //Adding the rest of the queue to the base
             if (files != NULL) {
                 for (int x = 0; x < files->end; x++) {
-                    ARCHIVE* mirror = dupFile(&cursor->content[files->value[x]]);
+                    ARCHIVE* mirror = dupFile(cursor->content[files->value[x]]);
                     logger("+ %s\n", mirror->name);
                     line_number++;
 
-                    addFile(&navigator, mirror);
+                    addFile(navigator, &mirror);
                     mirror = NULL;
                 }
 
@@ -1998,15 +1996,15 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
         }
 
         //Adding the exclusive folders
-        if (cursor->subcount > 0) {
+        if (cursor->dir_count > 0) {
             //Queuing the folders for optmization
-            files = initQueue(cursor->subcount);
-            for (int x = 0; x < (int)cursor->subcount; x++) {
+            files = initQueue(cursor->dir_count);
+            for (int x = 0; x < (int)cursor->dir_count; x++) {
                 files->value[files->end] = x;
                 enQueue(files, cursor->subdir[x].name);
             }
 
-            for (int x = 0; x < (int)navigator->subcount; x++) {
+            for (int x = 0; x < (int)navigator->dir_count; x++) {
                 
                 for (int y = 0; y < (int)files->end;) {
                     
@@ -2574,7 +2572,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 
 		break;
 	case 2:
-		OBJECT* cases, *mirror;
+		OBJECT *cases, *mirror;
 		if (strcmp(file[0]->name, "compass.json") == 0) {
 			sprintf(buffer, "{\n\t\"type\": \"minecraft:condition\",\n\t\"property\": \"minecraft:has_component\",\n\t\"component\": \"minecraft:lodestone_tracker\",\n\t\"on_true\": {},\n\t\"on_false\": {}\n}");
 			temp = processJSON(buffer);
@@ -2890,7 +2888,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 	indentJSON(&item->tab);
 	item->size = strlen(item->tab);
 
-	addFile(&location, item);
+	addFile(location, &item);
 	item = NULL;
 	
 } 
@@ -2972,7 +2970,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 		file.index = -1;
 		for (int x = 0; strlen(name) > 0 && x < (int)file.container->count; x++) {
-			if (strcmp(file.container->content[x].name, name) == 0) {
+			if (strcmp(file.container->content[x]->name, name) == 0) {
 				file.index = x;
 				break;
 			}
@@ -3013,7 +3011,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 					}
 					
-					snprintf(name, (int)(backup - save), save + 1);
+					snprintf(name, (int)(backup - save), "%s", save + 1);
 					save += strlen(name);
 				} else if (sscanf(save, "%255s", name) == 0) {
 					logger("Warning! Failed to get argument in iteraction %d, line %d\n", line, command_line);
@@ -3046,11 +3044,11 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					if (strcmp(arguments->item[0], "move") == 0) {
 						FOLDER* temp = navigator->parent;
-						for (int x = 0; x < (int)(temp->subcount + 1); x++) {
-							if (x < (int)temp->subcount && strcmp(temp->subdir[x].name, navigator->name) == 0) {
+						for (int x = 0; x < (int)(temp->dir_count + 1); x++) {
+							if (x < (int)temp->dir_count && strcmp(temp->subdir[x].name, navigator->name) == 0) {
 								delFolder(&temp, x);
 								break;
-							} else if (x == (int)temp->subcount) {
+							} else if (x == (int)temp->dir_count) {
 								logger("Warning! Failed to find origin <%s> folder to delete!\n", navigator->name);
 							}
 						}
@@ -3070,17 +3068,17 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					mirror = NULL;
 				} else { // Target is a file
-					ARCHIVE* mirror = dupFile(&file.container->content[file.index]);
+					ARCHIVE* mirror = dupFile(file.container->content[file.index]);
 					if (strlen(name) > 0) {
 						free(mirror->name);
 						mirror->name = strdup(name);
 					}
 
-					addFile(&cursor, mirror);
+					addFile(cursor, &mirror);
 
 					if (strcmp(arguments->item[0], "move") == 0) {
-						logger("Moving <%s> to %s\n", file.container->content[file.index].name, cursor->name);
-						delFile(&navigator, file.index);
+						logger("Moving <%s> to %s\n", file.container->content[file.index]->name, cursor->name);
+						delFile(navigator, file.index);
 					} else {
 						logger("Copying <%s> to %s\n", mirror->name, cursor->name);
 					}
@@ -3090,7 +3088,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				if (file.index == -1) {
 					cursor = navigator->parent;
 
-					for (int x = 0; x < (int)cursor->subcount; x++) {
+					for (int x = 0; x < (int)cursor->dir_count; x++) {
 						if (strcmp(cursor->subdir[x].name, navigator->name) == 0) {
 							logger("FOLDER removing <%s>\n", cursor->subdir[x].name);
 							delFolder(&cursor, x);
@@ -3101,14 +3099,15 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				} else {
 					navigator = file.container;
 					for (int x = 0; x < (int)navigator->count; x++) {
-						if (strcmp(navigator->content[x].name, file.container->content[file.index].name) == 0) {
-							logger("FILE removing <%s>\n", navigator->content[x].name);
-							delFile(&navigator, x);
+						if (strcmp(navigator->content[x]->name, file.container->content[file.index]->name) == 0) {
+							logger("FILE removing <%s>\n", navigator->content[x]->name);
+							delFile(navigator, x);
 							break;
 						}
 					}
 				}
 			} else if (strcmp(arguments->item[0], "edit") == 0) {
+
 				if (strcmp(arguments->item[1], "name") == 0) {
 					if (sscanf(arguments->item[2] + 1, "%255[^\"]", name) == 0) {
 						logger("Error! Couldn't process filename <%s>\n", arguments->item[2]);
@@ -3120,18 +3119,18 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						free(navigator->name);
 						navigator->name = strdup(name);
 					} else {
-						logger("FILE <%s> updated to <%s>", file.container->content[file.index].name, name);
+						logger("FILE <%s> updated to <%s>", file.container->content[file.index]->name, name);
 
-						free(file.container->content[file.index].name);
-						file.container->content[file.index].name = strdup(name);
+						free(file.container->content[file.index]->name);
+						file.container->content[file.index]->name = strdup(name);
 					}
 				} else if (strcmp(arguments->item[1], "display") == 0 || strcmp(arguments->item[1], "texture_path") == 0) {
 					OBJECT *value, *placeholder, *query;
 					sprintf(name, "%s", (strcmp(arguments->item[1], "display") == 0) ? "\"display\"" : "\"textures\"");
 
-					logger("FILE <%s> %s updated \n", file.container->content[file.index].name, name);
+					logger("FILE <%s> %s updated \n", file.container->content[file.index]->name, name);
 
-					placeholder = processJSON(file.container->content[file.index].tab);
+					placeholder = processJSON(file.container->content[file.index]->tab);
 					
 					for (size_t x = 0; x < placeholder->count; x++) {
 						if (strcmp(placeholder->value[x]->declaration, name) == 0) {
@@ -3176,9 +3175,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					char *model = printJSON(placeholder);
 					indentJSON(&model);
 
-					free(file.container->content[file.index].tab);
-					file.container->content[file.index].tab = model;
-					file.container->content[file.index].size = strlen(model);
+					free(file.container->content[file.index]->tab);
+					file.container->content[file.index]->tab = model;
+					file.container->content[file.index]->size = strlen(model);
 					
 					model = NULL;
 
@@ -3192,19 +3191,20 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						break;
 					}
 
-					ARCHIVE* temp = &file.container->content[file.index];
+					ARCHIVE* temp = file.container->content[file.index];
 					resizePNGFile(&temp, width, height);
 					temp = NULL;
 				}
+				
 			} else if (strcmp(arguments->item[0], "autofill") == 0) {
 				
-				logger("FILE <%s> Executing atlas autofill\n", file.container->content[file.index].name);
+				logger("FILE <%s> Executing atlas autofill\n", file.container->content[file.index]->name);
 				QUEUE* folders;
 				int dirnumber = 0, position[16];
 				char *temp;
                 size_t length;
 				OBJECT *placeholder, *query, *value;
-				placeholder = processJSON(file.container->content[file.index].tab);
+				placeholder = processJSON(file.container->content[file.index]->tab);
 
 				for (int x = 0; x < 16; x++) {
                     position[x] = 0;
@@ -3221,9 +3221,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                 }
 
 				navigator = navigator->parent->parent;
-                folders = initQueue(navigator->subcount - 1);
+                folders = initQueue(navigator->dir_count - 1);
 
-                for (size_t x = 0; x < navigator->subcount; x++) {
+                for (size_t x = 0; x < navigator->dir_count; x++) {
                     if (strcmp(navigator->subdir[x].name, "minecraft") == 0) {
                         continue;
                     }
@@ -3237,8 +3237,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                 }
 
 				for (size_t x = 0; x < templates->count; x++) {
-                    if (strcmp(templates->content[x].name, "atlases.txt") == 0) {
-                        query = processJSON(templates->content[x].tab);
+                    if (strcmp(templates->content[x]->name, "atlases.txt") == 0) {
+                        query = processJSON(templates->content[x]->tab);
                         query = query->value[0]->value[0];
                         break;
                     }
@@ -3256,7 +3256,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                     navigator = localizeFolder(target, namespace, false);
 
                     while (dirnumber >= 0) {
-                        while (position[dirnumber] < (int)navigator->subcount) {
+                        while (position[dirnumber] < (int)navigator->dir_count) {
                             navigator = &navigator->subdir[position[dirnumber]];
 
                             position[dirnumber]++;
@@ -3271,9 +3271,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                         if (navigator->count == 1) {
                             value = dupOBJ(query->value[1]);
 
-                            length = snprintf(NULL, 0, "\"%s/%s\"", temp, navigator->content->name);
+                            length = snprintf(NULL, 0, "\"%s/%s\"", temp, navigator->content[0]->name);
                             stamp = (char*)calloc(length + 1, sizeof(char));
-                            sprintf(stamp, "\"%s/%s\"", temp, navigator->content->name);
+                            sprintf(stamp, "\"%s/%s\"", temp, navigator->content[0]->name);
                             free(value->value[1]->value[0]->declaration);
                             value->value[1]->value[0]->declaration = stamp;
                             stamp = NULL;
@@ -3302,7 +3302,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                             value = NULL;
                         }
 
-                        while (position[dirnumber] == (int)navigator->subcount && dirnumber > -1) {
+                        while (position[dirnumber] == (int)navigator->dir_count && dirnumber > -1) {
                             navigator = navigator->parent;
                             position[dirnumber] = 0;
                             dirnumber--;
@@ -3317,10 +3317,10 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                     }
                 }
 
-                free(file.container->content[file.index].tab);
-                file.container->content[file.index].tab = printJSON(placeholder);
-				indentJSON(&file.container->content[file.index].tab);
-                file.container->content[file.index].size = strlen(file.container->content[file.index].tab);
+                free(file.container->content[file.index]->tab);
+                file.container->content[file.index]->tab = printJSON(placeholder);
+				indentJSON(&file.container->content[file.index]->tab);
+                file.container->content[file.index]->size = strlen(file.container->content[file.index]->tab);
 				
 			} else if (strcmp(arguments->item[0], "disassemble") == 0) {
 				
@@ -3329,7 +3329,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				FOLDER* location;
 				bool trim = false;
 
-				placeholder = processJSON(file.container->content[file.index].tab);
+				placeholder = processJSON(file.container->content[file.index]->tab);
 
 				if (strcmp(arguments->item[2], "trim") == 0) {
 					trim = true;
@@ -3458,7 +3458,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					logger("FILE <%s> placed at %s\n", permutate->name, namespace);
 
-					addFile(&location, permutate);
+					addFile(location, &permutate);
 					permutate = NULL;
 
 					freeOBJ(&value);
@@ -3467,18 +3467,19 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 				navigator = file.container;
 				for (size_t x = 0; x < navigator->count && trim == true; x++) {
-					if (strcmp(navigator->content[x].name, file.container->content[file.index].name) == 0) {
-						delFile(&navigator, x);
+					if (strcmp(navigator->content[x]->name, file.container->content[file.index]->name) == 0) {
+						delFile(navigator, x);
 						break;
 					}
 				}
 
-				free(file.container->content[file.index].tab);
-				file.container->content[file.index].tab = printJSON(placeholder);
-				indentJSON(&file.container->content[file.index].tab);
+				free(file.container->content[file.index]->tab);
+				file.container->content[file.index]->tab = printJSON(placeholder);
+				indentJSON(&file.container->content[file.index]->tab);
 				
 			} else if (strcmp(arguments->item[0], "paint") == 0) {
-				logger("Executing texture paint on %s\n", file.container->content[file.index].name);
+
+				logger("Executing texture paint on %s\n", file.container->content[file.index]->name);
 				int width, height;
 				int lines, collums;
 				int bit_depth, color_type;
@@ -3488,7 +3489,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 				texture = pixels = pallet = NULL;
 
-				if (getPNGPixels(&file.container->content[file.index], &texture, &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
+				if (getPNGPixels(file.container->content[file.index], &texture, &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
 					logger("Failed to read png file!\n");
 					checkpoint = NULL;
 					continue;
@@ -3515,6 +3516,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 				} else {
 					location = localizeFolder(assets, namespace, false);
+
 					if (location == NULL) {
 						logger("Error! Couldn't find %s at assets folder", namespace);
 						checkpoint = NULL;
@@ -3529,14 +3531,17 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				}
 
 				for (size_t x = 0; x < (location->count + 1); x++) {
-					if (x < location->count && strcmp(location->content[x].name, name) == 0) {
-						getPNGPixels(&location->content[x], &pixels, &collums, &lines, &color_type, &bit_depth, NULL, true);
+					if (x < location->count && strcmp(location->content[x]->name, name) == 0) {
+						getPNGPixels(location->content[x], &pixels, &collums, &lines, &color_type, &bit_depth, NULL, true);
 						break;
 					} else if (x == location->count) {
 						logger("Warning! Failed to find <%s>!\n", name);
 					}
 				}
 				if (pixels == NULL) {
+					for (int x = 0; x < height; x++) {
+						free(texture[x]);
+					}
 					free(texture);
 					continue;
 				}
@@ -3572,15 +3577,21 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				}
 
 				for (size_t x = 0; x < (location->count + 1); x++) {
-					if (x < location->count && strcmp(location->content[x].name, name) == 0) {
-						getPNGPixels(&location->content[x], &pallet, NULL, NULL, NULL, NULL, NULL, true);
+					if (x < location->count && strcmp(location->content[x]->name, name) == 0) {
+						getPNGPixels(location->content[x], &pallet, NULL, NULL, NULL, NULL, NULL, true);
 						break;
 					} else if (x == location->count) {
 						logger("Warning! Failed to find <%s>!\n", name);
 					}
 				}
 				if (pallet == NULL) {
+					for (int x = 0; x < height; x++) {
+						free(texture[x]);
+					}
 					free(texture);
+					for (int x = 0; x < lines; x++) {
+						free(pixels[x]);
+					}
 					free(pixels);
 					continue;
 				}
@@ -3611,12 +3622,17 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 				}
 				
-				printPNGPixels(&file.container->content[file.index], texture, width, height);
-				logger("FILE %s painted\n", file.container->content[file.index].name);
-
-				free(pallet);
+				printPNGPixels(file.container->content[file.index], texture, width, height);
+				logger("FILE %s painted\n", file.container->content[file.index]->name);
+				for (int x = 0; x < height; x++) {
+					free(texture[x]);
+				}
 				free(texture);
-				free(pixels);
+				for (int x = 0; x < lines; x++) {
+					free(pixels[x]);
+					free(pallet[x]);
+				}
+				
 			} else if (strcmp(arguments->item[0], "permutate_texture") == 0) {
 				
 				int width, height, texture_count = 0, bit_deph, color_type[2], bpp[2];
@@ -3633,8 +3649,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				}
 				
 				for (size_t x = 0; x < navigator->count; x++) {
-					if (strcmp(navigator->content[x].name, name) == 0) {
-						map = &navigator->content[x];
+					if (strcmp(navigator->content[x]->name, name) == 0) {
+						map = navigator->content[x];
 						break;
 					}
 				}
@@ -3673,22 +3689,22 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					for (size_t y = 0; y < navigator->count; y++) {
 
-						if (strcmp(location->content[y].name, namespace) == 0) {
-							copies[texture_count] = dupFile(&file.container->content[file.index]);
+						if (strcmp(location->content[y]->name, namespace) == 0) {
+							copies[texture_count] = dupFile(file.container->content[file.index]);
 
 							name_pointer = strchr(name, '.');
 							sprintf(namespace, "%.*s_%s", (int)(name_pointer - name), name, copies[texture_count]->name);
 							free(copies[texture_count]->name);
 							copies[texture_count]->name = strdup(namespace);
 
-							ARCHIVE *temp = &location->content[y];
+							ARCHIVE *temp = location->content[y];
 							ARCHIVE *mirror = copies[texture_count];
 
 							getPNGPixels(temp, &pallet[texture_count], NULL, NULL, NULL, NULL, NULL, true);
 							getPNGPixels(mirror, &to_paint[texture_count], NULL, NULL, NULL, NULL, NULL, true);
 
 							if (pallet[texture_count] == NULL || to_paint[texture_count] == NULL) {
-								logger("Error! Failed to process png files: %s, %s\n", location->content[y].name, copies[texture_count]->name);
+								logger("Error! Failed to process png files: %s, %s\n", location->content[y]->name, copies[texture_count]->name);
 								continue;
 							} else {
 								texture_count++;
@@ -3702,10 +3718,10 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				
 				//Continue with color substitution
 				getPNGPixels(map, &pixels, &collums, &lines, &bit_deph, &color_type[0], NULL, true);
-				getPNGPixels(&file.container->content[file.index], &texture, &width, &height, &bit_deph, &color_type[1], NULL, true);
+				getPNGPixels(file.container->content[file.index], &texture, &width, &height, &bit_deph, &color_type[1], NULL, true);
 
 				if (pixels == NULL || texture == NULL) {
-					logger("Error! Failed to process png files: %s, %s\n", map->name, file.container->content[file.index].name);
+					logger("Error! Failed to process png files: %s, %s\n", map->name, file.container->content[file.index]->name);
 					break;
 				}
 
@@ -3741,15 +3757,28 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 				}
 
+				for (int x = 0; x < lines; x++) {
+					free(pixels[x]);
+				}
 				free(pixels);
+				for (int x = 0; x < height; x++) {
+					free(texture[x]);
+				}
 				free(texture);
 				freeOBJ(&list);
 
 				for (int x = 0; x < texture_count; x++) {
 					ARCHIVE *mirror = copies[x];
 					printPNGPixels(mirror, to_paint[x], width, height);
-					addFile(&navigator, copies[x]);
+					addFile(navigator, &copies[x]);
 					logger("FILE <%s> was added to the same location as the base file\n", mirror->name, navigator->name);
+
+					for (int y = 0; y < lines; y++) {
+						free(to_paint[x][y]);
+					}
+					for (int y = 0; y < height; y++) {
+						free(pallet[x][y]);
+					}
 
 					free(to_paint[x]);
 					free(pallet[x]);
@@ -3758,8 +3787,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 				}
 				
 			} else if (strcmp(arguments->item[0], "convert_overrides") == 0) {
-				logger("FILE <%s> translating overrides\n", file.container->content[file.index].name);
-				ARCHIVE* temp = &file.container->content[file.index];
+				logger("FILE <%s> translating overrides\n", file.container->content[file.index]->name);
+				ARCHIVE* temp = file.container->content[file.index];
 				overridesFormatConvert(navigator, &temp);
 				temp = NULL;
 			}
@@ -3804,7 +3833,7 @@ void printZip(FOLDER* folder, char** path) {
 		box(miniwin, 0, 0);
 		wrefresh(miniwin);
 
-		while (navigator->subcount > 0) {
+		while (navigator->dir_count > 0) {
 			navigator = &navigator->subdir[dirPosition[dirNumber]];
 			snprintf(location + strlen(location), 1024 - strlen(location), "%s/", navigator->name);
 			
@@ -3819,7 +3848,7 @@ void printZip(FOLDER* folder, char** path) {
 		pointer = &location[strlen(location)];
 
 		for (int x = 0; x < (int)navigator->count; x++) {
-			snprintf(pointer, 1024 - strlen(location), "%s", navigator->content[x].name);
+			snprintf(pointer, 1024 - strlen(location), "%s", navigator->content[x]->name);
 			logger("%s FILE: <%s>\n", folder->name, location);
 
 			if (zipOpenNewFileInZip(rp, location, NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_DEFAULT_COMPRESSION) != ZIP_OK) {
@@ -3828,13 +3857,13 @@ void printZip(FOLDER* folder, char** path) {
 				return;
 			}
 
-			zipWriteInFileInZip(rp, navigator->content[x].tab, navigator->content[x].size);
+			zipWriteInFileInZip(rp, navigator->content[x]->tab, navigator->content[x]->size);
 			zipCloseFileInZip(rp);
 		}
 
 		pointer[0] = '\0';
 
-		while (dirPosition[dirNumber] == (int)navigator->subcount && dirNumber > -1) {
+		while (dirPosition[dirNumber] == (int)navigator->dir_count && dirNumber > -1) {
 			if ((pointer = strrchr(location, '/')) != NULL) {
 				pointer[0] = '\0';
 			}
@@ -3942,7 +3971,7 @@ int main () {
 	}
 
     refreshWindows();
-    optLenght = mvwprintLines(NULL, translated[0], 0, 1, 0, -1);
+    optLenght = mvwprintLines(NULL, translated[0], 0, 1, 1, 1);
 
     query = initQueue(8);
     entries = initQueue(8);
@@ -3991,18 +4020,18 @@ int main () {
 
                 break;
             case 1:
-                if (targets->subcount < 1) {
+                if (targets->dir_count < 1) {
                     mvwprintLines(miniwin, translated[1], 1, 1, 3, 3);
                     n_entries = 0;
                 } else if (diretrix[0] == 0) { // Printing tool options
 					for (int x = 0; x < 3; x++) {
-						optLenght = mvwprintLines(miniwin, translated[1], (1 + x), 1, (10 + x), (10 + x));
+						optLenght = mvwprintLines(miniwin, translated[1], (1 + x), 1, (9 + x), (9 + x));
 					}
 					n_entries = 3;
                 } else if (diretrix[0] != 0 && diretrix[1] == 1) { // Printing scanned resourcepacks for selection
-					mvwprintLines(miniwin, translated[1], 0, 1, 17, 17);
+					mvwprintLines(miniwin, translated[1], 0, 1, 16, 16);
 
-					for (int x = 0; x < (int)targets->subcount; x++) {
+					for (int x = 0; x < (int)targets->dir_count; x++) {
 						mvwprintw(miniwin, 1 + x, 1, "%s %s", targets->subdir[x].name, diretrix[0] == 2 ? "[ ]": "");
 
 						optLenght = (int)strlen(targets->subdir[x].name) > optLenght ? (int)strlen(targets->subdir[x].name) : optLenght; 
@@ -4016,25 +4045,25 @@ int main () {
 						mvwprintw(miniwin, 1 + query->value[x], strlen(query->item[x]) + 2, "[X]");
 					}
 					
-					mvwprintLines(miniwin, translated[1], targets->subcount + 1, 1, 15, 16);
-					n_entries = targets->subcount + 2;
+					mvwprintLines(miniwin, translated[1], targets->dir_count + 1, 1, 14, 15);
+					n_entries = targets->dir_count + 2;
 					
 				} else if (diretrix[0] == 1 && diretrix[1] == 2) { // Printing instructions file for selection
-					mvwprintLines(miniwin, translated[1], 0, 1, 18, 18);
+					mvwprintLines(miniwin, translated[1], 0, 1, 17, 17);
 
 					for (int x = 0; x < (int)instructions->count; x++) {
-						mvwprintw(miniwin, 1 + x, 1, "%s", instructions->content[x].name);
+						mvwprintw(miniwin, 1 + x, 1, "%s", instructions->content[x]->name);
 						
-						optLenght = (int)strlen(instructions->content[x].name) > optLenght ? (int)strlen(instructions->content[x].name) : optLenght;
+						optLenght = (int)strlen(instructions->content[x]->name) > optLenght ? (int)strlen(instructions->content[x]->name) : optLenght;
 					}
 
-					mvwprintLines(miniwin, translated[1], 1 + instructions->count, 1, 16, 16);
+					mvwprintLines(miniwin, translated[1], 1 + instructions->count, 1, 15, 15);
 					n_entries = instructions->count + 1;
 				}
                 break;
             case 2:
                 for (int x = 0; x < (int)lang->count; x++) {
-                    mvwprintw(miniwin, x + 1, 1, lang->content[x].name);
+                    mvwprintw(miniwin, x + 1, 1, lang->content[x]->name);
                 }
 
                 n_entries = lang->count;
@@ -4047,6 +4076,7 @@ int main () {
         switch (cursor[2])
         {
         case 0:
+			optLenght = mvwprintLines(NULL, translated[0], 0, 1, (cursor[1] + 1), (cursor[1] + 1));
             mvwchgat(sidebar, cursor[1] + 1, 1, optLenght, A_STANDOUT, 0, NULL);
             break;
         case 1:
@@ -4057,22 +4087,24 @@ int main () {
                 break;
             case 1:
 				if (diretrix[1] == 1) {
-					if (cursor[0] < (int)targets->subcount) {
+					if (cursor[0] < (int)targets->dir_count) {
 						optLenght = strlen(targets->subdir[cursor[0]].name) + 1;
 					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (15 + (cursor[0] - targets->subcount)), (15 + (cursor[0] - targets->subcount)));
+						optLenght = (int)mvwprintLines(NULL, translated[1], targets->dir_count + 1, 1, (14 + (cursor[0] - targets->dir_count)), (14 + (cursor[0] - targets->dir_count)));
 					}
-				} if (diretrix[1] == 2) {
+				} else if (diretrix[1] == 2) {
 					if (cursor[0] < (int)instructions->count) {
-						optLenght = strlen(instructions->content[cursor[0]].name);
+						optLenght = strlen(instructions->content[cursor[0]]->name);
 					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (15 + (cursor[0] - instructions->count)), (15 + (cursor[0] - instructions->count)));
+						optLenght = (int)mvwprintLines(NULL, translated[1], targets->dir_count + 1, 1, (14 + (cursor[0] - instructions->count)), (14 + (cursor[0] - instructions->count)));
 					}
+				} else {
+					optLenght = mvwprintLines(NULL, translated[1], 0, 1, (cursor[0] + 9), (cursor[0] + 9));
 				}
-                mvwchgat(miniwin, cursor[0]+1, 1, optLenght, A_STANDOUT, 0, NULL);
+                mvwchgat(miniwin, cursor[0] + 1, 1, optLenght, A_STANDOUT, 0, NULL);
                 break;
             case 2:
-                mvwchgat(miniwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name) + 1, A_STANDOUT, 0, NULL);
+                mvwchgat(miniwin, cursor[0] + 1, 1, strlen(lang->content[cursor[0]]->name) + 1, A_STANDOUT, 0, NULL);
                 break;
             }
             break;
@@ -4087,33 +4119,21 @@ int main () {
         //Erase Cursor
         switch (cursor[2])
         {
-        case 0:
-            mvwchgat(sidebar, cursor[1]+1, 1, optLenght, A_NORMAL, 0, NULL);
+		case 0:
+			optLenght = mvwprintLines(NULL, translated[0], 0, 1, (cursor[1] + 1), (cursor[1] + 1));
+            mvwchgat(sidebar, cursor[1] + 1, 1, optLenght, A_NORMAL, 0, NULL);
             break;
         case 1:
             switch (cursor[1])
             {
             case 0:
-                mvwchgat(miniwin, cursor[0]+1, 1, strlen(entries->item[cursor[0]]) + 4, A_NORMAL, 0, NULL);
+                mvwchgat(miniwin, cursor[0] + 1, 1, strlen(entries->item[cursor[0]]) + 4, A_NORMAL, 0, NULL);
                 break;
             case 1:
-				if (diretrix[1] == 1) {
-					if (cursor[0] < (int)targets->subcount) {
-						optLenght = strlen(targets->subdir[cursor[0]].name) + 1;
-					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, (15 + (cursor[0] - targets->subcount)), (15 + (cursor[0] - targets->subcount)));
-					}
-				} if (diretrix[1] == 2) {
-					if (cursor[0] < (int)instructions->count) {
-						optLenght = strlen(instructions->content[cursor[0]].name);
-					} else {
-						optLenght = (int)mvwprintLines(NULL, translated[1], targets->subcount + 1, 1, 16, 16);
-					}
-				}
-				mvwchgat(miniwin, cursor[0]+1, 1, optLenght, A_NORMAL, 0, NULL);
+				mvwchgat(miniwin, cursor[0] + 1, 1, optLenght, A_NORMAL, 0, NULL);
                 break;
             case 2:
-                mvwchgat(miniwin, cursor[0]+1, 1, strlen(lang->content[cursor[0]].name) + 1, A_NORMAL, 0, NULL);
+                mvwchgat(miniwin, cursor[0] + 1, 1, strlen(lang->content[cursor[0]]->name) + 1, A_NORMAL, 0, NULL);
                 break;
             }
             break;
@@ -4265,14 +4285,14 @@ int main () {
 							second = query->end == 2 ? &targets->subdir[query->value[1]] : NULL;
 							recieve = dupFolder(&targets->subdir[query->value[0]]);
 							free(recieve->name);
-							char name[256], *extension = strrchr(instructions->content[cursor[0]].name, '.');
+							char name[256], *extension = strrchr(instructions->content[cursor[0]]->name, '.');
 							extension++;
-							snprintf(name, (int)(extension - instructions->content[cursor[0]].name), "%s", instructions->content[cursor[0]].name);
+							snprintf(name, (int)(extension - instructions->content[cursor[0]]->name), "%s", instructions->content[cursor[0]]->name);
 							recieve->name = strdup(name);
 
-							executeInstruct(recieve, second, instructions->content[cursor[0]].tab);
+							executeInstruct(recieve, second, instructions->content[cursor[0]]->tab);
 							addFolder(&targets, recieve);
-							logger("Executed %s instructions and saved into %s duplicated folder\n", instructions->content[cursor[0]].name, recieve->name);
+							logger("Executed %s instructions and saved into %s duplicated folder\n", instructions->content[cursor[0]]->name, recieve->name);
 							confirmationDialog(translated[1], 13, actionLenght, 1);
 
 							diretrix[1] = diretrix[0] = 0;
@@ -4310,7 +4330,7 @@ int main () {
                     }
                     break;
                 case 1:
-                    if (targets->subcount > 0) {
+                    if (targets->dir_count > 0) {
                         cursor[2] = !cursor[2];
                     }
                     break;
