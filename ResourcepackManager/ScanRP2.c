@@ -38,7 +38,7 @@ typedef struct ARCHIVE {
 typedef struct FOLDER {
     char* name;
     struct FOLDER* parent;
-    struct FOLDER* subdir; // This needs to be updated to maybe get rid of memory leak
+    struct FOLDER** subdir; // This needs to be updated to maybe get rid of memory leak
     size_t dir_count;
     size_t count;
     size_t dir_capacity;
@@ -166,56 +166,55 @@ void logger(char* format, ...) {
 
 //Concatenate two strings to acess a path, return to the parent path or get the directory's name
 void returnString (char** path, const char* argument) {
-    char* scissor = strrchr(*path, '/');
-    size_t lenght;
+	char *placeholder, *pointer = path[0], type, temp[256];
+    size_t length;
 
-    if (scissor == NULL && (strcmp(argument, "path") == 0 || strcmp(argument, "name") == 0)) {
-        scissor = strrchr(*path, '\\');
-        if (strcmp(argument, "path") == 0 && scissor != NULL) {
-            *scissor = '\0';
-        } else if (strcmp(argument, "name") == 0 && scissor != NULL) {
-            lenght = strlen(scissor)-1;
-            memmove(*path, scissor+1, lenght*sizeof(char));
-            path[0][lenght] = '\0';
-        }
-    } else if (scissor != NULL && (strcmp(argument, "path") == 0 || strcmp(argument, "name") == 0)) {
-        if (path[0][strlen(path[0])-1] == '/') {
-            *scissor = '\0';
-            scissor = strrchr(*path, '/');
-        }
-        if (strcmp(argument, "name") == 0 && scissor != NULL) {
-            lenght = strlen(scissor);
-            memmove(*path, scissor+1, lenght*sizeof(char));
-            path[0][lenght] = '\0';
-        } else if (strcmp(argument, "path") == 0 && scissor != NULL) {
-            scissor[1] = '\0';
-        }
-    } else {
-        lenght = strlen(*path)+strlen(argument)+2;
-        char* backup = strdup(*path);
-        char* temp = (char*)realloc(*path, lenght*sizeof(char));
-        if (temp == NULL) {
-            logger("Could not reallcate memory for new path string, %s. Using backup\n", strerror(errno));
+	if (argument == NULL) {
+		logger("Warning! returnString argument is NULL!\n");
+	}
 
-            if (backup != NULL) {
-                *path = (char*)calloc(lenght, sizeof(char));
-                if (scissor != NULL) {
-                    snprintf(*path, lenght, "%s/%s", backup, argument);
-                } else {
-                    snprintf(*path, lenght, "%s\\%s", backup, argument);
-                }
-            }
-        } else {
-            free(backup);
-            *path = temp;
-            if (scissor != NULL) {
-                strcat(*path, "/");
-            } else {
-                strcat(*path, "\\");
-            }
-            strcat(*path, argument);
-        }
-    }
+	if (strrchr(pointer, '\\') != NULL) {
+		type = '\\';
+	} else {
+		type = '/';
+		pointer[strlen(pointer) - 1] = '\0';
+	}
+	if ((placeholder = strrchr(pointer, type)) == NULL) {
+		return;
+	}
+
+	if (strcmp(argument, "path") == 0 || strcmp(argument, "name") == 0) {
+		if (strcmp(argument, "path") == 0) {
+			placeholder = strrchr(pointer, type);
+			placeholder[(type == '\\') ? 0 : 1] = '\0';
+		} else if (strcmp(argument, "name") == 0) {
+			length = strlen(placeholder + 1);
+			snprintf(temp, 255, "%s", placeholder + 1);
+			sprintf(pointer, "%s", placeholder);
+
+			char* temp = (char*)realloc(path[0], (length + 1) * sizeof(char));
+			if (temp == NULL) {
+				logger("Error! Failed to resize path string! %s\n", strerror(errno));
+				return;
+			}
+
+			path[0] = temp;
+			temp = NULL;
+		}
+	} else {
+		length = snprintf(NULL, 0, "%s%c%s", pointer, type, argument);
+
+		char* temp = (char*)realloc(path[0], (length + 1) * sizeof(char));
+		if (temp == NULL) {
+			logger("Error! Failed to resize path string! %s\n", strerror(errno));
+			return;
+		}
+
+		path[0] = pointer = temp;
+		temp = NULL;
+
+		sprintf(pointer + strlen(pointer), "%c%s", type, argument);
+	}
 }
 
 char* returnPath (FOLDER* folder) {
@@ -338,10 +337,16 @@ OBJECT* createOBJ (char* key) {
     OBJECT* file = (OBJECT*)malloc(sizeof(OBJECT));
     file->capacity = 8;
     file->count = 0;
-    file->declaration = strdup(key);
     file->parent = NULL;
     file->value = NULL;
     file->indent = false;
+    file->declaration = strdup(key);
+
+	if (file->declaration == NULL) {
+		logger("Error! Failed to allocate name space for OBJECT! %s\n", strerror(errno));
+		free(file);
+		return NULL;
+	}
 
     return file;
 }
@@ -408,14 +413,18 @@ void addOBJ (OBJECT* file, OBJECT** value) {
 }
 
 void delOBJ (OBJECT* file, size_t key) {
+	if (file->value[key] == NULL) {
+		logger("Warning! OBJECT passed is NULL!\n");
+		return;
+	}
 	freeOBJ(&file->value[key]);
 
 	for (size_t x = key; x < (file->count - 1); x++) {
 		file->value[x] = file->value[x + 1];
 	}
 
-	if (file->count <= file->capacity / 2) {
-		file->capacity /= 2;
+	if (file->count <= file->capacity - 8) {
+		file->capacity -= 8;
 
 		OBJECT** temp = (OBJECT**)realloc(file->value, file->capacity * sizeof(OBJECT*));
 		if (temp == NULL) {
@@ -429,6 +438,9 @@ void delOBJ (OBJECT* file, size_t key) {
 }
 
 OBJECT* dupOBJ (OBJECT* target) {
+	if (target == NULL) {
+		return NULL;
+	}
     OBJECT* mirror = createOBJ(target->declaration);
 	mirror->indent = target->indent;
 
@@ -479,13 +491,15 @@ char* strchrs (const char* str, int count, ...) {
 OBJECT* processJSON (char* json) {
 	char *pointer, *checkpoint, *buffer, type[2];
 	OBJECT *file, *value;
-	size_t length, size = 1024;
+	size_t length, size = 1024, extension = strlen(json);
 	file = value = NULL;
 
 	buffer = (char*)calloc(size, sizeof(char));
-
+	if (buffer == NULL) {
+		logger("Error! Failed to allocate buffer, %s\n", strerror(errno));
+	}
 	type[0] = type[1] = ' ';
-	for (size_t x = 0; x < strlen(json); x++, value = NULL) {
+	for (size_t x = 0; x < extension; x++, value = NULL) {
 		pointer = strnotchr((json + x), 3, ' ', '\t', ',');
 		if (pointer == NULL) {
 			break;
@@ -497,7 +511,9 @@ OBJECT* processJSON (char* json) {
 		case '}':
 			/*fallthrough*/
 		case ']':
-			file = (file->parent != NULL) ? file->parent : file;
+			if (file != NULL) {
+				file = (file->parent != NULL) ? file->parent : file;
+			}
 			break;
 		case '{':
 			type[0] = '{';
@@ -539,6 +555,7 @@ OBJECT* processJSON (char* json) {
 				if (temp == NULL) {
 					logger("Error! Failed to resize buffer for json process! %s\n", strerror(errno));
 					free(buffer);
+					buffer = NULL;
 					break;
 				}
 				buffer = temp;
@@ -580,13 +597,14 @@ OBJECT* processJSON (char* json) {
 					if (temp == NULL) {
 						logger("Error! Failed to resize buffer for json process! %s\n", strerror(errno));
 						free(buffer);
+						buffer = NULL;
 						break;
 					}
 					buffer = temp;
 					temp = NULL;
 				}
 
-				sprintf(buffer, "%.*s", (int)length, (json + x));
+				snprintf(buffer, size, "%.*s", (int)length, (json + x));
 				value = processJSON(buffer);
 
 				x += length - 1;
@@ -606,6 +624,7 @@ OBJECT* processJSON (char* json) {
 					if (temp == NULL) {
 						logger("Error! Failed to resize buffer for json process! %s\n", strerror(errno));
 						free(buffer);
+						buffer = NULL;
 						break;
 					}
 					buffer = temp;
@@ -617,7 +636,11 @@ OBJECT* processJSON (char* json) {
 
 				x = (checkpoint - json);
 			}
-			addOBJ(file->value[file->count - 1], &value);
+			if (file->count > 0) {
+				addOBJ(file->value[file->count - 1], &value);
+			} else {
+				logger("Warning! Invalid json structure!\n");
+			}
 
 			break;
 		default: // Issue getting commas at end
@@ -637,11 +660,18 @@ OBJECT* processJSON (char* json) {
 		}
 	}
 
-	free(buffer);
+	if (buffer != NULL) {
+		free(buffer);
+		buffer = NULL;
+	}
 	return file;
 }
 
 void indentJSON (char** file) {
+	if (file == NULL || *file == NULL) {
+		logger("Warning! File passed for indentation is NULL!\n");
+		return;
+	}
     char *pointer = *file, *temp;
     size_t count = 0;
 
@@ -673,6 +703,10 @@ void indentJSON (char** file) {
 }
 
 char* printJSON (OBJECT* json) {
+	if (json == NULL) {
+		logger("Waning! json OBJECT passed is NULL!\n");
+		return NULL;
+	}
 	char *file, *placeholder;
     size_t length = 0, size = 1024;
     OBJECT* navigator = json;
@@ -689,7 +723,9 @@ char* printJSON (OBJECT* json) {
 		);
 		
 		for (size_t x = 0; x < navigator->count; x++) {
-			placeholder = printJSON(navigator->value[x]);
+			if ((placeholder = printJSON(navigator->value[x])) == NULL) {
+				continue;
+			}
 
 			if (navigator->indent == true) {
 				indentJSON(&placeholder);
@@ -742,10 +778,12 @@ char* printJSON (OBJECT* json) {
 			);
 
 			if (x == (navigator->count - 1)) {
-				sprintf(file + strlen(file), "%c", (strcmp(navigator->declaration, "obj") == 0) ? '}' : ']');
+				snprintf(file + strlen(file), size - strlen(file), "%c", (strcmp(navigator->declaration, "obj") == 0) ? '}' : ']');
 			}
 
-			free(placeholder);
+			if (placeholder != NULL) {
+				free(placeholder);
+			}
 		}
 	} else {
 		sprintf(file, "%s", navigator->declaration);
@@ -798,10 +836,12 @@ void freeFolder(FOLDER* folder) {
     free(folder->content);
 
     for (;folder->dir_count > 0; folder->dir_count--) {
-        freeFolder(&folder->subdir[folder->dir_count-1]);
+        freeFolder(folder->subdir[folder->dir_count-1]);
     }
     free(folder->subdir);
     free(folder->name);
+	free(folder);
+	folder = NULL;
 }
 
 FOLDER* createFolder(FOLDER* parent, const char* name) {
@@ -821,58 +861,58 @@ FOLDER* createFolder(FOLDER* parent, const char* name) {
     return folder;
 }
 
-void addFolder(FOLDER** parent, FOLDER* subdir) {
-    if (parent[0]->dir_count == 0) {
-        parent[0]->subdir = (FOLDER*)calloc(parent[0]->dir_capacity, sizeof(FOLDER));
+void addFolder(FOLDER* parent, FOLDER** subdir) {
+    if (parent->dir_count == 0) {
+        parent->subdir = (FOLDER**)calloc(parent->dir_capacity, sizeof(FOLDER*));
 
-        if (parent[0]->subdir == NULL) {
+        if (parent->subdir == NULL) {
             logger("Error allocating memory for new folder, %s\n", strerror(errno));
         }
-    } else if (parent[0]->dir_count >= parent[0]->dir_capacity) {
-		FOLDER* old = parent[0]->subdir;
-		size_t newCapacity = parent[0]->dir_capacity * 2;
+    } else if (parent->dir_count >= parent->dir_capacity) {
+		FOLDER** old = parent->subdir;
+		size_t newCapacity = parent->dir_capacity * 2;
         
-        FOLDER* temp = (FOLDER*)realloc(parent[0]->subdir, newCapacity * sizeof(FOLDER));
+        FOLDER** temp = (FOLDER**)realloc(parent->subdir, newCapacity * sizeof(FOLDER*));
         if (temp == NULL) {
             logger("Error reallocating memory for new folder, %s\n", strerror(errno));
             return;
         }
 
-        parent[0]->subdir = temp;
-        parent[0]->dir_capacity = newCapacity;
+        parent->subdir = temp;
+        parent->dir_capacity = newCapacity;
 
-		if (parent[0]->subdir != old) {
-			for (int x = 0; x < (int)parent[0]->dir_count; x++) {
-				parent[0]->subdir[x].parent = parent[0];
+		if (parent->subdir != old) {
+			for (int x = 0; x < (int)parent->dir_count; x++) {
+				parent->subdir[x]->parent = parent;
 			}
 		}
     }
 
-    subdir->parent = parent[0];
-    parent[0]->subdir[parent[0]->dir_count] = *subdir;
-    parent[0]->dir_count++;
+    subdir[0]->parent = parent;
+    parent->subdir[parent->dir_count] = subdir[0];
+    parent->dir_count++;
 }
 
 // Pass the folder with the target and it's index to free and move the array foward
-void delFolder (FOLDER** folder, int index) {
-	freeFolder(&folder[0]->subdir[index]);
+void delFolder (FOLDER* folder, int index) {
+	freeFolder(folder->subdir[index]);
 	
-	for (int x = index; x < (int)(folder[0]->dir_count - 1); x++) {
-		folder[0]->subdir[x] = folder[0]->subdir[x + 1];
+	for (int x = index; x < (int)(folder->dir_count - 1); x++) {
+		folder->subdir[x] = folder->subdir[x + 1];
 	}
-	folder[0]->dir_count--;
+	folder->dir_count--;
 
-	if (folder[0]->dir_count == 0) {
-		free(folder[0]->subdir);
+	if (folder->dir_count == 0) {
+		free(folder->subdir);
 	}
-	if (folder[0]->dir_count == folder[0]->dir_capacity / 2 && folder[0]->dir_capacity > 0) {
-		folder[0]->dir_capacity /= 2;
-		FOLDER* backup = realloc(folder[0]->subdir, folder[0]->dir_capacity * sizeof(FOLDER));
+	if (folder->dir_count == folder->dir_capacity / 2 && folder->dir_capacity > 0) {
+		folder->dir_capacity /= 2;
+		FOLDER** temp = realloc(folder->subdir, folder->dir_capacity * sizeof(FOLDER*));
 
-		if (backup == NULL) {
-			logger("Couldn't trim %s folder capacity! %s\n", folder[0]->name, strerror(errno));
+		if (temp == NULL) {
+			logger("Couldn't trim %s folder capacity! %s\n", folder->name, strerror(errno));
 		} else {
-			folder[0]->subdir = backup;
+			folder->subdir = temp;
 		}
 	}
 }
@@ -907,21 +947,35 @@ ARCHIVE* getUnzip(unzFile* file, const char* name) {
         return NULL;
     }
 
-    while ((bytesRead = unzReadCurrentFile(file, buffer+length, 1024*sizeof(char))) > 0) {
+    while ((bytesRead = unzReadCurrentFile(file, buffer + length, 1024)) > 0) {
         length += bytesRead;
-        if (length >= capacity-1) {
+        if (length >= capacity - 1) {
             capacity *= 2;
-            placeholder = (char*)realloc(buffer, (capacity+1)*sizeof(char));
+            placeholder = realloc(buffer, capacity);
             
             if (placeholder == NULL) {
                 logger("getUnzip: Error, could not resize buffer, %s\n", strerror(errno));
                 free(buffer);
-            } else {
-                buffer = placeholder;
-                placeholder = NULL;
+				free(model);
+				unzCloseCurrentFile(file);
             }
+
+			buffer = placeholder;
+			placeholder = NULL;
         }
     }
+
+	placeholder = realloc(buffer, (length + 1));
+    if (placeholder == NULL || length == 0) {
+		logger("getFile: Error! Couldn't resize tab of contents's size!\n");
+		buffer = placeholder;
+		free(model);
+		unzCloseCurrentFile(file);
+
+		return NULL;
+	}
+
+	buffer = placeholder;
 
     if (length == 0) {
         logger("getUnzip: Error reading file in zip, %s\n", strerror(errno));
@@ -934,7 +988,7 @@ ARCHIVE* getUnzip(unzFile* file, const char* name) {
     model->size = length;
     model->tab = buffer;
 
-    model->tab[length - 1] = '\0';
+    model->tab[length] = '\0';
 
     returnString(&model->name, "name");
     unzCloseCurrentFile(file);
@@ -969,7 +1023,7 @@ ARCHIVE* getFile(const char* path) {
 	while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
 		if (length + bytesRead > capacity) {
 			capacity *= 2;
-			temp = realloc(placeholder, capacity * sizeof(char));
+			temp = realloc(placeholder, capacity);
 
 			if (temp == NULL) {
 				logger("getFile: Error! Couldn't resize tab of contents's size!\n");
@@ -988,7 +1042,7 @@ ARCHIVE* getFile(const char* path) {
 		length += bytesRead;
 	}
 
-    temp = realloc(placeholder, length);
+    temp = realloc(placeholder, (length + 1));
     if (temp == NULL || length == 0) {
 		logger("getFile: Error! Couldn't resize tab of contents's size!\n");
 		placeholder = temp;
@@ -1010,6 +1064,7 @@ ARCHIVE* getFile(const char* path) {
     model->size = length;
     model->tab = placeholder;
 
+	model->tab[length] = '\0';
     fclose(file);
     return model;
 }
@@ -1085,8 +1140,8 @@ FOLDER* dupFolder (FOLDER* base) {
     }
 
     for (size_t x = 0; x < base->dir_count; x++) {
-        FOLDER* mirror = dupFolder(&base->subdir[x]);
-        addFolder(&dup, mirror);
+        FOLDER* mirror = dupFolder(base->subdir[x]);
+        addFolder(dup, &mirror);
         mirror = NULL;
     }
 
@@ -1615,7 +1670,7 @@ FOLDER* getFolder(char* path, int position) {
 			if (stat(namespace, &fileStat) == 0) {
 				if (S_ISDIR(fileStat.st_mode)) {
 					FOLDER* mirror = createFolder(NULL, pointer + 1);
-					addFolder(&navigator, mirror);
+					addFolder(navigator, &mirror);
 
 					logger("FOLDER: <%s>\n", namespace);
 					mirror = NULL;
@@ -1648,7 +1703,7 @@ FOLDER* getFolder(char* path, int position) {
 					break;
 				}
 
-				navigator = &navigator->subdir[dirPosition[dirNumber]];
+				navigator = navigator->subdir[dirPosition[dirNumber]];
 
 				sprintf(pointer, "\\%s", navigator->name);
 				pointer = &namespace[strlen(namespace)];
@@ -1749,8 +1804,8 @@ FOLDER* getFolder(char* path, int position) {
 				}
 
 				FOLDER* mirror = createFolder(NULL, pointer);
-				addFolder(&navigator, mirror);
-				navigator = &navigator->subdir[navigator->dir_count - 1];
+				addFolder(navigator, &mirror);
+				navigator = navigator->subdir[navigator->dir_count - 1];
 
 				dirNumber++;
 
@@ -1803,17 +1858,17 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
 	}
 
 	for (int x = 0, y = 0; y < dirNumber && x < (int)(navigator->dir_count + 1); x++) {
-		if (x < (int)navigator->dir_count && strcmp(navigator->subdir[x].name, dir[y]) == 0) {
-			navigator = &navigator->subdir[x];
+		if (x < (int)navigator->dir_count && strcmp(navigator->subdir[x]->name, dir[y]) == 0) {
+			navigator = navigator->subdir[x];
 
 			y++;
 			x = -1;
 		} else if (x == (int)navigator->dir_count && recreate_path) {
 			logger("FOLDER \"%s\" was created\n", dir[y]);
 			FOLDER* temp = createFolder(NULL, dir[y]);
-			addFolder(&navigator, temp);
+			addFolder(navigator, &temp);
 			temp = NULL;
-			navigator = &navigator->subdir[x];
+			navigator = navigator->subdir[x];
 
 			y++;
 			x = -1;
@@ -1929,14 +1984,14 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
             for (int y = coordinade[dirNumber]; y < (int)cursor->dir_count;) {
 
-                if (strcmp(navigator->subdir[x].name, cursor->subdir[y].name) == 0) {
-                    logger("> %s\n", navigator->subdir[x].name);
+                if (strcmp(navigator->subdir[x]->name, cursor->subdir[y]->name) == 0) {
+                    logger("> %s\n", navigator->subdir[x]->name);
                     line_number++;
                     coordinade[dirNumber] = y;
                     position[dirNumber] = x;
 
-                    navigator = &navigator->subdir[position[dirNumber]];
-                    cursor = &cursor->subdir[coordinade[dirNumber]];
+                    navigator = navigator->subdir[position[dirNumber]];
+                    cursor = cursor->subdir[coordinade[dirNumber]];
                     x = 0;
                     y = 0;
 
@@ -2001,14 +2056,14 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
             files = initQueue(cursor->dir_count);
             for (int x = 0; x < (int)cursor->dir_count; x++) {
                 files->value[files->end] = x;
-                enQueue(files, cursor->subdir[x].name);
+                enQueue(files, cursor->subdir[x]->name);
             }
 
             for (int x = 0; x < (int)navigator->dir_count; x++) {
                 
                 for (int y = 0; y < (int)files->end;) {
                     
-                    if (strcmp(navigator->subdir[x].name, files->item[y]) == 0) {
+                    if (strcmp(navigator->subdir[x]->name, files->item[y]) == 0) {
                         deQueue(files, y);
                         break;
                     } else {
@@ -2019,11 +2074,11 @@ void overrideFiles(FOLDER* base, FOLDER* override) {
 
             if (files != NULL) {
                 for (int x = 0; x < files->end; x++) {
-                    FOLDER* mirror = dupFolder(&cursor->subdir[files->value[x]]);
+                    FOLDER* mirror = dupFolder(cursor->subdir[files->value[x]]);
                     logger("++ /%s\n", mirror->name);
                     line_number++;
 
-                    addFolder(&navigator, mirror);
+                    addFolder(navigator, &mirror);
                     mirror = NULL;
                 }
 
@@ -3045,8 +3100,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					if (strcmp(arguments->item[0], "move") == 0) {
 						FOLDER* temp = navigator->parent;
 						for (int x = 0; x < (int)(temp->dir_count + 1); x++) {
-							if (x < (int)temp->dir_count && strcmp(temp->subdir[x].name, navigator->name) == 0) {
-								delFolder(&temp, x);
+							if (x < (int)temp->dir_count && strcmp(temp->subdir[x]->name, navigator->name) == 0) {
+								delFolder(temp, x);
 								break;
 							} else if (x == (int)temp->dir_count) {
 								logger("Warning! Failed to find origin <%s> folder to delete!\n", navigator->name);
@@ -3063,7 +3118,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						overrideFiles(cursor, mirror);
 						freeFolder(mirror);
 					} else {
-						addFolder(&cursor, mirror);
+						addFolder(cursor, &mirror);
 					}
 
 					mirror = NULL;
@@ -3089,9 +3144,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					cursor = navigator->parent;
 
 					for (int x = 0; x < (int)cursor->dir_count; x++) {
-						if (strcmp(cursor->subdir[x].name, navigator->name) == 0) {
-							logger("FOLDER removing <%s>\n", cursor->subdir[x].name);
-							delFolder(&cursor, x);
+						if (strcmp(cursor->subdir[x]->name, navigator->name) == 0) {
+							logger("FOLDER removing <%s>\n", cursor->subdir[x]->name);
+							delFolder(cursor, x);
 							navigator = NULL;
 							break;
 						}
@@ -3125,6 +3180,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						file.container->content[file.index]->name = strdup(name);
 					}
 				} else if (strcmp(arguments->item[1], "display") == 0 || strcmp(arguments->item[1], "texture_path") == 0) {
+					
 					OBJECT *value, *placeholder, *query;
 					sprintf(name, "%s", (strcmp(arguments->item[1], "display") == 0) ? "\"display\"" : "\"textures\"");
 
@@ -3224,11 +3280,11 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
                 folders = initQueue(navigator->dir_count - 1);
 
                 for (size_t x = 0; x < navigator->dir_count; x++) {
-                    if (strcmp(navigator->subdir[x].name, "minecraft") == 0) {
+                    if (strcmp(navigator->subdir[x]->name, "minecraft") == 0) {
                         continue;
                     }
 
-                    enQueue(folders, navigator->subdir[x].name);
+                    enQueue(folders, navigator->subdir[x]->name);
                 }
 
 				if (folders->end == 0) {
@@ -3257,7 +3313,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
                     while (dirnumber >= 0) {
                         while (position[dirnumber] < (int)navigator->dir_count) {
-                            navigator = &navigator->subdir[position[dirnumber]];
+                            navigator = navigator->subdir[position[dirnumber]];
 
                             position[dirnumber]++;
                             dirnumber++;
@@ -3834,7 +3890,7 @@ void printZip(FOLDER* folder, char** path) {
 		wrefresh(miniwin);
 
 		while (navigator->dir_count > 0) {
-			navigator = &navigator->subdir[dirPosition[dirNumber]];
+			navigator = navigator->subdir[dirPosition[dirNumber]];
 			snprintf(location + strlen(location), 1024 - strlen(location), "%s/", navigator->name);
 			
 			logger("%s: FOLDER <%s>\n", folder->name, location);
@@ -4032,9 +4088,9 @@ int main () {
 					mvwprintLines(miniwin, translated[1], 0, 1, 16, 16);
 
 					for (int x = 0; x < (int)targets->dir_count; x++) {
-						mvwprintw(miniwin, 1 + x, 1, "%s %s", targets->subdir[x].name, diretrix[0] == 2 ? "[ ]": "");
+						mvwprintw(miniwin, 1 + x, 1, "%s %s", targets->subdir[x]->name, diretrix[0] == 2 ? "[ ]": "");
 
-						optLenght = (int)strlen(targets->subdir[x].name) > optLenght ? (int)strlen(targets->subdir[x].name) : optLenght; 
+						optLenght = (int)strlen(targets->subdir[x]->name) > optLenght ? (int)strlen(targets->subdir[x]->name) : optLenght; 
 					}
 
 					for (int x = 0; diretrix[0] == 1 && x < query->end; x++) {
@@ -4088,7 +4144,7 @@ int main () {
             case 1:
 				if (diretrix[1] == 1) {
 					if (cursor[0] < (int)targets->dir_count) {
-						optLenght = strlen(targets->subdir[cursor[0]].name) + 1;
+						optLenght = strlen(targets->subdir[cursor[0]]->name) + 1;
 					} else {
 						optLenght = (int)mvwprintLines(NULL, translated[1], targets->dir_count + 1, 1, (14 + (cursor[0] - targets->dir_count)), (14 + (cursor[0] - targets->dir_count)));
 					}
@@ -4170,7 +4226,7 @@ int main () {
 							temp = getFolder(path, query->value[x]);
 							
 							if (temp != NULL) {
-								addFolder(&targets, temp);
+								addFolder(targets, &temp);
 								entries->value[query->value[x]] = 2;
 								temp = NULL;
 							} else {
@@ -4239,7 +4295,7 @@ int main () {
 								|| (diretrix[0] > 0 && query->end > 0))
 						) {
 							if (diretrix[0] == 0) { // Merge resourcepacks
-								overrideFiles(&targets->subdir[query->value[0]], &targets->subdir[query->value[1]]);
+								overrideFiles(targets->subdir[query->value[0]], targets->subdir[query->value[1]]);
 	
 								diretrix[1] = diretrix[0] = 0;
 								cursor[0] = 0;
@@ -4250,7 +4306,7 @@ int main () {
 								cursor[0] = 0;
 							} else if (diretrix[0] == 2) { // Export resourcepack
 								for (int x = 0; x < query->end; x++) {
-									printZip(&targets->subdir[query->value[x]], &path);
+									printZip(targets->subdir[query->value[x]], &path);
 								}
 								confirmationDialog(translated[1], 20, actionLenght, 1);
 		
@@ -4262,11 +4318,11 @@ int main () {
 							break;
 						} else if (cursor[0] < n_entries - 2) {
 							for (int x = 0; x < query->end + 1; x++) {
-								if (x < query->end && strcmp(targets->subdir[cursor[0]].name, query->item[x]) == 0) {
+								if (x < query->end && strcmp(targets->subdir[cursor[0]]->name, query->item[x]) == 0) {
 									deQueue(query, x);
 									break;
 								} else if (x == query->end) {
-									enQueue(query, targets->subdir[cursor[0]].name);
+									enQueue(query, targets->subdir[cursor[0]]->name);
 									query->value[query->end-1] = cursor[0];
 									break;
 								}
@@ -4282,8 +4338,8 @@ int main () {
 							break;
 						} else {
 							FOLDER *second, *recieve;
-							second = query->end == 2 ? &targets->subdir[query->value[1]] : NULL;
-							recieve = dupFolder(&targets->subdir[query->value[0]]);
+							second = query->end == 2 ? targets->subdir[query->value[1]] : NULL;
+							recieve = dupFolder(targets->subdir[query->value[0]]);
 							free(recieve->name);
 							char name[256], *extension = strrchr(instructions->content[cursor[0]]->name, '.');
 							extension++;
@@ -4291,7 +4347,7 @@ int main () {
 							recieve->name = strdup(name);
 
 							executeInstruct(recieve, second, instructions->content[cursor[0]]->tab);
-							addFolder(&targets, recieve);
+							addFolder(targets, &recieve);
 							logger("Executed %s instructions and saved into %s duplicated folder\n", instructions->content[cursor[0]]->name, recieve->name);
 							confirmationDialog(translated[1], 13, actionLenght, 1);
 
