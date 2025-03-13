@@ -400,8 +400,8 @@
 	copy "minecraft:textures/item/";
 > "tools/crossbow_firework.png"
 	copy "minecraft:textures/item/";
-> "tools/firework_rocket.png"
-	copy "minecraft:textures/item/";
+> "tools/firework.png"
+	copy "minecraft:textures/item/firework_rocket.png";
 > "tools/bow.json"
 	edit texture_path set {
 		"0": "item/bow",

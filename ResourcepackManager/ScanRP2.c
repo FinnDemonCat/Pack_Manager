@@ -86,53 +86,6 @@ char* report = NULL;
 char* display;
 size_t report_size = 1024, report_end = 0, report_lenght = 0;
 
-QUEUE* initQueue(size_t size) {
-    QUEUE* queue = malloc(sizeof(QUEUE));
-    queue->value = (int*)calloc(size, sizeof(int));
-    queue->item = (char**)calloc(size, sizeof(char*));
-
-    for (int x = 0; x < (int)size; x++) {
-        queue->item[x] = NULL;
-        queue->value[x] = 0;
-    }
-
-    queue->end = 0;
-    queue->size = size;
-    return queue;
-}
-
-void enQueue(QUEUE* queue, char* item) {
-    if (queue->end == (int)queue->size) {
-        return;
-    }
-    queue->item[queue->end] = strdup(item);
-        queue->end++;
-}
-
-void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
-    for (int i = 0; i < queue->end; i++) {
-        mvwprintw(window, y+i, x, "%s [%d]", queue->item[i], queue->value[i]);
-    }
-}
-
-void deQueue(QUEUE* queue, int item) {
-    free(queue->item[item]);
-    for (int x = item; x < queue->end - 1; x++) {
-        queue->item[x] = queue->item[x+1];
-        queue->value[x] = queue->value[x+1];
-    }
-    queue->end--;
-}
-
-void endQueue(QUEUE* queue) {
-    free(queue->value);
-    for (;queue->end > 0; queue->end--) {
-        free(queue->item[queue->end-1]);
-    }
-    free(queue->item);
-    free(queue);
-}
-
 void logger(char* format, ...) {
     char* buffer;
     size_t size;
@@ -162,6 +115,76 @@ void logger(char* format, ...) {
 	}
 
     free(buffer);
+}
+
+QUEUE* initQueue(size_t size) {
+    QUEUE* queue = malloc(sizeof(QUEUE));
+    queue->value = (int*)calloc(size, sizeof(int));
+    queue->item = (char**)calloc(size, sizeof(char*));
+
+    for (int x = 0; x < (int)size; x++) {
+        queue->item[x] = NULL;
+        queue->value[x] = 0;
+    }
+
+    queue->end = 0;
+    queue->size = size;
+    return queue;
+}
+
+void enQueue(QUEUE* queue, char* item) {
+    if (queue->end == (int)queue->size) {
+		queue->size += 8;
+
+        char** temp = (char**)realloc(queue->item, queue->size * sizeof(char*));
+		if (temp == NULL) {
+			logger("Error! Failed to resize item queue! %s\n", strerror(errno));
+			return;
+		}
+		
+		queue->item = temp;
+		temp = NULL;
+		
+		int* count = (int*)realloc(queue->value, queue->size * sizeof(int));
+		if (count == NULL) {
+			logger("Error! Failed to resize value queue! %s\n", strerror(errno));
+			return;
+		}
+
+		queue->value = count;
+		count = NULL;
+
+    }
+
+    queue->item[queue->end] = strdup(item);
+	queue->end++;
+}
+
+void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
+    for (int i = 0; i < queue->end; i++) {
+        mvwprintw(window, y+i, x, "%s [%d]", queue->item[i], queue->value[i]);
+    }
+}
+
+void deQueue(QUEUE* queue, int item) {
+	if (queue->end == 0 || item > queue->end || item > queue->size) {
+		return;
+	}
+    free(queue->item[item]);
+    for (int x = item; x < queue->end - 1; x++) {
+        queue->item[x] = queue->item[x+1];
+        queue->value[x] = queue->value[x+1];
+    }
+    queue->end--;
+}
+
+void endQueue(QUEUE* queue) {
+    free(queue->value);
+    for (;queue->end > 0; queue->end--) {
+        free(queue->item[queue->end-1]);
+    }
+    free(queue->item);
+    free(queue);
 }
 
 //Concatenate two strings to acess a path, return to the parent path or get the directory's name
@@ -2950,7 +2973,7 @@ void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
 
 void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 	FOLDER *navigator, *cursor, *templates;
-	char *pointer, *checkpoint, *save, buffer[1024], command[512], namespace[256], name[256], *path = calloc(256, sizeof(char));
+	char *pointer, *checkpoint, *save, buffer[1024], command[1024], namespace[256], name[256], *path = calloc(256, sizeof(char));
 	int input, pin = report_end, line = 0, command_line = 0;
 	QUEUE *arguments;
 
@@ -3045,12 +3068,18 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			command_line++;
 			arguments = initQueue(8);
 
-			if (sscanf(checkpoint, "%511[^;]", command) == 0) {
+			if (sscanf(checkpoint, "%1023[^;]", command) == 0) {
 				logger("Error! Failure when copying command %d in iteraction %d\n", command_line, line);
 			}
 
 			// Processing line arguments into queue
-			for (save = &command[0]; save != NULL; save = strchr(save + 1, ' ')) {
+			for (
+					save = &command[0];
+					save != NULL;
+					save = strchrs(save + 1, 2, '\n', ' '), save = strnotchr(save, 3, '\n', '\t', ' ')
+				) {
+				
+				char placeholder[512];
 				if (save[1] == '{') {
 					char* backup;
 					for (int x = 2, y = 1; save[x] != '\0'; x++) {
@@ -3068,785 +3097,806 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					
 					snprintf(name, (int)(backup - save), "%s", save + 1);
 					save += strlen(name);
-				} else if (sscanf(save, "%255s", name) == 0) {
+				} else if (sscanf(save, "%511s", placeholder) == 0) {
 					logger("Warning! Failed to get argument in iteraction %d, line %d\n", line, command_line);
 					continue;
 				}
 
-				enQueue(arguments, name);
+				enQueue(arguments, placeholder);
+
+				if (
+					strcmp(placeholder, "copy") == 0
+					|| strcmp(placeholder, "move") == 0
+					|| strcmp(placeholder, "remove") == 0
+					|| strcmp(placeholder, "edit") == 0
+					|| strcmp(placeholder, "autofill") == 0
+					|| strcmp(placeholder, "disassemble") == 0
+					|| strcmp(placeholder, "paint") == 0
+					|| strcmp(placeholder, "permutate_texture") == 0
+					|| strcmp(placeholder, "convert_overrides") == 0
+				) {
+					arguments->value[arguments->end - 1] = 1;
+				}
 			}
 
-			if (strcmp(arguments->item[0], "move") == 0 || strcmp(arguments->item[0], "copy") == 0) {
-				if (sscanf(arguments->item[1] + 1, "%255[^\"]", namespace) == 0) {
-					logger("Failed to process file path string!\n");
-					break;
-				}
-
-				if ((save = strrchr(namespace, '/')) != NULL) {
-					sprintf(name, "%s", save + 1);
-				} else {
-					name[0] = '\0';
-				}
-
-				cursor = localizeFolder(target, namespace, true);
-				if (cursor == NULL) {
-					logger("Error! Failed to find <%s>!\n", namespace);
-					break;
-				}
-
-				if (file.index == -1) { // Target is a folder
-					FOLDER* mirror = dupFolder(navigator);
-
-					if (strcmp(arguments->item[0], "move") == 0) {
-						FOLDER* temp = navigator->parent;
-						for (int x = 0; x < (int)(temp->dir_count + 1); x++) {
-							if (x < (int)temp->dir_count && strcmp(temp->subdir[x]->name, navigator->name) == 0) {
-								delFolder(temp, x);
-								break;
-							} else if (x == (int)temp->dir_count) {
-								logger("Warning! Failed to find origin <%s> folder to delete!\n", navigator->name);
-							}
-						}
-
-						logger("Moving <%s> to <%s>\n", cursor->name, namespace);
-					} else {
-						logger("Copying <%s> to <%s>\n", cursor->name, namespace);
-					}
-
-					if (strcmp(mirror->name, cursor->name) == 0) {
-						logger("A match to <%s> was found at <%s>, merging contents\n", mirror->name, namespace);
-						overrideFiles(cursor, mirror);
-						freeFolder(mirror);
-					} else {
-						addFolder(cursor, &mirror);
-					}
-
-					mirror = NULL;
-				} else { // Target is a file
-					ARCHIVE* mirror = dupFile(file.container->content[file.index]);
-					if (strlen(name) > 0) {
-						free(mirror->name);
-						mirror->name = strdup(name);
-					}
-
-					addFile(cursor, &mirror);
-
-					if (strcmp(arguments->item[0], "move") == 0) {
-						logger("Moving <%s> to %s\n", file.container->content[file.index]->name, cursor->name);
-						delFile(navigator, file.index);
-					} else {
-						logger("Copying <%s> to %s\n", mirror->name, cursor->name);
-					}
-					mirror = NULL;
-				}
-			} else if (strcmp(arguments->item[0], "remove") == 0) {
-				if (file.index == -1) {
-					cursor = navigator->parent;
-
-					for (int x = 0; x < (int)cursor->dir_count; x++) {
-						if (strcmp(cursor->subdir[x]->name, navigator->name) == 0) {
-							logger("FOLDER removing <%s>\n", cursor->subdir[x]->name);
-							delFolder(cursor, x);
-							navigator = NULL;
-							break;
-						}
-					}
-				} else {
-					navigator = file.container;
-					for (int x = 0; x < (int)navigator->count; x++) {
-						if (strcmp(navigator->content[x]->name, file.container->content[file.index]->name) == 0) {
-							logger("FILE removing <%s>\n", navigator->content[x]->name);
-							delFile(navigator, x);
-							break;
-						}
-					}
-				}
-			} else if (strcmp(arguments->item[0], "edit") == 0) {
-
-				if (strcmp(arguments->item[1], "name") == 0) {
-					if (sscanf(arguments->item[2] + 1, "%255[^\"]", name) == 0) {
-						logger("Error! Couldn't process filename <%s>\n", arguments->item[2]);
+			while (arguments->end > 0) {
+				if (strcmp(arguments->item[0], "move") == 0 || strcmp(arguments->item[0], "copy") == 0) {
+					if (sscanf(arguments->item[1] + 1, "%255[^\"]", namespace) == 0) {
+						logger("Failed to process file path string!\n");
 						break;
 					}
+	
+					if ((save = strrchr(namespace, '/')) != NULL) {
+						sprintf(name, "%s", save + 1);
+					} else {
+						name[0] = '\0';
+					}
+	
+					cursor = localizeFolder(target, namespace, true);
+					if (cursor == NULL) {
+						logger("Error! Failed to find <%s>!\n", namespace);
+						break;
+					}
+	
+					if (file.index == -1) { // Target is a folder
+						FOLDER* mirror = dupFolder(navigator);
+	
+						if (strcmp(arguments->item[0], "move") == 0) {
+							FOLDER* temp = navigator->parent;
+							for (int x = 0; x < (int)(temp->dir_count + 1); x++) {
+								if (x < (int)temp->dir_count && strcmp(temp->subdir[x]->name, navigator->name) == 0) {
+									delFolder(temp, x);
+									break;
+								} else if (x == (int)temp->dir_count) {
+									logger("Warning! Failed to find origin <%s> folder to delete!\n", navigator->name);
+								}
+							}
+	
+							logger("Moving <%s> to <%s>\n", cursor->name, namespace);
+						} else {
+							logger("Copying <%s> to <%s>\n", cursor->name, namespace);
+						}
+	
+						if (strcmp(mirror->name, cursor->name) == 0) {
+							logger("A match to <%s> was found at <%s>, merging contents\n", mirror->name, namespace);
+							overrideFiles(cursor, mirror);
+							freeFolder(mirror);
+						} else {
+							addFolder(cursor, &mirror);
+						}
+	
+						mirror = NULL;
+					} else { // Target is a file
+						ARCHIVE* mirror = dupFile(file.container->content[file.index]);
+						if (strlen(name) > 0) {
+							free(mirror->name);
+							mirror->name = strdup(name);
+						}
+	
+						addFile(cursor, &mirror);
+	
+						if (strcmp(arguments->item[0], "move") == 0) {
+							logger("Moving <%s> to %s\n", file.container->content[file.index]->name, cursor->name);
+							delFile(navigator, file.index);
+						} else {
+							logger("Copying <%s> to %s\n", mirror->name, cursor->name);
+						}
+						mirror = NULL;
+					}
+				} else if (strcmp(arguments->item[0], "remove") == 0) {
 					if (file.index == -1) {
-						logger("FOLDER <%s> updated to <%s>", navigator->name, name);
-
-						free(navigator->name);
-						navigator->name = strdup(name);
-					} else {
-						logger("FILE <%s> updated to <%s>", file.container->content[file.index]->name, name);
-
-						free(file.container->content[file.index]->name);
-						file.container->content[file.index]->name = strdup(name);
-					}
-				} else if (strcmp(arguments->item[1], "display") == 0 || strcmp(arguments->item[1], "texture_path") == 0) {
-					
-					OBJECT *value, *placeholder, *query;
-					sprintf(name, "%s", (strcmp(arguments->item[1], "display") == 0) ? "\"display\"" : "\"textures\"");
-
-					logger("FILE <%s> %s updated \n", file.container->content[file.index]->name, name);
-
-					placeholder = processJSON(file.container->content[file.index]->tab);
-					
-					for (size_t x = 0; x < placeholder->count; x++) {
-						if (strcmp(placeholder->value[x]->declaration, name) == 0) {
-							query = placeholder->value[x]->value[0];
-							break;
-						}
-					}
-
-					if (query == NULL) {
-						logger("Warning! Failed to find %s member in file model!", name);
-						break;
-					}
-					
-					// Executing display cleanup
-					if (strcmp(arguments->item[2], "set") == 0) {
-						while(query->count > 0) {
-							delOBJ(query, 0);
-						}
-
-						deQueue(arguments, 2);
-					}
-					value = processJSON(arguments->item[2]);
-
-					// Executing new members placement
-					for (size_t x = 0; x < value->count; x++) {
-						OBJECT* mirror = NULL;
-						mirror = dupOBJ(value->value[x]);
-
-						for (size_t y = 0; y < (query->count + 1); y++) {
-							if (y < query->count && strcmp(mirror->declaration, query->value[y]->declaration) == 0) {
-								freeOBJ(&query->value[y]);
-								
-								mirror->parent = query;
-								query->value[y] = mirror;
+						cursor = navigator->parent;
+	
+						for (int x = 0; x < (int)cursor->dir_count; x++) {
+							if (strcmp(cursor->subdir[x]->name, navigator->name) == 0) {
+								logger("FOLDER removing <%s>\n", cursor->subdir[x]->name);
+								delFolder(cursor, x);
+								navigator = NULL;
 								break;
-							} else if (y == query->count) {
-								addOBJ(query, &mirror);
+							}
+						}
+					} else {
+						navigator = file.container;
+						for (int x = 0; x < (int)navigator->count; x++) {
+							if (strcmp(navigator->content[x]->name, file.container->content[file.index]->name) == 0) {
+								logger("FILE removing <%s>\n", navigator->content[x]->name);
+								delFile(navigator, x);
 								break;
 							}
 						}
 					}
-					char *model = printJSON(placeholder);
-					indentJSON(&model);
-
-					free(file.container->content[file.index]->tab);
-					file.container->content[file.index]->tab = model;
-					file.container->content[file.index]->size = strlen(model);
-					
-					model = NULL;
-
-					freeOBJ(&value);
-					freeOBJ(&placeholder);
-					
-				} else if (strcmp(arguments->item[1], "dimentions") == 0) {
-					int width, height;
-					if (sscanf(arguments->item[2], "%dx%d", &width, &height) == 0) {
-						logger("Error! Failed to process new file dimentions \"%s\"", arguments->item[2]);
-						break;
-					}
-
-					ARCHIVE* temp = file.container->content[file.index];
-					resizePNGFile(&temp, width, height);
-					temp = NULL;
-				}
-				
-			} else if (strcmp(arguments->item[0], "autofill") == 0) {
-				
-				logger("FILE <%s> Executing atlas autofill\n", file.container->content[file.index]->name);
-				QUEUE* folders;
-				int dirnumber = 0, position[16];
-				char *temp;
-                size_t length;
-				OBJECT *placeholder, *query, *value;
-				placeholder = processJSON(file.container->content[file.index]->tab);
-
-				for (int x = 0; x < 16; x++) {
-                    position[x] = 0;
-                }
-
-				while(placeholder->value[0]->value[0]->count > 0) {
-					delOBJ(placeholder->value[0]->value[0], 0);
-				}
-				
-                navigator = localizeFolder(target, "minecraft:textures/", false);
-                if (navigator == NULL) {
-                    logger("Error! no textures folder were found in the minecraft folder!\n");
-                    break;
-                }
-
-				navigator = navigator->parent->parent;
-                folders = initQueue(navigator->dir_count - 1);
-
-                for (size_t x = 0; x < navigator->dir_count; x++) {
-                    if (strcmp(navigator->subdir[x]->name, "minecraft") == 0) {
-                        continue;
-                    }
-
-                    enQueue(folders, navigator->subdir[x]->name);
-                }
-
-				if (folders->end == 0) {
-                    logger("No other folders besides minecraft were found.\n");
-                    break;
-                }
-
-				for (size_t x = 0; x < templates->count; x++) {
-                    if (strcmp(templates->content[x]->name, "atlases.txt") == 0) {
-                        query = processJSON(templates->content[x]->tab);
-                        query = query->value[0]->value[0];
-                        break;
-                    }
-                }
-
-				if (query == NULL) {
-                    logger("Error! atlas.json template is missing from program files!\n");
-                    break;
-                }
-
-				for (int x = 0; x < folders->end; x++) {
-                    char* stamp;
-                    sprintf(namespace, "%s:textures/", folders->item[x]);
-
-                    navigator = localizeFolder(target, namespace, false);
-
-                    while (dirnumber >= 0) {
-                        while (position[dirnumber] < (int)navigator->dir_count) {
-                            navigator = navigator->subdir[position[dirnumber]];
-
-                            position[dirnumber]++;
-                            dirnumber++;
-                        }
-
-                        temp = returnPath(navigator);
-						stamp = strchr(temp, '/');
-						stamp[0] = ':';
-                        temp[strlen(temp) - 1] = '\0';
-
-                        if (navigator->count == 1) {
-                            value = dupOBJ(query->value[1]);
-
-                            length = snprintf(NULL, 0, "\"%s/%s\"", temp, navigator->content[0]->name);
-                            stamp = (char*)calloc(length + 1, sizeof(char));
-                            sprintf(stamp, "\"%s/%s\"", temp, navigator->content[0]->name);
-                            free(value->value[1]->value[0]->declaration);
-                            value->value[1]->value[0]->declaration = stamp;
-                            stamp = NULL;
-
-                            addOBJ(placeholder->value[0]->value[0], &value);
-                            value = NULL;
-
-                        } else if (navigator->count > 1) {
-                            value = dupOBJ(query->value[0]);
-
-                            length = snprintf(NULL, 0, "\"%s\"", temp);
-                            stamp = (char*)calloc(length + 1, sizeof(char));
-                            sprintf(stamp, "\"%s\"", temp);
-                            free(value->value[1]->value[0]->declaration);
-                            value->value[1]->value[0]->declaration = stamp;
-                            stamp = NULL;
-
-                            length = snprintf(NULL, 0, "\"%s/\"", temp);
-                            stamp = (char*)calloc(length + 1, sizeof(char));
-                            sprintf(stamp, "\"%s/\"", temp);
-                            free(value->value[2]->value[0]->declaration);
-                            value->value[2]->value[0]->declaration = stamp;
-                            stamp = NULL;
-
-                            addOBJ(placeholder->value[0]->value[0], &value);
-                            value = NULL;
-                        }
-
-                        while (position[dirnumber] == (int)navigator->dir_count && dirnumber > -1) {
-                            navigator = navigator->parent;
-                            position[dirnumber] = 0;
-                            dirnumber--;
-                        }
-                        
-                        free(temp);
-                        
-                        if (dirnumber < 0) {
-                            dirnumber = 0;
-                            break;
-                        }
-                    }
-                }
-
-                free(file.container->content[file.index]->tab);
-                file.container->content[file.index]->tab = printJSON(placeholder);
-				indentJSON(&file.container->content[file.index]->tab);
-                file.container->content[file.index]->size = strlen(file.container->content[file.index]->tab);
-				
-			} else if (strcmp(arguments->item[0], "disassemble") == 0) {
-				
-				OBJECT *mirror, *copy, *elements, *cube, *base = NULL, *children, *placeholder, *query, *value;
-				QUEUE *groups;
-				FOLDER* location;
-				bool trim = false;
-
-				placeholder = processJSON(file.container->content[file.index]->tab);
-
-				if (strcmp(arguments->item[2], "trim") == 0) {
-					trim = true;
-					deQueue(arguments, 2);
-				}
-				if (sscanf(arguments->item[2] + 1, "%255[^\"]", namespace) == 0) {
-					logger("Error! Failed to process disassemble file path at iteraction %d\n", line);
-					break;
-				}
-
-				location = localizeFolder(target, namespace, true);
-
-				//Cleaning the reference
-				mirror = dupOBJ(placeholder);
-				for (size_t x = 0; x < mirror->count; x++) {
-					if (strcmp(mirror->value[x]->declaration, "\"elements\"") == 0) {
-						query = mirror->value[x]->value[0];
-						while (query->count > 0) {
-							delOBJ(query, 0);
+				} else if (strcmp(arguments->item[0], "edit") == 0) {
+	
+					if (strcmp(arguments->item[1], "name") == 0) {
+						if (sscanf(arguments->item[2] + 1, "%255[^\"]", name) == 0) {
+							logger("Error! Couldn't process filename <%s>\n", arguments->item[2]);
+							break;
 						}
-
-					} else if (strcmp(mirror->value[x]->declaration, "\"groups\"") == 0) {
-						query = dupOBJ(mirror->value[x]);
-						delOBJ(mirror, x);
-					}
-				}
-
-				//QUEUEing the groups names and position
-				for (size_t x = 0; x < placeholder->count; x++) {
-					if (strcmp(placeholder->value[x]->declaration, "\"elements\"") == 0) {
-						elements = placeholder->value[x]->value[0];
-					} else if (strcmp(placeholder->value[x]->declaration, "\"groups\"") == 0) {
-						query = placeholder->value[x]->value[0];
-						groups = initQueue(query->count);
-
-						 for (size_t y = 0; y < query->count; y++) {
-
-							for (size_t z = 0; z < query->value[y]->count; z++) {
-
-								if (strcmp(query->value[y]->value[z]->declaration, "\"name\"") == 0) {
-
-									if (strcmp(query->value[y]->value[z]->value[0]->declaration, "\"base\"") == 0) {
-										base = query->value[y]->value[z];
-									} else {
-										enQueue(groups, query->value[y]->value[z]->value[0]->declaration);
-										groups->value[groups->end - 1] = y;
-									}
-
+						if (file.index == -1) {
+							logger("FOLDER <%s> updated to <%s>", navigator->name, name);
+	
+							free(navigator->name);
+							navigator->name = strdup(name);
+						} else {
+							logger("FILE <%s> updated to <%s>", file.container->content[file.index]->name, name);
+	
+							free(file.container->content[file.index]->name);
+							file.container->content[file.index]->name = strdup(name);
+						}
+					} else if (strcmp(arguments->item[1], "display") == 0 || strcmp(arguments->item[1], "texture_path") == 0) {
+						
+						OBJECT *value, *placeholder, *query;
+						sprintf(name, "%s", (strcmp(arguments->item[1], "display") == 0) ? "\"display\"" : "\"textures\"");
+	
+						logger("FILE <%s> %s updated \n", file.container->content[file.index]->name, name);
+	
+						placeholder = processJSON(file.container->content[file.index]->tab);
+						
+						for (size_t x = 0; x < placeholder->count; x++) {
+							if (strcmp(placeholder->value[x]->declaration, name) == 0) {
+								query = placeholder->value[x]->value[0];
+								break;
+							}
+						}
+	
+						if (query == NULL) {
+							logger("Warning! Failed to find %s member in file model!", name);
+							break;
+						}
+						
+						// Executing display cleanup
+						if (strcmp(arguments->item[2], "set") == 0) {
+							while(query->count > 0) {
+								delOBJ(query, 0);
+							}
+	
+							deQueue(arguments, 2);
+						}
+						value = processJSON(arguments->item[2]);
+	
+						// Executing new members placement
+						for (size_t x = 0; x < value->count; x++) {
+							OBJECT* mirror = NULL;
+							mirror = dupOBJ(value->value[x]);
+	
+							for (size_t y = 0; y < (query->count + 1); y++) {
+								if (y < query->count && strcmp(mirror->declaration, query->value[y]->declaration) == 0) {
+									freeOBJ(&query->value[y]);
+									
+									mirror->parent = query;
+									query->value[y] = mirror;
+									break;
+								} else if (y == query->count) {
+									addOBJ(query, &mirror);
 									break;
 								}
 							}
-						 }
+						}
+						char *model = printJSON(placeholder);
+						indentJSON(&model);
+	
+						free(file.container->content[file.index]->tab);
+						file.container->content[file.index]->tab = model;
+						file.container->content[file.index]->size = strlen(model);
+						
+						model = NULL;
+	
+						freeOBJ(&value);
+						freeOBJ(&placeholder);
+						
+					} else if (strcmp(arguments->item[1], "dimentions") == 0) {
+						int width, height;
+						if (sscanf(arguments->item[2], "%dx%d", &width, &height) == 0) {
+							logger("Error! Failed to process new file dimentions \"%s\"", arguments->item[2]);
+							break;
+						}
+	
+						ARCHIVE* temp = file.container->content[file.index];
+						resizePNGFile(&temp, width, height);
+						temp = NULL;
 					}
-				}
-
-				//OBJECT value, copy, cube
-				//Template it's OBJECT mirror
-
-				for (size_t x = 0; x < (size_t)groups->end; x++) {
-					value = dupOBJ(mirror);
-					int index;
-					ARCHIVE* permutate;
-					char file_name[256];
-
-					for (size_t y = 0; y < value->count; y++) {
-
-						if (strcmp(value->value[y]->declaration, "\"elements\"") == 0) {
-							copy = value->value[y]->value[0];
+					
+				} else if (strcmp(arguments->item[0], "autofill") == 0) {
+					
+					logger("FILE <%s> Executing atlas autofill\n", file.container->content[file.index]->name);
+					QUEUE* folders;
+					int dirnumber = 0, position[16];
+					char *temp;
+					size_t length;
+					OBJECT *placeholder, *query, *value;
+					placeholder = processJSON(file.container->content[file.index]->tab);
+	
+					for (int x = 0; x < 16; x++) {
+						position[x] = 0;
+					}
+	
+					while(placeholder->value[0]->value[0]->count > 0) {
+						delOBJ(placeholder->value[0]->value[0], 0);
+					}
+					
+					navigator = localizeFolder(target, "minecraft:textures/", false);
+					if (navigator == NULL) {
+						logger("Error! no textures folder were found in the minecraft folder!\n");
+						break;
+					}
+	
+					navigator = navigator->parent->parent;
+					folders = initQueue(navigator->dir_count - 1);
+	
+					for (size_t x = 0; x < navigator->dir_count; x++) {
+						if (strcmp(navigator->subdir[x]->name, "minecraft") == 0) {
+							continue;
+						}
+	
+						enQueue(folders, navigator->subdir[x]->name);
+					}
+	
+					if (folders->end == 0) {
+						logger("No other folders besides minecraft were found.\n");
+						break;
+					}
+	
+					for (size_t x = 0; x < templates->count; x++) {
+						if (strcmp(templates->content[x]->name, "atlases.txt") == 0) {
+							query = processJSON(templates->content[x]->tab);
+							query = query->value[0]->value[0];
 							break;
 						}
 					}
-
-					if (base != NULL) {
-						for (size_t x = 0; x < base->count; x++) {
-
-							if (strcmp(base->value[x]->declaration, "\"children\"") == 0) {
-
-								for (size_t y = 0; y < base->value[x]->value[0]->count; y++) {
-									if (sscanf(base->value[x]->value[0]->value[y]->declaration, "%d", &index) == 0) {
+	
+					if (query == NULL) {
+						logger("Error! atlas.json template is missing from program files!\n");
+						break;
+					}
+	
+					for (int x = 0; x < folders->end; x++) {
+						char* stamp;
+						sprintf(namespace, "%s:textures/", folders->item[x]);
+	
+						navigator = localizeFolder(target, namespace, false);
+	
+						while (dirnumber >= 0) {
+							while (position[dirnumber] < (int)navigator->dir_count) {
+								navigator = navigator->subdir[position[dirnumber]];
+	
+								position[dirnumber]++;
+								dirnumber++;
+							}
+	
+							temp = returnPath(navigator);
+							stamp = strchr(temp, '/');
+							stamp[0] = ':';
+							temp[strlen(temp) - 1] = '\0';
+	
+							if (navigator->count == 1) {
+								value = dupOBJ(query->value[1]);
+	
+								length = snprintf(NULL, 0, "\"%s/%s\"", temp, navigator->content[0]->name);
+								stamp = (char*)calloc(length + 1, sizeof(char));
+								sprintf(stamp, "\"%s/%s\"", temp, navigator->content[0]->name);
+								free(value->value[1]->value[0]->declaration);
+								value->value[1]->value[0]->declaration = stamp;
+								stamp = NULL;
+	
+								addOBJ(placeholder->value[0]->value[0], &value);
+								value = NULL;
+	
+							} else if (navigator->count > 1) {
+								value = dupOBJ(query->value[0]);
+	
+								length = snprintf(NULL, 0, "\"%s\"", temp);
+								stamp = (char*)calloc(length + 1, sizeof(char));
+								sprintf(stamp, "\"%s\"", temp);
+								free(value->value[1]->value[0]->declaration);
+								value->value[1]->value[0]->declaration = stamp;
+								stamp = NULL;
+	
+								length = snprintf(NULL, 0, "\"%s/\"", temp);
+								stamp = (char*)calloc(length + 1, sizeof(char));
+								sprintf(stamp, "\"%s/\"", temp);
+								free(value->value[2]->value[0]->declaration);
+								value->value[2]->value[0]->declaration = stamp;
+								stamp = NULL;
+	
+								addOBJ(placeholder->value[0]->value[0], &value);
+								value = NULL;
+							}
+	
+							while (position[dirnumber] == (int)navigator->dir_count && dirnumber > -1) {
+								navigator = navigator->parent;
+								position[dirnumber] = 0;
+								dirnumber--;
+							}
+							
+							free(temp);
+							
+							if (dirnumber < 0) {
+								dirnumber = 0;
+								break;
+							}
+						}
+					}
+	
+					free(file.container->content[file.index]->tab);
+					file.container->content[file.index]->tab = printJSON(placeholder);
+					indentJSON(&file.container->content[file.index]->tab);
+					file.container->content[file.index]->size = strlen(file.container->content[file.index]->tab);
+					
+				} else if (strcmp(arguments->item[0], "disassemble") == 0) {
+					
+					OBJECT *mirror, *copy, *elements, *cube, *base = NULL, *children, *placeholder, *query, *value;
+					QUEUE *groups;
+					FOLDER* location;
+					bool trim = false;
+	
+					placeholder = processJSON(file.container->content[file.index]->tab);
+	
+					if (strcmp(arguments->item[2], "trim") == 0) {
+						trim = true;
+						deQueue(arguments, 2);
+					}
+					if (sscanf(arguments->item[2] + 1, "%255[^\"]", namespace) == 0) {
+						logger("Error! Failed to process disassemble file path at iteraction %d\n", line);
+						break;
+					}
+	
+					location = localizeFolder(target, namespace, true);
+	
+					//Cleaning the reference
+					mirror = dupOBJ(placeholder);
+					for (size_t x = 0; x < mirror->count; x++) {
+						if (strcmp(mirror->value[x]->declaration, "\"elements\"") == 0) {
+							query = mirror->value[x]->value[0];
+							while (query->count > 0) {
+								delOBJ(query, 0);
+							}
+	
+						} else if (strcmp(mirror->value[x]->declaration, "\"groups\"") == 0) {
+							query = dupOBJ(mirror->value[x]);
+							delOBJ(mirror, x);
+						}
+					}
+	
+					//QUEUEing the groups names and position
+					for (size_t x = 0; x < placeholder->count; x++) {
+						if (strcmp(placeholder->value[x]->declaration, "\"elements\"") == 0) {
+							elements = placeholder->value[x]->value[0];
+						} else if (strcmp(placeholder->value[x]->declaration, "\"groups\"") == 0) {
+							query = placeholder->value[x]->value[0];
+							groups = initQueue(query->count);
+	
+							 for (size_t y = 0; y < query->count; y++) {
+	
+								for (size_t z = 0; z < query->value[y]->count; z++) {
+	
+									if (strcmp(query->value[y]->value[z]->declaration, "\"name\"") == 0) {
+	
+										if (strcmp(query->value[y]->value[z]->value[0]->declaration, "\"base\"") == 0) {
+											base = query->value[y]->value[z];
+										} else {
+											enQueue(groups, query->value[y]->value[z]->value[0]->declaration);
+											groups->value[groups->end - 1] = y;
+										}
+	
+										break;
+									}
+								}
+							 }
+						}
+					}
+	
+					//OBJECT value, copy, cube
+					//Template it's OBJECT mirror
+	
+					for (size_t x = 0; x < (size_t)groups->end; x++) {
+						value = dupOBJ(mirror);
+						int index;
+						ARCHIVE* permutate;
+						char file_name[256];
+	
+						for (size_t y = 0; y < value->count; y++) {
+	
+							if (strcmp(value->value[y]->declaration, "\"elements\"") == 0) {
+								copy = value->value[y]->value[0];
+								break;
+							}
+						}
+	
+						if (base != NULL) {
+							for (size_t x = 0; x < base->count; x++) {
+	
+								if (strcmp(base->value[x]->declaration, "\"children\"") == 0) {
+	
+									for (size_t y = 0; y < base->value[x]->value[0]->count; y++) {
+										if (sscanf(base->value[x]->value[0]->value[y]->declaration, "%d", &index) == 0) {
+											logger("Failed to extract children's index! skipping this cube\n");
+											continue;
+										} 
+										
+										cube = dupOBJ(elements->value[index]);
+	
+										addOBJ(copy, &cube);
+										cube = NULL;
+									}
+									break;
+								}
+							}
+						}
+	
+						// query is the array of groups
+						// elements points to the target cubes
+						// copy points to the destination of the copied cubes
+						for (size_t y = 0; y < query->value[groups->value[x]]->count; y++) {
+							if (strcmp(query->value[groups->value[x]]->value[y]->declaration, "\"children\"") == 0) {
+								children = query->value[groups->value[x]]->value[y]->value[0];
+	
+								for (size_t z = 0; z < children->count; z++) {
+									if (sscanf(children->value[z]->declaration, "%d", &index) == 0) {
 										logger("Failed to extract children's index! skipping this cube\n");
 										continue;
 									} 
-									
 									cube = dupOBJ(elements->value[index]);
-
+	
 									addOBJ(copy, &cube);
 									cube = NULL;
 								}
 								break;
 							}
 						}
+	
+						if (sscanf(groups->item[x], "\"%[^\"]s\"", file_name) == 0) {
+							logger("Error! Failed to get filename!\n");
+							return;
+						}
+						
+						permutate = malloc(sizeof(ARCHIVE));
+						permutate->name = strdup(file_name);
+						permutate->tab = printJSON(value);
+						permutate->size = strlen(permutate->tab);
+	
+						indentJSON(&permutate->tab);
+	
+						logger("FILE <%s> placed at %s\n", permutate->name, namespace);
+	
+						addFile(location, &permutate);
+						permutate = NULL;
+	
+						freeOBJ(&value);
 					}
-
-					// query is the array of groups
-					// elements points to the target cubes
-					// copy points to the destination of the copied cubes
-					for (size_t y = 0; y < query->value[groups->value[x]]->count; y++) {
-						if (strcmp(query->value[groups->value[x]]->value[y]->declaration, "\"children\"") == 0) {
-							children = query->value[groups->value[x]]->value[y]->value[0];
-
-							for (size_t z = 0; z < children->count; z++) {
-								if (sscanf(children->value[z]->declaration, "%d", &index) == 0) {
-									logger("Failed to extract children's index! skipping this cube\n");
-									continue;
-								} 
-								cube = dupOBJ(elements->value[index]);
-
-								addOBJ(copy, &cube);
-								cube = NULL;
-							}
+					freeOBJ(&query);
+	
+					navigator = file.container;
+					for (size_t x = 0; x < navigator->count && trim == true; x++) {
+						if (strcmp(navigator->content[x]->name, file.container->content[file.index]->name) == 0) {
+							delFile(navigator, x);
 							break;
 						}
 					}
-
-					if (sscanf(groups->item[x], "\"%[^\"]s\"", file_name) == 0) {
-						logger("Error! Failed to get filename!\n");
-						return;
+	
+					free(file.container->content[file.index]->tab);
+					file.container->content[file.index]->tab = printJSON(placeholder);
+					indentJSON(&file.container->content[file.index]->tab);
+					
+				} else if (strcmp(arguments->item[0], "paint") == 0) {
+	
+					logger("Executing texture paint on %s\n", file.container->content[file.index]->name);
+					int width, height;
+					int lines, collums;
+					int bit_depth, color_type;
+					int bpp[2];
+					png_bytep *texture, *pixels, *pallet;
+					FOLDER* location;
+	
+					texture = pixels = pallet = NULL;
+	
+					if (getPNGPixels(file.container->content[file.index], &texture, &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
+						logger("Failed to read png file!\n");
+						checkpoint = NULL;
+						continue;
+					}
+	
+					if (texture == NULL) {
+						continue;
 					}
 					
-					permutate = malloc(sizeof(ARCHIVE));
-					permutate->name = strdup(file_name);
-					permutate->tab = printJSON(value);
-					permutate->size = strlen(permutate->tab);
-
-					indentJSON(&permutate->tab);
-
-					logger("FILE <%s> placed at %s\n", permutate->name, namespace);
-
-					addFile(location, &permutate);
-					permutate = NULL;
-
-					freeOBJ(&value);
-				}
-				freeOBJ(&query);
-
-				navigator = file.container;
-				for (size_t x = 0; x < navigator->count && trim == true; x++) {
-					if (strcmp(navigator->content[x]->name, file.container->content[file.index]->name) == 0) {
-						delFile(navigator, x);
+					bpp[0] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+					// Map
+					if (sscanf(arguments->item[1] + 1, "%255[^\"]", namespace) == 0) {
+						logger("Error! Failed to process texture color map's path at iteraction %d!\n", line);
 						break;
 					}
-				}
-
-				free(file.container->content[file.index]->tab);
-				file.container->content[file.index]->tab = printJSON(placeholder);
-				indentJSON(&file.container->content[file.index]->tab);
-				
-			} else if (strcmp(arguments->item[0], "paint") == 0) {
-
-				logger("Executing texture paint on %s\n", file.container->content[file.index]->name);
-				int width, height;
-				int lines, collums;
-				int bit_depth, color_type;
-				int bpp[2];
-				png_bytep *texture, *pixels, *pallet;
-				FOLDER* location;
-
-				texture = pixels = pallet = NULL;
-
-				if (getPNGPixels(file.container->content[file.index], &texture, &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
-					logger("Failed to read png file!\n");
-					checkpoint = NULL;
-					continue;
-				}
-
-				if (texture == NULL) {
-					continue;
-				}
-				
-				bpp[0] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
-				// Map
-				if (sscanf(arguments->item[1] + 1, "%255[^\"]", namespace) == 0) {
-					logger("Error! Failed to process texture color map's path at iteraction %d!\n", line);
-					break;
-				}
-
-				if (strstr(namespace, "./") != NULL) {
-					location = localizeFolder(target, namespace, false);
-
-					if (location == NULL) {
-						logger("Error! Couldn't find %s at target folder\n", namespace);
-						checkpoint = NULL;
-						continue;
-					}
-				} else {
-					location = localizeFolder(assets, namespace, false);
-
-					if (location == NULL) {
-						logger("Error! Couldn't find %s at assets folder", namespace);
-						checkpoint = NULL;
-						continue;
-					}
-				}
-
-				if ((save = strrchr(namespace, '/')) == NULL) {
-					sprintf(name, "%s", namespace);
-				} else {
-					sprintf(name, "%s", save + 1);
-				}
-
-				for (size_t x = 0; x < (location->count + 1); x++) {
-					if (x < location->count && strcmp(location->content[x]->name, name) == 0) {
-						getPNGPixels(location->content[x], &pixels, &collums, &lines, &color_type, &bit_depth, NULL, true);
-						break;
-					} else if (x == location->count) {
-						logger("Warning! Failed to find <%s>!\n", name);
-					}
-				}
-				if (pixels == NULL) {
-					for (int x = 0; x < height; x++) {
-						free(texture[x]);
-					}
-					free(texture);
-					continue;
-				}
-				bpp[1] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
-
-				// Pallet
-				if (sscanf(arguments->item[2] + 1, "%255[^\"]", namespace) == 0) {
-					logger("Error! Failed to process texture color map's path at iteraction %d!\n", line);
-					break;
-				}
-
-				if (strstr(namespace, "./") != NULL) {
-					location = localizeFolder(target, namespace, false);
-
-					if (location == NULL) {
-						logger("Error! Couldn't find %s at target folder", namespace);
-						checkpoint = NULL;
-						continue;
-					}
-				} else {
-					location = localizeFolder(assets, namespace, false);
-					if (location == NULL) {
-						logger("Error! Couldn't find %s at assets folder", namespace);
-						checkpoint = NULL;
-						continue;
-					}
-				}
-
-				if ((save = strrchr(namespace, '/')) == NULL) {
-					sprintf(name, "%s", namespace);
-				} else {
-					sprintf(name, "%s", save + 1);
-				}
-
-				for (size_t x = 0; x < (location->count + 1); x++) {
-					if (x < location->count && strcmp(location->content[x]->name, name) == 0) {
-						getPNGPixels(location->content[x], &pallet, NULL, NULL, NULL, NULL, NULL, true);
-						break;
-					} else if (x == location->count) {
-						logger("Warning! Failed to find <%s>!\n", name);
-					}
-				}
-				if (pallet == NULL) {
-					for (int x = 0; x < height; x++) {
-						free(texture[x]);
-					}
-					free(texture);
-					for (int x = 0; x < lines; x++) {
-						free(pixels[x]);
-					}
-					free(pixels);
-					continue;
-				}
-
-				for (int x = 0; x < height; x++) {
-					for (int y = 0; y < width; y++) {
-						png_bytep compare = &texture[x][y * bpp[0]];
-
-						for (int z = 0; z < collums; z++) {
-							png_bytep px = &pixels[0][z * bpp[1]];;
-
-							if (bpp[0] == 4 && compare[3] == 0) {
-								continue;
-							}
-
-							if (
-								px[0] == compare[0]
-								&& px[1] == compare[1]
-								&& px[2] == compare[2]
-							) {
-								texture[x][(y * bpp[0]) + 0] = pallet[0][(z * bpp[1]) + 0];
-								texture[x][(y * bpp[0]) + 1] = pallet[0][(z * bpp[1]) + 1];
-								texture[x][(y * bpp[0]) + 2] = pallet[0][(z * bpp[1]) + 2];
-
-								break;
-							}
+	
+					if (strstr(namespace, "./") != NULL) {
+						location = localizeFolder(target, namespace, false);
+	
+						if (location == NULL) {
+							logger("Error! Couldn't find %s at target folder\n", namespace);
+							checkpoint = NULL;
+							continue;
+						}
+					} else {
+						location = localizeFolder(assets, namespace, false);
+	
+						if (location == NULL) {
+							logger("Error! Couldn't find %s at assets folder", namespace);
+							checkpoint = NULL;
+							continue;
 						}
 					}
-				}
-				
-				printPNGPixels(file.container->content[file.index], texture, width, height);
-				logger("FILE %s painted\n", file.container->content[file.index]->name);
-				for (int x = 0; x < height; x++) {
-					free(texture[x]);
-				}
-				free(texture);
-				for (int x = 0; x < lines; x++) {
-					free(pixels[x]);
-					free(pallet[x]);
-				}
-				
-			} else if (strcmp(arguments->item[0], "permutate_texture") == 0) {
-				
-				int width, height, texture_count = 0, bit_deph, color_type[2], bpp[2];
-				int lines, collums;
-				ARCHIVE *map, *copies[32];
-				FOLDER* location;
-				OBJECT* list;
-				png_bytep *texture, *pixels, *pallet[32], *to_paint[32];
-				
-				//Getting texture map name
-				if (sscanf(arguments->item[1] + 1, "%255[^\"]", namespace) == 0) {
-					logger("Error! Failed to process texture color map's path at iteraction %d!\n", line);
-					break;
-				}
-				
-				for (size_t x = 0; x < navigator->count; x++) {
-					if (strcmp(navigator->content[x]->name, name) == 0) {
-						map = navigator->content[x];
-						break;
+	
+					if ((save = strrchr(namespace, '/')) == NULL) {
+						sprintf(name, "%s", namespace);
+					} else {
+						sprintf(name, "%s", save + 1);
 					}
-				}
-
-				//Getting pallets list
-				list = processJSON(arguments->item[2]);
-
-				for (size_t x = 0; x < list->count; x++) {
-					char* name_pointer;
-					if (sscanf(list->value[x]->declaration, "\"%[^\"]\"", namespace) == 0) {
-						logger("Error! Failed to extract file pallet %d name!\n", x);
+	
+					for (size_t x = 0; x < (location->count + 1); x++) {
+						if (x < location->count && strcmp(location->content[x]->name, name) == 0) {
+							getPNGPixels(location->content[x], &pixels, &collums, &lines, &color_type, &bit_depth, NULL, true);
+							break;
+						} else if (x == location->count) {
+							logger("Warning! Failed to find <%s>!\n", name);
+						}
+					}
+					if (pixels == NULL) {
+						for (int x = 0; x < height; x++) {
+							free(texture[x]);
+						}
+						free(texture);
 						continue;
 					}
-
-					if (strstr(name, "./") != NULL) {
+					bpp[1] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+	
+					// Pallet
+					if (sscanf(arguments->item[2] + 1, "%255[^\"]", namespace) == 0) {
+						logger("Error! Failed to process texture color map's path at iteraction %d!\n", line);
+						break;
+					}
+	
+					if (strstr(namespace, "./") != NULL) {
 						location = localizeFolder(target, namespace, false);
 	
 						if (location == NULL) {
 							logger("Error! Couldn't find %s at target folder", namespace);
+							checkpoint = NULL;
 							continue;
 						}
 					} else {
 						location = localizeFolder(assets, namespace, false);
 						if (location == NULL) {
 							logger("Error! Couldn't find %s at assets folder", namespace);
+							checkpoint = NULL;
 							continue;
 						}
 					}
-
-					if ((name_pointer = strrchr(namespace, '/')) == NULL) {
-						sprintf(name, "%.*s", 255, namespace);
-						name_pointer = name;
+	
+					if ((save = strrchr(namespace, '/')) == NULL) {
+						sprintf(name, "%s", namespace);
 					} else {
-						sprintf(name, "%s", name_pointer + 1);
+						sprintf(name, "%s", save + 1);
 					}
-
-					for (size_t y = 0; y < navigator->count; y++) {
-
-						if (strcmp(location->content[y]->name, namespace) == 0) {
-							copies[texture_count] = dupFile(file.container->content[file.index]);
-
-							name_pointer = strchr(name, '.');
-							sprintf(namespace, "%.*s_%s", (int)(name_pointer - name), name, copies[texture_count]->name);
-							free(copies[texture_count]->name);
-							copies[texture_count]->name = strdup(namespace);
-
-							ARCHIVE *temp = location->content[y];
-							ARCHIVE *mirror = copies[texture_count];
-
-							getPNGPixels(temp, &pallet[texture_count], NULL, NULL, NULL, NULL, NULL, true);
-							getPNGPixels(mirror, &to_paint[texture_count], NULL, NULL, NULL, NULL, NULL, true);
-
-							if (pallet[texture_count] == NULL || to_paint[texture_count] == NULL) {
-								logger("Error! Failed to process png files: %s, %s\n", location->content[y]->name, copies[texture_count]->name);
-								continue;
-							} else {
-								texture_count++;
+	
+					for (size_t x = 0; x < (location->count + 1); x++) {
+						if (x < location->count && strcmp(location->content[x]->name, name) == 0) {
+							getPNGPixels(location->content[x], &pallet, NULL, NULL, NULL, NULL, NULL, true);
+							break;
+						} else if (x == location->count) {
+							logger("Warning! Failed to find <%s>!\n", name);
+						}
+					}
+					if (pallet == NULL) {
+						for (int x = 0; x < height; x++) {
+							free(texture[x]);
+						}
+						free(texture);
+						for (int x = 0; x < lines; x++) {
+							free(pixels[x]);
+						}
+						free(pixels);
+						continue;
+					}
+	
+					for (int x = 0; x < height; x++) {
+						for (int y = 0; y < width; y++) {
+							png_bytep compare = &texture[x][y * bpp[0]];
+	
+							for (int z = 0; z < collums; z++) {
+								png_bytep px = &pixels[0][z * bpp[1]];;
+	
+								if (bpp[0] == 4 && compare[3] == 0) {
+									continue;
+								}
+	
+								if (
+									px[0] == compare[0]
+									&& px[1] == compare[1]
+									&& px[2] == compare[2]
+								) {
+									texture[x][(y * bpp[0]) + 0] = pallet[0][(z * bpp[1]) + 0];
+									texture[x][(y * bpp[0]) + 1] = pallet[0][(z * bpp[1]) + 1];
+									texture[x][(y * bpp[0]) + 2] = pallet[0][(z * bpp[1]) + 2];
+	
+									break;
+								}
 							}
-
-							temp = mirror = NULL;
+						}
+					}
+					
+					printPNGPixels(file.container->content[file.index], texture, width, height);
+					logger("FILE %s painted\n", file.container->content[file.index]->name);
+					for (int x = 0; x < height; x++) {
+						free(texture[x]);
+					}
+					free(texture);
+					for (int x = 0; x < lines; x++) {
+						free(pixels[x]);
+						free(pallet[x]);
+					}
+					
+				} else if (strcmp(arguments->item[0], "permutate_texture") == 0) {
+					
+					int width, height, texture_count = 0, bit_deph, color_type[2], bpp[2];
+					int lines, collums;
+					ARCHIVE *map, *copies[32];
+					FOLDER* location;
+					OBJECT* list;
+					png_bytep *texture, *pixels, *pallet[32], *to_paint[32];
+					
+					//Getting texture map name
+					if (sscanf(arguments->item[1] + 1, "%255[^\"]", namespace) == 0) {
+						logger("Error! Failed to process texture color map's path at iteraction %d!\n", line);
+						break;
+					}
+					
+					for (size_t x = 0; x < navigator->count; x++) {
+						if (strcmp(navigator->content[x]->name, name) == 0) {
+							map = navigator->content[x];
 							break;
 						}
 					}
-				}
-				
-				//Continue with color substitution
-				getPNGPixels(map, &pixels, &collums, &lines, &bit_deph, &color_type[0], NULL, true);
-				getPNGPixels(file.container->content[file.index], &texture, &width, &height, &bit_deph, &color_type[1], NULL, true);
-
-				if (pixels == NULL || texture == NULL) {
-					logger("Error! Failed to process png files: %s, %s\n", map->name, file.container->content[file.index]->name);
-					break;
-				}
-
-				bpp[1] = (color_type[0] == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
-				bpp[0] = (color_type[1] == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
-
-				for (int x = 0; x < height; x++) {
-
-					for (int y = 0; y < width; y++) {
-						png_bytep compare = &texture[x][y * bpp[0]];
-
-						for (int z = 0; z < collums; z++) {
-							png_bytep px = &pixels[0][z * bpp[1]];
-
-							if (bpp[0] == 4 && compare[3] == 0) {
+	
+					//Getting pallets list
+					list = processJSON(arguments->item[2]);
+	
+					for (size_t x = 0; x < list->count; x++) {
+						char* name_pointer;
+						if (sscanf(list->value[x]->declaration, "\"%[^\"]\"", namespace) == 0) {
+							logger("Error! Failed to extract file pallet %d name!\n", x);
+							continue;
+						}
+	
+						if (strstr(name, "./") != NULL) {
+							location = localizeFolder(target, namespace, false);
+		
+							if (location == NULL) {
+								logger("Error! Couldn't find %s at target folder", namespace);
 								continue;
 							}
-
-							if (
-								px[0] == compare[0]
-								&& px[1] == compare[1]
-								&& px[2] == compare[2]
-							) {
-								for (int a = 0; a < texture_count; a++) {
-									to_paint[a][x][(y * bpp[0]) + 0] = pallet[a][0][(z * bpp[1]) + 0];
-									to_paint[a][x][(y * bpp[0]) + 1] = pallet[a][0][(z * bpp[1]) + 1];
-									to_paint[a][x][(y * bpp[0]) + 2] = pallet[a][0][(z * bpp[1]) + 2];
+						} else {
+							location = localizeFolder(assets, namespace, false);
+							if (location == NULL) {
+								logger("Error! Couldn't find %s at assets folder", namespace);
+								continue;
+							}
+						}
+	
+						if ((name_pointer = strrchr(namespace, '/')) == NULL) {
+							sprintf(name, "%.*s", 255, namespace);
+							name_pointer = name;
+						} else {
+							sprintf(name, "%s", name_pointer + 1);
+						}
+	
+						for (size_t y = 0; y < navigator->count; y++) {
+	
+							if (strcmp(location->content[y]->name, namespace) == 0) {
+								copies[texture_count] = dupFile(file.container->content[file.index]);
+	
+								name_pointer = strchr(name, '.');
+								sprintf(namespace, "%.*s_%s", (int)(name_pointer - name), name, copies[texture_count]->name);
+								free(copies[texture_count]->name);
+								copies[texture_count]->name = strdup(namespace);
+	
+								ARCHIVE *temp = location->content[y];
+								ARCHIVE *mirror = copies[texture_count];
+	
+								getPNGPixels(temp, &pallet[texture_count], NULL, NULL, NULL, NULL, NULL, true);
+								getPNGPixels(mirror, &to_paint[texture_count], NULL, NULL, NULL, NULL, NULL, true);
+	
+								if (pallet[texture_count] == NULL || to_paint[texture_count] == NULL) {
+									logger("Error! Failed to process png files: %s, %s\n", location->content[y]->name, copies[texture_count]->name);
+									continue;
+								} else {
+									texture_count++;
 								}
-
+	
+								temp = mirror = NULL;
 								break;
 							}
 						}
 					}
-				}
-
-				for (int x = 0; x < lines; x++) {
-					free(pixels[x]);
-				}
-				free(pixels);
-				for (int x = 0; x < height; x++) {
-					free(texture[x]);
-				}
-				free(texture);
-				freeOBJ(&list);
-
-				for (int x = 0; x < texture_count; x++) {
-					ARCHIVE *mirror = copies[x];
-					printPNGPixels(mirror, to_paint[x], width, height);
-					addFile(navigator, &copies[x]);
-					logger("FILE <%s> was added to the same location as the base file\n", mirror->name, navigator->name);
-
-					for (int y = 0; y < lines; y++) {
-						free(to_paint[x][y]);
+					
+					//Continue with color substitution
+					getPNGPixels(map, &pixels, &collums, &lines, &bit_deph, &color_type[0], NULL, true);
+					getPNGPixels(file.container->content[file.index], &texture, &width, &height, &bit_deph, &color_type[1], NULL, true);
+	
+					if (pixels == NULL || texture == NULL) {
+						logger("Error! Failed to process png files: %s, %s\n", map->name, file.container->content[file.index]->name);
+						break;
 					}
-					for (int y = 0; y < height; y++) {
-						free(pallet[x][y]);
+	
+					bpp[1] = (color_type[0] == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+					bpp[0] = (color_type[1] == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+	
+					for (int x = 0; x < height; x++) {
+	
+						for (int y = 0; y < width; y++) {
+							png_bytep compare = &texture[x][y * bpp[0]];
+	
+							for (int z = 0; z < collums; z++) {
+								png_bytep px = &pixels[0][z * bpp[1]];
+	
+								if (bpp[0] == 4 && compare[3] == 0) {
+									continue;
+								}
+	
+								if (
+									px[0] == compare[0]
+									&& px[1] == compare[1]
+									&& px[2] == compare[2]
+								) {
+									for (int a = 0; a < texture_count; a++) {
+										to_paint[a][x][(y * bpp[0]) + 0] = pallet[a][0][(z * bpp[1]) + 0];
+										to_paint[a][x][(y * bpp[0]) + 1] = pallet[a][0][(z * bpp[1]) + 1];
+										to_paint[a][x][(y * bpp[0]) + 2] = pallet[a][0][(z * bpp[1]) + 2];
+									}
+	
+									break;
+								}
+							}
+						}
 					}
-
-					free(to_paint[x]);
-					free(pallet[x]);
-
-					mirror = NULL;
+	
+					for (int x = 0; x < lines; x++) {
+						free(pixels[x]);
+					}
+					free(pixels);
+					for (int x = 0; x < height; x++) {
+						free(texture[x]);
+					}
+					free(texture);
+					freeOBJ(&list);
+	
+					for (int x = 0; x < texture_count; x++) {
+						ARCHIVE *mirror = copies[x];
+						printPNGPixels(mirror, to_paint[x], width, height);
+						addFile(navigator, &copies[x]);
+						logger("FILE <%s> was added to the same location as the base file\n", mirror->name, navigator->name);
+	
+						for (int y = 0; y < lines; y++) {
+							free(to_paint[x][y]);
+						}
+						for (int y = 0; y < height; y++) {
+							free(pallet[x][y]);
+						}
+	
+						free(to_paint[x]);
+						free(pallet[x]);
+	
+						mirror = NULL;
+					}
+					
+				} else if (strcmp(arguments->item[0], "convert_overrides") == 0) {
+					logger("FILE <%s> translating overrides\n", file.container->content[file.index]->name);
+					ARCHIVE* temp = file.container->content[file.index];
+					overridesFormatConvert(navigator, &temp);
+					temp = NULL;
 				}
-				
-			} else if (strcmp(arguments->item[0], "convert_overrides") == 0) {
-				logger("FILE <%s> translating overrides\n", file.container->content[file.index]->name);
-				ARCHIVE* temp = file.container->content[file.index];
-				overridesFormatConvert(navigator, &temp);
-				temp = NULL;
+
+				arguments->value[0] = 0;
+				while (arguments->value[0] == 0 && arguments->end > 0) {
+					deQueue(arguments, 0);
+				}
 			}
 
 			endQueue(arguments);
