@@ -454,27 +454,26 @@
 > "tools/bow.json"
 	edit texture_path set {
 		"0": "item/bow",
+		"1": "item/arrow",
 		"particle": "item/bow"
 	};
 	copy "minecraft:models/item/";
-> "tools/bow_pulling_0.json"
+	disassemble "minecraft:models/item/";
+> "minecraft:models/item/bow_pulling_0.json"
 	edit texture_path set {
 		"0": "item/bow_pulling_0",
 		"particle": "item/bow_pulling_0"
 	};
-	copy "minecraft:models/item/";
-> "tools/bow_pulling_1.json"
+> "minecraft:models/item/bow_pulling_1.json"
 	edit texture_path set {
 		"0": "item/bow_pulling_1",
 		"particle": "item/bow_pulling_1"
 	};
-	copy "minecraft:models/item/";
-> "tools/bow_pulling_2.json"
+> "minecraft:models/item/bow_pulling_2.json"
 	edit texture_path set {
 		"0": "item/bow_pulling_2",
 		"particle": "item/bow_pulling_2"
 	};
-	copy "minecraft:models/item/";
 > "tools/arrow.json"
 	edit texture_path set {
 		"0": "item/arrow",
@@ -482,6 +481,13 @@
 	};
 	copy "minecraft:models/item/";
 > "util/potion.json"
+	edit texture_path set {
+		"0": "item/potion",
+		"1": "item/potion_overlay",
+		"particle": "item/potion"
+	};
+	copy "minecraft:models/item/";
+> "util/glass_bottle.json"
 	edit texture_path set {
 		"0": "item/potion",
 		"1": "item/potion_overlay",
@@ -715,8 +721,8 @@
 	};
 > "minecraft:models/item/copper_ingot.json"
 	edit texture_path set {
-		"0": "item/golden_ingot",
-		"particle": "item/golden_ingot"
+		"0": "item/copper_ingot",
+		"particle": "item/copper_ingot"
 	};
 > "minecraft:models/item/golden_ingot.json"
 	edit texture_path set {
@@ -735,15 +741,15 @@
 > "util/quartz.png"
 	copy "minecraft:textures/item/";
 > "util/iron_ingot.png"
+	paint "./materials/iron_map.png" "./materials/iron_material.png";
 	copy "minecraft:textures/item/";
 	copy "minecraft:textures/item/copper_ingot.png";
 	copy "minecraft:textures/item/golden_ingot.png";
 	copy "minecraft:textures/item/netherite_ingot.png";
-	paint "./materials/iron_map.png" "./materials/iron_material.png";
 > "minecraft:textures/item/copper_ingot.png"
 	paint "./materials/iron_material.png" "./materials/copper_map.png";
 > "minecraft:textures/item/golden_ingot.png"
-	paint "./materials/iron_material.png" "./materials/golden_material.png";
+	paint "./materials/iron_material.png" "./materials/gold_material.png";
 > "minecraft:textures/item/netherite_ingot.png"
 	paint "./materials/iron_material.png" "./materials/netherite_material.png";
 > "foods/apple.json"
@@ -810,7 +816,6 @@
 > "foods/apple.png"
 	copy "minecraft:textures/item/";
 > "foods/golden_apple.png"
-	paint "./materials/gold_map" "./materials/gold_material";
 	copy "minecraft:textures/item/";
 > "foods/golden_apple_glint.png"
 	copy "minecraft:textures/item/";
@@ -891,8 +896,10 @@
 	copy "minecraft:textures/block/";
 > "blocks/jukebox_top_inside.png"
 	copy "minecraft:textures/block/";
-> "pack 1.21.4.mcmeta"
-	edit name "pack.mcmeta";
+> "pack/pack 1.21.4.mcmeta"
+	copy "pack.mcmeta";
+> "pack/pack.png"
+	copy "pack.png";
 > "armors/"
 	remove;
 > "blocks/"
@@ -908,4 +915,6 @@
 > "tools/"
 	remove;
 > "util/"
+	remove;
+> "pack/"
 	remove;

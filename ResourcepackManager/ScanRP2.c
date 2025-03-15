@@ -3439,15 +3439,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					OBJECT *mirror, *copy, *elements, *cube, *base = NULL, *children, *placeholder, *query, *value;
 					QUEUE *groups;
 					FOLDER* location;
-					bool trim = false;
 	
 					placeholder = processJSON(file.container->content[file.index]->tab);
-	
-					if (strcmp(arguments->item[2], "trim") == 0) {
-						trim = true;
-						deQueue(arguments, 2);
-					}
-					if (sscanf(arguments->item[2] + 1, "%255[^\"]", namespace) == 0) {
+					if (sscanf(arguments->item[1] + 1, "%255[^\"]", namespace) == 0) {
 						logger("Error! Failed to process disassemble file path at iteraction %d\n", line);
 						break;
 					}
@@ -3504,7 +3498,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						value = dupOBJ(mirror);
 						int index;
 						ARCHIVE* permutate;
-						char file_name[256];
+						char file_name[511];
 	
 						for (size_t y = 0; y < value->count; y++) {
 	
@@ -3556,11 +3550,11 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							}
 						}
 	
-						if (sscanf(groups->item[x], "\"%[^\"]s\"", file_name) == 0) {
+						if (sscanf(groups->item[x], "\"%255[^\"]\"", name) == 0) {
 							logger("Error! Failed to get filename!\n");
 							return;
 						}
-						
+						snprintf(file_name, 511, "%s.json", name);
 						permutate = malloc(sizeof(ARCHIVE));
 						permutate->name = strdup(file_name);
 						permutate->tab = printJSON(value);
@@ -3576,18 +3570,6 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						freeOBJ(&value);
 					}
 					freeOBJ(&query);
-	
-					navigator = file.container;
-					for (size_t x = 0; x < navigator->count && trim == true; x++) {
-						if (strcmp(navigator->content[x]->name, file.container->content[file.index]->name) == 0) {
-							delFile(navigator, x);
-							break;
-						}
-					}
-	
-					free(file.container->content[file.index]->tab);
-					file.container->content[file.index]->tab = printJSON(placeholder);
-					indentJSON(&file.container->content[file.index]->tab);
 					
 				} else if (strcmp(arguments->item[0], "paint") == 0) {
 	
@@ -3951,7 +3933,7 @@ void printZip(FOLDER* folder, char** path) {
 		box(miniwin, 0, 0);
 		wrefresh(miniwin);
 
-		if (dirPosition[dirNumber] < navigator->dir_count) {
+		if (dirPosition[dirNumber] < (int)navigator->dir_count) {
 			navigator = navigator->subdir[dirPosition[dirNumber]];
 			snprintf(location + strlen(location), 1024 - strlen(location), "%s/", navigator->name);
 			
