@@ -1,109 +1,52 @@
-> "util/music_disc.json"
-	copy "minecraft:models/item/music_disc_5.json"
-	copy "minecraft:models/item/music_disc_13.json"
-	copy "minecraft:models/item/music_disc_blocks.json"
-	copy "minecraft:models/item/music_disc_cat.json"
-	copy "minecraft:models/item/music_disc_chirp.json"
-	copy "minecraft:models/item/music_disc_creator.json"
-	copy "minecraft:models/item/music_disc_creator_music_box.json"
-	copy "minecraft:models/item/music_disc_far.json"
-	copy "minecraft:models/item/music_disc_mall.json"
-	copy "minecraft:models/item/music_disc_mellohi.json"
-	copy "minecraft:models/item/music_disc_otherside.json"
-	copy "minecraft:models/item/music_disc_pigstep.json"
-	copy "minecraft:models/item/music_disc_precipice.json"
-	copy "minecraft:models/item/music_disc_relic.json"
-	copy "minecraft:models/item/music_disc_stal.json"
-	copy "minecraft:models/item/music_disc_strad.json"
-	copy "minecraft:models/item/music_disc_wait.json"
-	copy "minecraft:models/item/music_disc_ward.json"
-> "minecraft:models/item/music_disc_5.json"
-	edit texture_path set {
-		"0":"item/music_disc_5",
-		"particle":"item/music_disc_5"
-	};
-> "minecraft:models/item/music_disc_13.json"
-	edit texture_path set {
-		"0":"item/music_disc_13",
-		"particle":"item/music_disc_13"
-	};
-> "minecraft:models/item/music_disc_blocks.json"
-	edit texture_path set {
-		"0":"item/music_disc_blocks",
-		"particle":"item/music_disc_blocks"
-	};
-> "minecraft:models/item/music_disc_cat.json"
-	edit texture_path set {
-		"0":"item/music_disc_cat",
-		"particle":"item/music_disc_cat"
-	};
-> "minecraft:models/item/music_disc_chirp.json"
-	edit texture_path set {
-		"0":"item/music_disc_chirp",
-		"particle":"item/music_disc_chirp"
-	};
-> "minecraft:models/item/music_disc_creator.json"
-	edit texture_path set {
-		"0":"item/music_disc_creator",
-		"particle":"item/music_disc_creator"
-	};
-> "minecraft:models/item/music_disc_creator_music_box.json"
-	edit texture_path set {
-		"0":"item/music_disc_creator_music_box",
-		"particle":"item/music_disc_creator_music_box"
-	};
-> "minecraft:models/item/music_disc_far.json"
-	edit texture_path set {
-		"0":"item/music_disc_far",
-		"particle":"item/music_disc_far"
-	};
-> "minecraft:models/item/music_disc_mall.json"
-	edit texture_path set {
-		"0":"item/music_disc_mall",
-		"particle":"item/music_disc_mall"
-	};
-> "minecraft:models/item/music_disc_mellohi.json"
-	edit texture_path set {
-		"0":"item/music_disc_mellohi",
-		"particle":"item/music_disc_mellohi"
-	};
-> "minecraft:models/item/music_disc_otherside.json"
-	edit texture_path set {
-		"0":"item/music_disc_otherside",
-		"particle":"item/music_disc_otherside"
-	};
-> "minecraft:models/item/music_disc_pigstep.json"
-	edit texture_path set {
-		"0":"item/music_disc_pigstep",
-		"particle":"item/music_disc_pigstep"
-	};
-> "minecraft:models/item/music_disc_precipice.json"
-	edit texture_path set {
-		"0":"item/music_disc_precipice",
-		"particle":"item/music_disc_precipice"
-	};
-> "minecraft:models/item/music_disc_relic.json"
-	edit texture_path set {
-		"0":"item/music_disc_relic",
-		"particle":"item/music_disc_relic"
-	};
-> "minecraft:models/item/music_disc_stal.json"
-	edit texture_path set {
-		"0":"item/music_disc_stal",
-		"particle":"item/music_disc_stal"
-	};
-> "minecraft:models/item/music_disc_strad.json"
-	edit texture_path set {
-		"0":"item/music_disc_strad",
-		"particle":"item/music_disc_strad"
-	};
-> "minecraft:models/item/music_disc_wait.json"
-	edit texture_path set {
-		"0":"item/music_disc_wait",
-		"particle":"item/music_disc_wait"
-	};
-> "minecraft:models/item/music_disc_ward.json"
-	edit texture_path set {
-		"0":"item/music_disc_ward",
-		"particle":"item/music_disc_ward"
-	};
+> "equipment/"
+	copy "assets/minecraft/";
+> "blockstates/"
+	copy "assets/minecraft/";
+> "armors/iron_layer_1.png"
+	copy "minecraft:textures/entity/equipment/humanoid/iron.png";
+	copy "minecraft:textures/item/iron_layer1.png";
+> "armors/iron_layer_2.png"
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/iron.png";
+	copy "minecraft:textures/item/iron_layer2.png";
+> "armors/diamond_layer_1.png"
+	copy "minecraft:textures/entity/equipment/humanoid/diamond.png";
+	copy "minecraft:textures/item/diamond_layer1.png";
+> "armors/diamond_layer_2.png"
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/diamond.png";
+	copy "minecraft:textures/item/diamond_layer2.png";
+> "armors/gold_layer_1.png"
+	copy "minecraft:textures/entity/equipment/humanoid/gold.png";
+	copy "minecraft:textures/item/gold_layer1.png";
+> "armors/gold_layer_2.png"
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/gold.png";
+	copy "minecraft:textures/item/gold_layer2.png";
+> "armors/netherite_layer_1.png"
+	copy "minecraft:textures/entity/equipment/humanoid/netherite.png";
+	copy "minecraft:textures/item/netherite_layer1.png";
+> "armors/netherite_layer_2.png"
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/netherite.png";
+	copy "minecraft:textures/item/netherite_layer2.png";
+> "armors/chainmail_layer_1.png"
+	copy "minecraft:textures/entity/equipment/humanoid/chainmail.png";
+	copy "minecraft:textures/item/chainmail_layer1.png";
+> "armors/chainmail_layer_2.png"
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/chainmail.png";
+	copy "minecraft:textures/item/chainmail_layer2.png";
+> "pack 1.21.4.mcmeta"
+	edit name "pack.mcmeta";
+> "armors/"
+	remove;
+> "blocks/"
+	remove;
+> "blockstates/"
+	remove;
+> "equipment/"
+	remove;
+> "foods/"
+	remove;
+> "materials/"
+	remove;
+> "tools/"
+	remove;
+> "util/"
+	remove;

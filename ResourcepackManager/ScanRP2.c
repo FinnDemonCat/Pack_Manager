@@ -167,7 +167,7 @@ void peekQueue(WINDOW* window, int y, int x, QUEUE* queue) {
 }
 
 void deQueue(QUEUE* queue, int item) {
-	if (queue->end == 0 || item > queue->end || item > queue->size) {
+	if (queue->end == 0 || item > queue->end || item > (int)queue->size) {
 		return;
 	}
     free(queue->item[item]);
@@ -927,6 +927,7 @@ void delFolder (FOLDER* folder, int index) {
 
 	if (folder->dir_count == 0) {
 		free(folder->subdir);
+		folder->subdir = NULL;
 	}
 	if (folder->dir_count == folder->dir_capacity / 2 && folder->dir_capacity > 0) {
 		folder->dir_capacity /= 2;
@@ -1897,6 +1898,8 @@ FOLDER* localizeFolder(FOLDER* folder, char* path, bool recreate_path) {
 			x = -1;
 		} else if (x == (int)navigator->dir_count && !recreate_path) {
 			logger("FOLDER %s <%s> wasn't found!\n", dir[y], path);
+			navigator = NULL;
+
 			break;
 		}
 	}
@@ -2144,7 +2147,7 @@ void encodePNG (png_structp png_ptr, png_bytep data, png_size_t size) {
 	TEXTURE* reader = (TEXTURE*)png_get_io_ptr(png_ptr);
 
 	if (reader->offset + size > reader->size) {
-		size_t new_size = reader->size + 256;
+		size_t new_size = reader->size * 2;
 		char* temp = (char*)realloc(reader->data, new_size);
 
 		if (temp == NULL) {
@@ -2274,6 +2277,8 @@ void printPNGPixels(ARCHIVE* file, png_bytep *pixels, int width, int height) {
 	);
 
 	png_set_compression_level(png, Z_BEST_COMPRESSION);
+	png_set_compression_strategy(png, Z_DEFAULT_STRATEGY);
+	png_set_filter(png, PNG_FILTER_TYPE_BASE, PNG_FILTER_NONE);
 
 	png_write_info(png, info);
 	png_write_image(png, pixels);
@@ -3063,7 +3068,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 		for (
 			checkpoint = &buffer[0];
 			checkpoint != NULL;
-			checkpoint = strchr(checkpoint, ';'), checkpoint = strnotchr(checkpoint, 4, ';', ' ', '\n', '\t')
+			checkpoint = strchrs(checkpoint, 1, ';'), checkpoint = strnotchr(checkpoint, 4, ';', ' ', '\n', '\t')
 		) {
 			command_line++;
 			arguments = initQueue(8);
@@ -3076,11 +3081,11 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			for (
 					save = &command[0];
 					save != NULL;
-					save = strchrs(save + 1, 2, '\n', ' '), save = strnotchr(save, 3, '\n', '\t', ' ')
+					save = strchrs(save, 2, '\n', ' '), save = strnotchr(save, 3, '\n', '\t', ' ')
 				) {
 				
 				char placeholder[512];
-				if (save[1] == '{') {
+				if (save[0] == '{') {
 					char* backup;
 					for (int x = 2, y = 1; save[x] != '\0'; x++) {
 						if (save[x] == '{') {
@@ -3095,8 +3100,8 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 					}
 					
-					snprintf(name, (int)(backup - save), "%s", save + 1);
-					save += strlen(name);
+					snprintf(placeholder, 511, "%.*s", (int)(backup - save), save);
+					save += strlen(placeholder);
 				} else if (sscanf(save, "%511s", placeholder) == 0) {
 					logger("Warning! Failed to get argument in iteraction %d, line %d\n", line, command_line);
 					continue;
@@ -3184,6 +3189,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						mirror = NULL;
 					}
 				} else if (strcmp(arguments->item[0], "remove") == 0) {
+					if (cursor == NULL) {
+						break;
+					}
 					if (file.index == -1) {
 						cursor = navigator->parent;
 	
@@ -3225,12 +3233,16 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 					} else if (strcmp(arguments->item[1], "display") == 0 || strcmp(arguments->item[1], "texture_path") == 0) {
 						
-						OBJECT *value, *placeholder, *query;
+						OBJECT *value = NULL, *placeholder = NULL, *query = NULL;
 						sprintf(name, "%s", (strcmp(arguments->item[1], "display") == 0) ? "\"display\"" : "\"textures\"");
 	
 						logger("FILE <%s> %s updated \n", file.container->content[file.index]->name, name);
 	
 						placeholder = processJSON(file.container->content[file.index]->tab);
+						if (placeholder == NULL) {
+							logger("Warning! Tried to pass <%s> as a json file!\n", file.container->content[file.index]->name);
+							break;
+						}
 						
 						for (size_t x = 0; x < placeholder->count; x++) {
 							if (strcmp(placeholder->value[x]->declaration, name) == 0) {
@@ -3240,7 +3252,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						}
 	
 						if (query == NULL) {
-							logger("Warning! Failed to find %s member in file model!", name);
+							logger("Warning! Failed to find %s member in file model!\n", name);
 							break;
 						}
 						
@@ -3592,11 +3604,11 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					if (getPNGPixels(file.container->content[file.index], &texture, &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
 						logger("Failed to read png file!\n");
 						checkpoint = NULL;
-						continue;
+						break;
 					}
 	
 					if (texture == NULL) {
-						continue;
+						break;
 					}
 					
 					bpp[0] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
@@ -3612,15 +3624,15 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						if (location == NULL) {
 							logger("Error! Couldn't find %s at target folder\n", namespace);
 							checkpoint = NULL;
-							continue;
+							break;
 						}
 					} else {
 						location = localizeFolder(assets, namespace, false);
 	
 						if (location == NULL) {
-							logger("Error! Couldn't find %s at assets folder", namespace);
+							logger("Error! Couldn't find %s at assets folder\n", namespace);
 							checkpoint = NULL;
-							continue;
+							break;
 						}
 					}
 	
@@ -3643,7 +3655,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							free(texture[x]);
 						}
 						free(texture);
-						continue;
+						break;
 					}
 					bpp[1] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
 	
@@ -3659,14 +3671,14 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						if (location == NULL) {
 							logger("Error! Couldn't find %s at target folder", namespace);
 							checkpoint = NULL;
-							continue;
+							break;
 						}
 					} else {
 						location = localizeFolder(assets, namespace, false);
 						if (location == NULL) {
 							logger("Error! Couldn't find %s at assets folder", namespace);
 							checkpoint = NULL;
-							continue;
+							break;
 						}
 					}
 	
@@ -3693,7 +3705,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							free(pixels[x]);
 						}
 						free(pixels);
-						continue;
+						break;
 					}
 	
 					for (int x = 0; x < height; x++) {
@@ -3939,7 +3951,7 @@ void printZip(FOLDER* folder, char** path) {
 		box(miniwin, 0, 0);
 		wrefresh(miniwin);
 
-		while (navigator->dir_count > 0) {
+		if (dirPosition[dirNumber] < navigator->dir_count) {
 			navigator = navigator->subdir[dirPosition[dirNumber]];
 			snprintf(location + strlen(location), 1024 - strlen(location), "%s/", navigator->name);
 			
@@ -3950,41 +3962,42 @@ void printZip(FOLDER* folder, char** path) {
 
 			dirPosition[dirNumber]++;
 			dirNumber = (dirNumber < 16) ? (dirNumber + 1) : dirNumber;
-		}
-		pointer = &location[strlen(location)];
-
-		for (int x = 0; x < (int)navigator->count; x++) {
-			snprintf(pointer, 1024 - strlen(location), "%s", navigator->content[x]->name);
-			logger("%s FILE: <%s>\n", folder->name, location);
-
-			if (zipOpenNewFileInZip(rp, location, NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_DEFAULT_COMPRESSION) != ZIP_OK) {
-				logger("Failed to create %s!\n");
-				zipClose(rp, NULL);
-				return;
+		} else {
+			pointer = &location[strlen(location)];
+	
+			for (int x = 0; x < (int)navigator->count; x++) {
+				snprintf(pointer, 1024 - strlen(location), "%s", navigator->content[x]->name);
+				logger("%s FILE: <%s>\n", folder->name, location);
+	
+				if (zipOpenNewFileInZip(rp, location, NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_DEFAULT_COMPRESSION) != ZIP_OK) {
+					logger("Failed to create %s!\n");
+					zipClose(rp, NULL);
+					return;
+				}
+	
+				zipWriteInFileInZip(rp, navigator->content[x]->tab, navigator->content[x]->size);
+				zipCloseFileInZip(rp);
 			}
-
-			zipWriteInFileInZip(rp, navigator->content[x]->tab, navigator->content[x]->size);
-			zipCloseFileInZip(rp);
-		}
-
-		pointer[0] = '\0';
-
-		while (dirPosition[dirNumber] == (int)navigator->dir_count && dirNumber > -1) {
-			if ((pointer = strrchr(location, '/')) != NULL) {
-				pointer[0] = '\0';
-			}
-			if ((pointer = strrchr(location, '/')) != NULL) {
-				pointer[1] = '\0';
+	
+			pointer[0] = '\0';
+	
+			if (dirNumber > 0) {
+				if ((pointer = strrchr(location, '/')) != NULL) {
+					pointer[0] = '\0';
+				}
+				if ((pointer = strrchr(location, '/')) != NULL) {
+					pointer[1] = '\0';
+				} else {
+					location[0] = '\0';
+				}
+	
+				dirPosition[dirNumber] = 0;
+				dirNumber--;
+				navigator = (dirNumber >= 0) ? navigator->parent : navigator;
 			} else {
-				location[0] = '\0';
+				done = true;
 			}
-
-			dirPosition[dirNumber] = 0;
-			dirNumber--;
-			navigator = navigator->parent;
 		}
-
-		done = dirNumber < 0 ? true : false;
 	}
 	nodelay(window, false);
 
