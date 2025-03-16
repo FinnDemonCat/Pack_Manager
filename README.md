@@ -1,21 +1,21 @@
 # Resourcepack Manager
 
-**ResourcepackManager** é uma aplicação desenvolvida para auxiliar criadores de resourcepacks a gerenciar múltiplos pacotes de recursos. Com um sistema de scripts implementado, o ResourcepackManager pode selecionar uma pasta ou um arquivo para executar ações determinadas pelo usuário.
+**ResourcepackManager** is an application developed to assist resourcepack creators in managing multiple resource packs. With an implemented script system, ResourcepackManager can select a folder or file to execute user-defined actions.
 
-## Instruções
+## Instructions
 
-O sistema de instruções funciona com um arquivo contendo uma lista de comandos que apontam para um arquivo e indicam ao programa o que fazer com ele.
+The instruction system works with a file containing a list of commands that point to a file and tell the program what to do with it.
 
-A versão atual (1.0) do ResourcepackManager possui as seguintes ações:
+The current version (1.0) of ResourcepackManager has the following actions:
 
 ---
 
 ### **Copy/Move**:
-- O programa seleciona o arquivo/pasta de destino e move/copia para o caminho de destino.
-- O programa cria automaticamente as pastas no caminho especificado, caso não existam.
-- Se o caminho incluir um nome de arquivo, o programa atualiza automaticamente o nome do arquivo para corresponder ao caminho.
+- The program selects the target file/folder and moves/copies it to the destination path.
+- The program automatically creates folders in the specified path if they do not exist.
+- If the path includes a file name, the program automatically updates the file name to match the path.
 
-**Exemplos:**
+**Examples:**
 ```
 > "pack/pack 1.21.4.mcmeta"
    copy "pack.mcmeta";
@@ -23,52 +23,53 @@ A versão atual (1.0) do ResourcepackManager possui as seguintes ações:
 > "blockstates/"
    copy "assets/minecraft/";
 ```
+
 ---
 
 ### **Remove**:
-- O programa seleciona o arquivo/pasta de destino e o exclui.
+- The program selects the target file/folder and deletes it.
 
-**Exemplos:**
+**Examples:**
 ```
 > "minecraft:models/item/sweet_berries.json"
    remove;
 
 > "minecraft:textures/entity/equipment/"
    remove;
-   ```
+```
 
 ---
 
 ### **Edit**:
-Esta função contém um conjunto de sub-ações relacionadas ao arquivo:
+This function contains a set of sub-actions related to the file:
 
-1. **"name"**: altera o nome do arquivo.
-   ```
+1. **"name"**: changes the file name.
+```
    > "minecraft:models/item/potion.json"
       edit name "bottle_drinkable.json";
-   ```
+```
 
-2. **"display" / "texture_path"**: atualiza o respectivo membro do modelo para o valor fornecido no script.
-   ```
+2. **"display" / "texture_path"**: updates the respective model member to the value provided in the script.
+```
    > "tools/fishing_rod_cast.json"
       edit texture_path set {
         "0": "item/fishing_rod",
         "particle": "item/fishing_rod"
       };
-   ```
+```
 
-3. **"dimensions"**: redimensiona as imagens para as dimensões fornecidas.
-   ```
+3. **"dimensions"**: resizes images to the specified dimensions.
+```
    > "armors/iron_layer_1.png"
       edit dimensions 64x32;
-   ```
+```
 
 ---
 
 ### **Autofill**:
-- O programa cria um arquivo que reflete as pastas no resourcepack para ser carregado pelo atlas logger.
+- The program creates a file that reflects the folders in the resourcepack to be loaded by the atlas logger.
 
-**Exemplo:**
+**Example:**
 ```
 > "minecraft:atlases/custom.json"
    autofill;
@@ -77,9 +78,9 @@ Esta função contém um conjunto de sub-ações relacionadas ao arquivo:
 ---
 
 ### **Disassemble**:
-- O programa seleciona o arquivo de destino e extrai os grupos para seus próprios modelos de arquivo.
+- The program selects the target file and extracts the groups into their own file models.
 
-**Exemplo:**
+**Example:**
 ```
 > "tools/bow.json"
    disassemble trim "minecraft:models/item/";
@@ -88,9 +89,9 @@ Esta função contém um conjunto de sub-ações relacionadas ao arquivo:
 ---
 
 ### **Paint**:
-- O programa pega a textura e pinta de acordo com a paleta especificada.
+- The program takes the texture and paints it according to the specified palette.
 
-**Exemplo:**
+**Example:**
 ```
 > "tools/bow.png"
    paint "./materials/wood_map.png" "./materials/wood_material.png";
@@ -99,24 +100,25 @@ Esta função contém um conjunto de sub-ações relacionadas ao arquivo:
 ---
 
 ### **Permutate_Texture**:
-- O programa pega a textura e uma lista de paletas para pintar as duplicatas.
+- The program takes the texture and a list of palettes to paint the duplicates.
 
-**Exemplo:**
+**Example:**
 ```
 > "bricks.png"
    permutate_texture "snowstone_map.png" {"yellow_stone.png", "pink_stone.png", "brown_stone.png", "burgundy.png", "limestone.png", "blue_stone.png", "green_stone.png"};
 ```
-- A duplicata será salva no mesmo local que o arquivo alvo, usando o nome da paleta como prefixo.
+
+- The duplicate will be saved in the same location as the target file, using the palette name as a prefix.
 
 ---
 
 ### **Convert_Overrides**:
-- Com a mudança no sistema de overrides, esta ação traduz o puxar do arco, o tempo/ângulo da bússola e do relógio, e o `custom_model_data` para seu próprio arquivo.
+- With the change in the overrides system, this action translates the bow pull, compass and clock time/angle, and `custom_model_data` into their own file.
 
-**Exemplo:**
+**Example:**
 ```
 > "minecraft:models/item/bow.json"
    convert_overrides;
 ```
 
-- (Não há intenção de adicionar suporte a outros predicados).
+- (There are no intentions to add support for other predicates).
