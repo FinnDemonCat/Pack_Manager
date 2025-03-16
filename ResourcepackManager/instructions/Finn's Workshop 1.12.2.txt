@@ -1,6 +1,6 @@
 > "pack.mcmeta"
 	remove;
-< "packs/pack 1.12.2.mcmeta"
+< "pack/pack 1.12.2.mcmeta"
 	copy "pack.mcmeta";
 > "minecraft:models/item/potion.json";
 	edit name "bottle_drinkable.json";
@@ -32,29 +32,29 @@
 	copy "minecraft:textures/models/armor/";
 > "minecraft:models/item/sweet_berries.json"
 	remove;
-"minecraft:models/item/glow_berries.json"
+> "minecraft:models/item/glow_berries.json"
 	remove;
-> "minecraft:models/item/amethyst.json
+> "minecraft:models/item/amethyst.json"
 	remove;
-> "minecraft:models/item/copper_ingot.json
+> "minecraft:models/item/copper_ingot.json"
 	remove;
-> "minecraft:models/item/netherite_ingot.json
+> "minecraft:models/item/netherite_ingot.json"
 	remove;
-> "minecraft:models/item/netherite_sword.json
+> "minecraft:models/item/netherite_sword.json"
 	remove;
-> "minecraft:models/item/netherite_axe.json
+> "minecraft:models/item/netherite_axe.json"
 	remove;
-> "minecraft:models/item/netherite_pickaxe.json
+> "minecraft:models/item/netherite_pickaxe.json"
 	remove;
-> "minecraft:models/item/netherite_shovel.json
+> "minecraft:models/item/netherite_shovel.json"
 	remove;
-> "minecraft:models/item/netherite_hoe.json
+> "minecraft:models/item/netherite_hoe.json"
 	remove;
-> "minecraft:models/item/netherite_helmet.json
+> "minecraft:models/item/netherite_helmet.json"
 	remove;
-> "minecraft:models/item/netherite_chestplate.json
+> "minecraft:models/item/netherite_chestplate.json"
 	remove;
-> "minecraft:models/item/netherite_leggins.json
+> "minecraft:models/item/netherite_leggings.json"
 	remove;
-> "minecraft:models/item/netherite_boots.json
+> "minecraft:models/item/netherite_boots.json"
 	remove;

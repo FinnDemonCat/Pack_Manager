@@ -189,7 +189,7 @@ void endQueue(QUEUE* queue) {
 
 //Concatenate two strings to acess a path, return to the parent path or get the directory's name
 void returnString (char** path, const char* argument) {
-	char *placeholder, *pointer = path[0], type, temp[256];
+	char *placeholder, *pointer = path[0], type;
     size_t length;
 
 	if (argument == NULL) {
@@ -200,7 +200,9 @@ void returnString (char** path, const char* argument) {
 		type = '\\';
 	} else {
 		type = '/';
-		pointer[strlen(pointer) - 1] = '\0';
+		if (pointer[strlen(pointer) - 1] == type) {
+			pointer[strlen(pointer) - 1] = '\0';
+		}
 	}
 	if ((placeholder = strrchr(pointer, type)) == NULL) {
 		return;
@@ -211,8 +213,8 @@ void returnString (char** path, const char* argument) {
 			placeholder = strrchr(pointer, type);
 			placeholder[(type == '\\') ? 0 : 1] = '\0';
 		} else if (strcmp(argument, "name") == 0) {
-			length = strlen(placeholder + 1);
-			snprintf(temp, 255, "%s", placeholder + 1);
+			placeholder++;
+			length = strlen(placeholder);
 			sprintf(pointer, "%s", placeholder);
 
 			char* temp = (char*)realloc(path[0], (length + 1) * sizeof(char));
@@ -3221,12 +3223,12 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							break;
 						}
 						if (file.index == -1) {
-							logger("FOLDER <%s> updated to <%s>", navigator->name, name);
+							logger("FOLDER <%s> updated to <%s>\n", navigator->name, name);
 	
 							free(navigator->name);
 							navigator->name = strdup(name);
 						} else {
-							logger("FILE <%s> updated to <%s>", file.container->content[file.index]->name, name);
+							logger("FILE <%s> updated to <%s>\n", file.container->content[file.index]->name, name);
 	
 							free(file.container->content[file.index]->name);
 							file.container->content[file.index]->name = strdup(name);
