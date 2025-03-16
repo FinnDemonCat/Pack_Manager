@@ -2153,9 +2153,9 @@ void encodePNG (png_structp png_ptr, png_bytep data, png_size_t size) {
 		char* temp = (char*)realloc(reader->data, new_size);
 
 		if (temp == NULL) {
-			logger("Failed to expand pixels memory! %s\n", strerror(errno));
-			return;
-		}
+            png_error(png_ptr, "Falha ao alocar memória");
+            return;
+        }
 
 		reader->data = temp;
 		reader->size = new_size;
@@ -2302,7 +2302,26 @@ void resizePNGFile(ARCHIVE** image, int width, int height) {
 	png_bytep *texture;
 
 	getPNGPixels(*image, &texture, &collums, &lines, &color_type, &bit_deph, &row_bytes, true);
-	offset = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+	switch (color_type) {
+		case PNG_COLOR_TYPE_GRAY:
+			offset = 1;
+			break;
+		case PNG_COLOR_TYPE_GRAY_ALPHA:
+			offset = 2;
+			break;
+		case PNG_COLOR_TYPE_PALETTE:
+			offset = 1;
+			break;
+		case PNG_COLOR_TYPE_RGB:
+			offset = 3;
+			break;
+		case PNG_COLOR_TYPE_RGBA:
+			offset = 4;
+			break;
+		default:
+			logger("Color type não suportado: %d\n", color_type);
+			return;
+	}
 
 	png_bytep *resize = (png_bytep*)realloc(texture, height * sizeof(png_bytep));
 	if (resize == NULL) {
@@ -2317,6 +2336,7 @@ void resizePNGFile(ARCHIVE** image, int width, int height) {
 			resize[x] = (png_bytep)realloc(resize[x], row_bytes);
 		} else {
 			resize[x] = (png_bytep)malloc(row_bytes);
+			memset(resize[x], 0, row_bytes);
 		}
 
 		if (resize[x] == NULL) {
@@ -2343,12 +2363,20 @@ void resizePNGFile(ARCHIVE** image, int width, int height) {
 					resize[x][(y * offset) + 2] = 255;
 				} else {
 					resize[x][(y * offset) + 3] = 0;
+					resize[x][(y * offset) + 0] = 255;
+					resize[x][(y * offset) + 1] = 255;
+					resize[x][(y * offset) + 2] = 255;
 				}
 			}
 		}
 	}
 
 	printPNGPixels(image[0], resize, width, height);
+
+	for (int x = 0; x < height; x++) {
+		free(resize[x]);
+	}
+	free(resize);
 }
 
 void overridesFormatConvert(FOLDER* folder, ARCHIVE** file) {
@@ -3036,7 +3064,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 			}
 			break;
 		case 1:
-			navigator = localizeFolder(target, namespace, false);
+			navigator = localizeFolder(assets, namespace, false);
 			if (navigator == NULL) {
 				logger("Failed to locate %s in assets folder!\n", namespace);
 				continue;
@@ -3136,7 +3164,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					if ((save = strrchr(namespace, '/')) != NULL) {
 						sprintf(name, "%s", save + 1);
 					} else {
-						name[0] = '\0';
+						sprintf(name, "%s", namespace);
 					}
 	
 					cursor = localizeFolder(target, namespace, true);

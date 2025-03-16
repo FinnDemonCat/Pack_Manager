@@ -1,37 +1,51 @@
+> "pack/pack 1.21.4.mcmeta"
+	copy "pack.mcmeta";
+> "pack/pack.png"
+	copy "pack.png";
 > "equipment/"
 	copy "assets/minecraft/";
 > "blockstates/"
 	copy "assets/minecraft/";
 > "armors/iron_layer_1.png"
 	copy "minecraft:textures/entity/equipment/humanoid/iron.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/iron_layer1.png";
 > "armors/iron_layer_2.png"
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/iron.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/iron_layer2.png";
 > "armors/diamond_layer_1.png"
 	copy "minecraft:textures/entity/equipment/humanoid/diamond.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/diamond_layer1.png";
 > "armors/diamond_layer_2.png"
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/diamond.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/diamond_layer2.png";
 > "armors/gold_layer_1.png"
 	copy "minecraft:textures/entity/equipment/humanoid/gold.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/gold_layer1.png";
 > "armors/gold_layer_2.png"
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/gold.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/gold_layer2.png";
 > "armors/netherite_layer_1.png"
 	copy "minecraft:textures/entity/equipment/humanoid/netherite.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/netherite_layer1.png";
 > "armors/netherite_layer_2.png"
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/netherite.png";
+	edit dimentions 64x32;
 	copy "minecraft:textures/item/netherite_layer2.png";
 > "armors/chainmail_layer_1.png"
-	copy "minecraft:textures/entity/equipment/humanoid/chainmail.png";
 	copy "minecraft:textures/item/chainmail_layer1.png";
+	edit dimentions 64x64;
+	copy "minecraft:textures/entity/equipment/humanoid/chainmail.png";
 > "armors/chainmail_layer_2.png"
-	copy "minecraft:textures/entity/equipment/humanoid_leggings/chainmail.png";
 	copy "minecraft:textures/item/chainmail_layer2.png";
+	edit dimentions 64x64;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/chainmail.png";
 > "armors/helmet.json"
 	copy "minecraft:models/item/iron_helmet.json";
 	copy "minecraft:models/item/diamond_helmet.json";
@@ -304,6 +318,12 @@
 		"0": "item/netherite_shovel",
 		"particle": "item/netherite_shovel"
 	};
+> "tools/fishing_rod.json"
+	copy "minecraft:models/item/";
+> "tools/fishing_rod_cast.json"
+	copy "minecraft:models/item/";
+> "tools/carrot_on_a_stick.json"
+	copy "minecraft:models/item/";
 > "tools/wooden_sword.json"
 	edit texture_path set {
 		"0": "item/wooden_sword",
@@ -387,6 +407,9 @@
 > "minecraft:textures/item/netherite_shovel.png"
 	paint "./materials/wood_material.png" "./materials/crimsom_material.png";
 	paint "./materials/iron_material.png" "./materials/netherite_material.png";
+> "tools/fishing_rod.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
+	copy "minecraft:models/item/";
 > "tools/wooden_hoe.png"
 	copy "minecraft:textures/item/";
 > "tools/stone_hoe.png"
@@ -445,6 +468,10 @@
 		"particle": "item/firework_rocket"
 	};
 	copy "minecraft:models/item/";
+> "tools/bow.png"
+	copy "minecraft:textures/item/";
+> "tools/arrow.png"
+	copy "minecraft:textures/item/";
 > "tools/crossbow.png"
 	copy "minecraft:textures/item/";
 > "tools/crossbow_firework.png"
@@ -457,23 +484,7 @@
 		"1": "item/arrow",
 		"particle": "item/bow"
 	};
-	copy "minecraft:models/item/";
 	disassemble "minecraft:models/item/";
-> "minecraft:models/item/bow_pulling_0.json"
-	edit texture_path set {
-		"0": "item/bow_pulling_0",
-		"particle": "item/bow_pulling_0"
-	};
-> "minecraft:models/item/bow_pulling_1.json"
-	edit texture_path set {
-		"0": "item/bow_pulling_1",
-		"particle": "item/bow_pulling_1"
-	};
-> "minecraft:models/item/bow_pulling_2.json"
-	edit texture_path set {
-		"0": "item/bow_pulling_2",
-		"particle": "item/bow_pulling_2"
-	};
 > "tools/arrow.json"
 	edit texture_path set {
 		"0": "item/arrow",
@@ -496,7 +507,7 @@
 	copy "minecraft:models/item/";
 > "util/splash_potion.json"
 	edit texture_path set {
-		"0": "item/splash_potion",
+		"0": "item/potion",
 		"1": "item/potion_overlay",
 		"particle": "item/splash_potion"
 	};
@@ -532,7 +543,7 @@
 > "util/potion.png.mcmeta"
 	copy "minecraft:textures/item/";
 	copy "minecraft:textures/item/lingering_potion.png.mcmeta";
-	copy "minecraft:textures/item/torch.png.mcmeta";
+	copy "minecraft:textures/block/torch.png.mcmeta";
 > "util/music_disc.json"
 	copy "minecraft:models/item/music_disc_5.json";
 	copy "minecraft:models/item/music_disc_13.json";
@@ -699,12 +710,22 @@
 	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_wait_pallet.png";
 > "minecraft:textures/item/music_disc_ward.png"
 	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_ward_pallet.png";
-> "util/amethyst.json"
-	copy "minecraft:models/item/";
-> "util/lapiz_lazuli.json"
+> "util/amethyst_shard.json"
 	edit texture_path set {
-		"0": "item/lapiz_lazuli",
-		"particle": "item/lapiz_lazuli"
+		"0": "item/amethyst_shard",
+		"particle": "item/amethyst_shard"
+	};
+	copy "minecraft:models/item/";
+> "util/diamond.json"
+	edit texture_path set {
+		"0": "item/diamond",
+		"particle": "item/diamond"
+	};
+	copy "minecraft:models/item/";
+> "util/lapis_lazuli.json"
+	edit texture_path set {
+		"0": "item/lapis_lazuli",
+		"particle": "item/lapis_lazuli"
 	};
 	copy "minecraft:models/item/";
 > "util/quartz.json"
@@ -712,7 +733,7 @@
 > "util/iron_ingot.json"
 	copy "minecraft:models/item/";
 	copy "minecraft:models/item/copper_ingot.json";
-	copy "minecraft:models/item/golden_ingot.json";
+	copy "minecraft:models/item/gold_ingot.json";
 	copy "minecraft:models/item/netherite_ingot.json";
 > "minecraft:models/item/iron_ingot.json"
 	edit texture_path set {
@@ -724,31 +745,34 @@
 		"0": "item/copper_ingot",
 		"particle": "item/copper_ingot"
 	};
-> "minecraft:models/item/golden_ingot.json"
+> "minecraft:models/item/gold_ingot.json"
 	edit texture_path set {
-		"0": "item/golden_ingot",
-		"particle": "item/golden_ingot"
+		"0": "item/gold_ingot",
+		"particle": "item/gold_ingot"
 	};
 > "minecraft:models/item/netherite_ingot.json"
 	edit texture_path set {
 		"0": "item/netherite_ingot",
 		"particle": "item/netherite_ingot"
 	};
-> "util/amethyst.png"
+> "util/amethyst_shard.png"
+	copy "minecraft:textures/item/";
+> "util/diamond.png"
+	paint "./materials/diamond_map.png" "./materials/diamond_material.png";
 	copy "minecraft:textures/item/";
 > "util/lapis_lazuli.png"
-	copy "minecraft:textures/item/lapiz_lazuli.png";
+	copy "minecraft:textures/item/";
 > "util/quartz.png"
 	copy "minecraft:textures/item/";
 > "util/iron_ingot.png"
 	paint "./materials/iron_map.png" "./materials/iron_material.png";
 	copy "minecraft:textures/item/";
 	copy "minecraft:textures/item/copper_ingot.png";
-	copy "minecraft:textures/item/golden_ingot.png";
+	copy "minecraft:textures/item/gold_ingot.png";
 	copy "minecraft:textures/item/netherite_ingot.png";
 > "minecraft:textures/item/copper_ingot.png"
 	paint "./materials/iron_material.png" "./materials/copper_map.png";
-> "minecraft:textures/item/golden_ingot.png"
+> "minecraft:textures/item/gold_ingot.png"
 	paint "./materials/iron_material.png" "./materials/gold_material.png";
 > "minecraft:textures/item/netherite_ingot.png"
 	paint "./materials/iron_material.png" "./materials/netherite_material.png";
@@ -767,6 +791,7 @@
 > "foods/enchanted_golden_apple.json"
 	edit texture_path set {
 		"0": "item/golden_apple",
+		"1": "item/golden_apple_glint",
 		"particle": "item/golden_apple"
 	};
 	copy "minecraft:models/item/";
@@ -872,9 +897,25 @@
 	};
 	copy "minecraft:models/block/";
 > "blocks/jukebox.json"
+	edit texture_path set {
+		"0": "block/jukebox_bottom",
+		"1": "block/jukebox_inside",
+		"2": "block/jukebox_side",
+		"3": "block/jukebox_top",
+		"4": "block/jukebox_top_inside",
+		"particle": "block/jukebox_side"
+	};
 	copy "minecraft:models/block/";
 	copy "minecraft:models/item/";
 > "blocks/jukebox_playing.json"
+	edit texture_path set {
+		"0": "block/jukebox_bottom",
+		"1": "block/jukebox_inside",
+		"2": "block/jukebox_side",
+		"3": "block/jukebox_top",
+		"4": "block/jukebox_top_inside",
+		"particle": "block/jukebox_side"
+	};
 	copy "minecraft:models/block/";
 > "blocks/redstone_torch_off.png"
 	copy "minecraft:textures/block/";
@@ -896,10 +937,6 @@
 	copy "minecraft:textures/block/";
 > "blocks/jukebox_top_inside.png"
 	copy "minecraft:textures/block/";
-> "pack/pack 1.21.4.mcmeta"
-	copy "pack.mcmeta";
-> "pack/pack.png"
-	copy "pack.png";
 > "armors/"
 	remove;
 > "blocks/"

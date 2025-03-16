@@ -2,7 +2,7 @@
 	remove;
 < "pack/pack 1.12.2.mcmeta"
 	copy "pack.mcmeta";
-> "minecraft:models/item/potion.json";
+> "minecraft:models/item/potion.json"
 	edit name "bottle_drinkable.json";
 > "minecraft:models/item/splash_potion.json"
 	edit name "bottle_splash.json";
