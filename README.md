@@ -1,28 +1,122 @@
 # Resourcepack Manager
- ResourcepackManager is an application developed to assist resourcepack creators to manage multiple resourcepacks.
- With an implemented scrip system, the instructions, ResourcepackManager can pick a folder or group of files to execute actions determined by the user.
-# Instructions
- The instruction system works with a file with a list of commands that point to a file and tell the program what to do with it.
- The current version (1.0) of ResourcepackManager has the following actions:
- - Copy/Move:
-  The program will pick the target file/folder and move/copy to destination path.
-  The program will automatically create the folders as in the path when it can't find it.
-  In case the path includes a file name, the program will automatically update the file name to match the path.
- - Remove:
-  The program will The program will pick the target file/folder and delete it.
- - Edit:
-  This function contain a set of sub-actions related to the file:
-  - "name" will change the filename.
-  - "display" / "texture_path" will upate the respective model member to the one given in the scrip.
-  - "dimentions" will resize images to the given dimentions.
- - Autofill:
-   The program will create a file that reflects the folders in the resourcepack to be loaded by the atlas logger.
- - Disassemble:
-   The program will pick the target file and extract the groups to their own file models.
- - Paint:
-   The program will take the texture and paint to the acording pallet
- - Permutate_Texture:
-   The program will take the texture and a list of pallets to paint the duplicates with.
- - Convert_Overrides:
-   As with the change of overrides system, this action will translate bow pull, compass and clock time/angle and custom_model_data to it's own file.
-   (No intentios to add support to other predicates)
+
+**ResourcepackManager** é uma aplicação desenvolvida para auxiliar criadores de resourcepacks a gerenciar múltiplos pacotes de recursos. Com um sistema de scripts implementado, o ResourcepackManager pode selecionar uma pasta ou um arquivo para executar ações determinadas pelo usuário.
+
+## Instruções
+
+O sistema de instruções funciona com um arquivo contendo uma lista de comandos que apontam para um arquivo e indicam ao programa o que fazer com ele.
+
+A versão atual (1.0) do ResourcepackManager possui as seguintes ações:
+
+---
+
+### **Copy/Move**:
+- O programa seleciona o arquivo/pasta de destino e move/copia para o caminho de destino.
+- O programa cria automaticamente as pastas no caminho especificado, caso não existam.
+- Se o caminho incluir um nome de arquivo, o programa atualiza automaticamente o nome do arquivo para corresponder ao caminho.
+
+**Exemplos:**
+```
+> "pack/pack 1.21.4.mcmeta"
+   copy "pack.mcmeta";
+
+> "blockstates/"
+   copy "assets/minecraft/";
+```
+---
+
+### **Remove**:
+- O programa seleciona o arquivo/pasta de destino e o exclui.
+
+**Exemplos:**
+```
+> "minecraft:models/item/sweet_berries.json"
+   remove;
+
+> "minecraft:textures/entity/equipment/"
+   remove;
+   ```
+
+---
+
+### **Edit**:
+Esta função contém um conjunto de sub-ações relacionadas ao arquivo:
+
+1. **"name"**: altera o nome do arquivo.
+   ```
+   > "minecraft:models/item/potion.json"
+      edit name "bottle_drinkable.json";
+   ```
+
+2. **"display" / "texture_path"**: atualiza o respectivo membro do modelo para o valor fornecido no script.
+   ```
+   > "tools/fishing_rod_cast.json"
+      edit texture_path set {
+        "0": "item/fishing_rod",
+        "particle": "item/fishing_rod"
+      };
+   ```
+
+3. **"dimensions"**: redimensiona as imagens para as dimensões fornecidas.
+   ```
+   > "armors/iron_layer_1.png"
+      edit dimensions 64x32;
+   ```
+
+---
+
+### **Autofill**:
+- O programa cria um arquivo que reflete as pastas no resourcepack para ser carregado pelo atlas logger.
+
+**Exemplo:**
+```
+> "minecraft:atlases/custom.json"
+   autofill;
+```
+
+---
+
+### **Disassemble**:
+- O programa seleciona o arquivo de destino e extrai os grupos para seus próprios modelos de arquivo.
+
+**Exemplo:**
+```
+> "tools/bow.json"
+   disassemble trim "minecraft:models/item/";
+```
+
+---
+
+### **Paint**:
+- O programa pega a textura e pinta de acordo com a paleta especificada.
+
+**Exemplo:**
+```
+> "tools/bow.png"
+   paint "./materials/wood_map.png" "./materials/wood_material.png";
+```
+
+---
+
+### **Permutate_Texture**:
+- O programa pega a textura e uma lista de paletas para pintar as duplicatas.
+
+**Exemplo:**
+```
+> "bricks.png"
+   permutate_texture "snowstone_map.png" {"yellow_stone.png", "pink_stone.png", "brown_stone.png", "burgundy.png", "limestone.png", "blue_stone.png", "green_stone.png"};
+```
+- A duplicata será salva no mesmo local que o arquivo alvo, usando o nome da paleta como prefixo.
+
+---
+
+### **Convert_Overrides**:
+- Com a mudança no sistema de overrides, esta ação traduz o puxar do arco, o tempo/ângulo da bússola e do relógio, e o `custom_model_data` para seu próprio arquivo.
+
+**Exemplo:**
+```
+> "minecraft:models/item/bow.json"
+   convert_overrides;
+```
+
+- (Não há intenção de adicionar suporte a outros predicados).
