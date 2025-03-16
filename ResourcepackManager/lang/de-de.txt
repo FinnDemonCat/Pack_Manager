@@ -1,0 +1,37 @@
+[Logo]:
+______          _     ___  ___                                  
+| ___ \        | |    |  \/  |                                  
+| |_/ /_ _  ___| | __ | .  . | __ _ _ __   __ _  __ _  ___ _ __ 
+|  __/ _` |/ __| |/ / | |\/| |/ _` | '_ \ / _` |/ _` |/ _ \ '__|
+| | | (_| | (__|   <  | |  | | (_| | | | | (_| | (_| |  __/ |   
+\_|  \__,_|\___|_|\_\ \_|  |_/\__,_|_| |_|\__,_|\__, |\___|_|   
+                                                 __/ |          
+                                                |___/           
+[Options]:
+Hauptmenü
+Resourcepacks scannen
+Werkzeuge
+Sprache
+Beenden
+[Messages]:
+Keine Einträge im Resourcepack-Ordner gefunden! Drücken Sie eine beliebige Taste, um zu aktualisieren
+[Wählen Sie bis zu 8 Resourcepacks zum Scannen aus]
+Keine Resourcepacks gescannt
+Keine Dateien ausgewählt
+Ausgewählte Dateien scannen?
+Zielscan abgeschlossen
+[Ja]
+[Nein]
+[Alles klar]
+Zusammenführen und Stapeln
+Anweisungen ausführen
+Resourcepacks exportieren
+Anweisungen überprüfen (im Duplikatordner gespeichert)
+Ordner für Anweisungen ist leer
+Fertig
+Abbrechen
+[Wählen Sie die Ordner aus]
+[Wählen Sie die Anweisungsdatei aus]
+Sie müssen noch ein Resourcepack auswählen!
+ZIP-Pack in den Resourcepacks-Ordner verschieben
+Fehler beim Scannen eines ausgewählten Ordners!
