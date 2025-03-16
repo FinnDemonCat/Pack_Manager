@@ -45,23 +45,23 @@ This function contains a set of sub-actions related to the file:
 
 1. **"name"**: changes the file name.
 ```
-   > "minecraft:models/item/potion.json"
-      edit name "bottle_drinkable.json";
+> "minecraft:models/item/potion.json"
+   edit name "bottle_drinkable.json";
 ```
 
 2. **"display" / "texture_path"**: updates the respective model member to the value provided in the script.
 ```
-   > "tools/fishing_rod_cast.json"
-      edit texture_path set {
-        "0": "item/fishing_rod",
-        "particle": "item/fishing_rod"
-      };
+> "tools/fishing_rod_cast.json"
+   edit texture_path set {
+     "0": "item/fishing_rod",
+     "particle": "item/fishing_rod"
+   };
 ```
 
 3. **"dimensions"**: resizes images to the specified dimensions.
 ```
-   > "armors/iron_layer_1.png"
-      edit dimensions 64x32;
+> "armors/iron_layer_1.png"
+   edit dimensions 64x32;
 ```
 
 ---
