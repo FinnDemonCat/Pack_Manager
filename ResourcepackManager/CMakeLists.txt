@@ -6,6 +6,9 @@ set(CPACK_PACKAGE_INSTALL_DIRECTORY "ResourcepackManager")
 # Copiando executável
 install(PROGRAMS ScanRP2.exe DESTINATION .)
 
+# Copiando a DLL necessária
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/pdcurses.dll DESTINATION .)
+
 # Copiando pastas base
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lang DESTINATION .)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/templates DESTINATION .)

@@ -1668,6 +1668,9 @@ FOLDER* getFolder(char* path, int position) {
 	sprintf(name, "%s", pointer + 1);
 	folder = createFolder(NULL, name);
 
+	if (entry == NULL) {
+		return folder;
+	}
 	navigator = folder;
 
 	nodelay(window, true);
@@ -4082,7 +4085,15 @@ int main () {
 	logger("Getting lang text\n");
     returnString(&path, "lang");
     lang = getFolder(path, -1);
-    translated = getLang(lang, 0);
+	for (size_t x = 0; x < lang->count; x++) {
+		if (x < lang->count && strstr(lang->content[x]->name, "en-us") != NULL) {
+			translated = getLang(lang, x);
+			break;
+		} else if (x >= lang->count) {
+			translated = getLang(lang, 0);
+			logger("Engligh lang file was not found! Using <%s>\n", lang->content[0]->name);
+		}
+	}
 
 	logger("Getting instructions from folder\n");
 	returnString(&path, "path");
