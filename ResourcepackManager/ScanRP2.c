@@ -3588,9 +3588,9 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 						permutate = malloc(sizeof(ARCHIVE));
 						permutate->name = strdup(file_name);
 						permutate->tab = printJSON(value);
-						permutate->size = strlen(permutate->tab);
-	
+						
 						indentJSON(&permutate->tab);
+						permutate->size = strlen(permutate->tab);
 	
 						logger("FILE <%s> placed at %s\n", permutate->name, namespace);
 	

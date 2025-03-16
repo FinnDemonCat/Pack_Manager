@@ -6,45 +6,45 @@
 	copy "assets/minecraft/";
 > "blockstates/"
 	copy "assets/minecraft/";
+> "items/"
+	copy "assets/minecraft/";
 > "armors/iron_layer_1.png"
-	copy "minecraft:textures/entity/equipment/humanoid/iron.png";
 	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/iron.png";
 	copy "minecraft:textures/item/iron_layer1.png";
 > "armors/iron_layer_2.png"
-	copy "minecraft:textures/entity/equipment/humanoid_leggings/iron.png";
 	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/iron.png";
 	copy "minecraft:textures/item/iron_layer2.png";
 > "armors/diamond_layer_1.png"
-	copy "minecraft:textures/entity/equipment/humanoid/diamond.png";
 	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/diamond.png";
 	copy "minecraft:textures/item/diamond_layer1.png";
 > "armors/diamond_layer_2.png"
-	copy "minecraft:textures/entity/equipment/humanoid_leggings/diamond.png";
 	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/diamond.png";
 	copy "minecraft:textures/item/diamond_layer2.png";
 > "armors/gold_layer_1.png"
-	copy "minecraft:textures/entity/equipment/humanoid/gold.png";
 	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/gold.png";
 	copy "minecraft:textures/item/gold_layer1.png";
 > "armors/gold_layer_2.png"
-	copy "minecraft:textures/entity/equipment/humanoid_leggings/gold.png";
 	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/gold.png";
 	copy "minecraft:textures/item/gold_layer2.png";
 > "armors/netherite_layer_1.png"
-	copy "minecraft:textures/entity/equipment/humanoid/netherite.png";
 	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid/netherite.png";
 	copy "minecraft:textures/item/netherite_layer1.png";
 > "armors/netherite_layer_2.png"
-	copy "minecraft:textures/entity/equipment/humanoid_leggings/netherite.png";
 	edit dimentions 64x32;
+	copy "minecraft:textures/entity/equipment/humanoid_leggings/netherite.png";
 	copy "minecraft:textures/item/netherite_layer2.png";
 > "armors/chainmail_layer_1.png"
 	copy "minecraft:textures/item/chainmail_layer1.png";
-	edit dimentions 64x64;
 	copy "minecraft:textures/entity/equipment/humanoid/chainmail.png";
 > "armors/chainmail_layer_2.png"
 	copy "minecraft:textures/item/chainmail_layer2.png";
-	edit dimentions 64x64;
 	copy "minecraft:textures/entity/equipment/humanoid_leggings/chainmail.png";
 > "armors/helmet.json"
 	copy "minecraft:models/item/iron_helmet.json";
@@ -170,10 +170,6 @@
 		"0": "item/chainmail_layer1",
 		"particle": "item/chainmail_layer1"
 	};
-> "armors/inner_armor.jem"
-	copy "minecraft:optfine/cem/;
-> "armors/outer_armor.jem"
-	copy "minecraft:optfine/cem/;
 > "tools/wooden_axe.json"
 	edit texture_path set {
 		"0": "item/wooden_axe",
@@ -319,10 +315,23 @@
 		"particle": "item/netherite_shovel"
 	};
 > "tools/fishing_rod.json"
+	edit texture_path set {
+		"0": "item/fishing_rod",
+		"particle": "item/fishing_rod"
+	};
 	copy "minecraft:models/item/";
 > "tools/fishing_rod_cast.json"
+	edit texture_path set {
+		"0": "item/fishing_rod",
+		"particle": "item/fishing_rod"
+	};
 	copy "minecraft:models/item/";
 > "tools/carrot_on_a_stick.json"
+	edit texture_path set {
+		"0": "item/fishing_rod",
+		"1": "item/carrot",
+		"particle": "item/fishing_rod"
+	};
 	copy "minecraft:models/item/";
 > "tools/wooden_sword.json"
 	edit texture_path set {
@@ -342,6 +351,12 @@
 		"particle": "item/stone_sword"
 	};
 	copy "minecraft:models/item/";
+> "tools/diamond_katana.json"
+	edit texture_path set {
+		"0": "item/diamond_sword",
+		"particle": "item/diamond_sword"
+	};
+	copy "minecraft:models/item/diamond_sword.json";
 > "tools/netherite_machete.json"
 	edit texture_path set {
 		"0": "item/netherite_sword",
@@ -409,7 +424,7 @@
 	paint "./materials/iron_material.png" "./materials/netherite_material.png";
 > "tools/fishing_rod.png"
 	paint "./materials/wood_map.png" "./materials/wood_material.png";
-	copy "minecraft:models/item/";
+	copy "minecraft:textures/item/";
 > "tools/wooden_hoe.png"
 	copy "minecraft:textures/item/";
 > "tools/stone_hoe.png"
@@ -432,6 +447,8 @@
 	copy "minecraft:textures/item/iron_sword.png";
 > "tools/stone_sword.png"
 	copy "minecraft:textures/item/";
+> "tools/diamond_katana.png"
+	copy "minecraft:textures/item/diamond_sword.png";
 > "tools/netherite_machete.png"
 	copy "minecraft:textures/item/netherite_sword.png";
 > "tools/shears.json"
@@ -452,14 +469,16 @@
 	copy "minecraft:models/item/";
 > "tools/crossbow_firework.json"
 	edit texture_path set {
-		"0": "item/crossbow_firework",
+		"0": "item/crossbow",
+		"1": "item/crossbow_firework"
 		"particle": "item/crossbow_firework"
 	};
 	copy "minecraft:models/item/";
 > "tools/crossbow_arrow.json"
 	edit texture_path set {
-		"0": "item/crossbow_arrow",
-		"particle": "item/crossbow_arrow"
+		"0": "item/crossbow",
+		"1": "item/arrow",
+		"particle": "item/crossbow"
 	};
 	copy "minecraft:models/item/";
 > "tools/firework_rocket.json"
@@ -469,6 +488,7 @@
 	};
 	copy "minecraft:models/item/";
 > "tools/bow.png"
+	paint "./materials/wood_map.png" "./materials/wood_material.png";
 	copy "minecraft:textures/item/";
 > "tools/arrow.png"
 	copy "minecraft:textures/item/";
@@ -544,6 +564,8 @@
 	copy "minecraft:textures/item/";
 	copy "minecraft:textures/item/lingering_potion.png.mcmeta";
 	copy "minecraft:textures/block/torch.png.mcmeta";
+	copy "minecraft:textures/item/torch.png.mcmeta";
+	copy "minecraft:textures/block/disc.png.mcmeta";
 > "util/music_disc.json"
 	copy "minecraft:models/item/music_disc_5.json";
 	copy "minecraft:models/item/music_disc_13.json";
@@ -710,12 +732,12 @@
 	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_wait_pallet.png";
 > "minecraft:textures/item/music_disc_ward.png"
 	paint "./materials/discs/disc_side_map.png" "./materials/discs/disc_ward_pallet.png";
-> "util/amethyst_shard.json"
+> "util/amethyst.json"
 	edit texture_path set {
 		"0": "item/amethyst_shard",
 		"particle": "item/amethyst_shard"
 	};
-	copy "minecraft:models/item/";
+	copy "minecraft:models/item/amethyst_shard.json";
 > "util/diamond.json"
 	edit texture_path set {
 		"0": "item/diamond",
@@ -755,8 +777,8 @@
 		"0": "item/netherite_ingot",
 		"particle": "item/netherite_ingot"
 	};
-> "util/amethyst_shard.png"
-	copy "minecraft:textures/item/";
+> "util/amethyst.png"
+	copy "minecraft:textures/item/amethyst_shard.png";
 > "util/diamond.png"
 	paint "./materials/diamond_map.png" "./materials/diamond_material.png";
 	copy "minecraft:textures/item/";
@@ -838,6 +860,33 @@
 		"particle": "item/carrot"
 	};
 	copy "minecraft:models/item/";
+> "foods/bowl.json"
+	edit texture_path set {
+		"0": "item/bowl",
+		"particle": "item/bowl"
+	};
+	copy "minecraft:models/item/";
+> "foods/mushroom_stew.json"
+	edit texture_path set {
+		"0": "item/bowl",
+		"1": "item/mushroom_stew",
+		"particle": "mushroom_stew"
+	};
+	copy "minecraft:models/item/";
+> "foods/rabbit_stew.json"
+	edit texture_path set {
+		"0": "item/bowl",
+		"1": "item/rabbit_stew",
+		"particle": "rabbit_stew"
+	};
+	copy "minecraft:models/item/";
+> "foods/suspicious_stew.json"
+	edit texture_path set {
+		"0": "item/bowl",
+		"1": "item/suspicious_stew",
+		"particle": "suspicious_stew"
+	};
+	copy "minecraft:models/item/";
 > "foods/apple.png"
 	copy "minecraft:textures/item/";
 > "foods/golden_apple.png"
@@ -857,6 +906,14 @@
 > "foods/poisonous_potato_root.png"
 	copy "minecraft:textures/item/";
 > "foods/carrot.png"
+	copy "minecraft:textures/item/";
+> "foods/bowl.png"
+	copy "minecraft:textures/item/";
+> "foods/mushroom_stew.png"
+	copy "minecraft:textures/item/";
+> "foods/rabbit_stew.png"
+	copy "minecraft:textures/item/";
+> "foods/suspicious_stew.png"
 	copy "minecraft:textures/item/";
 > "blocks/torch.json"
 	edit texture_path set {
@@ -914,6 +971,7 @@
 		"2": "block/jukebox_side",
 		"3": "block/jukebox_top",
 		"4": "block/jukebox_top_inside",
+		"5": "block/disc",
 		"particle": "block/jukebox_side"
 	};
 	copy "minecraft:models/block/";
@@ -954,4 +1012,6 @@
 > "util/"
 	remove;
 > "pack/"
+	remove;
+> "items/"
 	remove;
