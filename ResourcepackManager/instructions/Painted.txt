@@ -1,0 +1,2 @@
+> "window.png"
+	paint "./snowstone_map.png" "./burgundu.png";

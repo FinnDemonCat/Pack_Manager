@@ -3634,7 +3634,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 	
 					if (strstr(namespace, "./") != NULL) {
-						location = localizeFolder(target, namespace, false);
+						location = localizeFolder(target, namespace + 2, false);
 	
 						if (location == NULL) {
 							logger("Error! Couldn't find %s at target folder\n", namespace);
@@ -3681,17 +3681,17 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					}
 	
 					if (strstr(namespace, "./") != NULL) {
-						location = localizeFolder(target, namespace, false);
+						location = localizeFolder(target, namespace + 2, false);
 	
 						if (location == NULL) {
-							logger("Error! Couldn't find %s at target folder", namespace);
+							logger("Error! Couldn't find %s at target folder\n", namespace);
 							checkpoint = NULL;
 							break;
 						}
 					} else {
 						location = localizeFolder(assets, namespace, false);
 						if (location == NULL) {
-							logger("Error! Couldn't find %s at assets folder", namespace);
+							logger("Error! Couldn't find %s at assets folder\n", namespace);
 							checkpoint = NULL;
 							break;
 						}
@@ -3762,120 +3762,142 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 					
 				} else if (strcmp(arguments->item[0], "permutate_texture") == 0) {
 					
-					int width, height, texture_count = 0, bit_deph, color_type[2], bpp[2];
-					int lines, collums;
-					ARCHIVE *map, *copies[32];
+					logger("Executing texture paint on %s\n", file.container->content[file.index]->name);
+					int width, height; // Texture
+					int lines, collums;	// Pallets & Map
+					int bit_depth, color_type;
+					int bpp[2];
+					int count = 0;
+					png_bytep **textures, *pixels, **pallets;
 					FOLDER* location;
-					OBJECT* list;
-					png_bytep *texture, *pixels, *pallet[32], *to_paint[32];
+					OBJECT *list;
 					
-					//Getting texture map name
+					pixels =  NULL;
+					list = processJSON(arguments->item[2]);
+					textures = (png_bytep**)calloc(list->count, sizeof(png_bytep*));
+					pallets = (png_bytep**)calloc(list->count, sizeof(png_bytep*));
+
+					// Texture duplicates
+					for (size_t x = 0; x < list->count; x++) {
+						if (getPNGPixels(file.container->content[file.index], &textures[x], &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
+							logger("Failed to read png file!\n");
+							checkpoint = NULL;
+							break;
+						}
+					}
+					bpp[0] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+					
+					// Pallets
+					for (size_t x = 0; x < list->count; x++) {
+						if (sscanf(list->value[x]->declaration + 1, "%255[^\"]", namespace) == 0) {
+							logger("Error! Failed to process pallet path at iteraction %d!\n", line);
+							break;
+						}
+		
+						if (strstr(namespace, "./") != NULL) {
+							location = localizeFolder(target, namespace + 2, false);
+		
+							if (location == NULL) {
+								logger("Error! Couldn't find %s at target folder\n", namespace);
+								checkpoint = NULL;
+								break;
+							}
+						} else {
+							location = localizeFolder(assets, namespace, false);
+		
+							if (location == NULL) {
+								logger("Error! Couldn't find %s at assets folder\n", namespace);
+								checkpoint = NULL;
+								break;
+							}
+						}
+		
+						if ((save = strrchr(namespace, '/')) == NULL) {
+							sprintf(name, "%s", namespace);
+						} else {
+							sprintf(name, "%s", save + 1);
+						}
+						
+						for (size_t y = 0; y < location->count; y++) {
+							if (y < location->count && strcmp(location->content[y]->name, name) == 0) {
+								if (getPNGPixels(location->content[y], &pallets[count], &collums, &lines, &color_type, &bit_depth, NULL, true) == 0) {
+									logger("Failed to read png file!\n");
+									checkpoint = NULL;
+									break;
+								}
+								count++;
+
+								char *extension = strrchr(name, '.');
+								sprintf(extension, "_%s", file.container->content[file.index]->name);
+								free(list->value[x]->declaration);
+								list->value[x]->declaration = strdup(name);
+								break;
+							} else if (y >= location->count) {
+								logger("Warning! Failed to find <%s>!\n", name);
+							}
+						}
+					}
+					bpp[1] = (color_type == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
+
+					// Map
 					if (sscanf(arguments->item[1] + 1, "%255[^\"]", namespace) == 0) {
 						logger("Error! Failed to process texture color map's path at iteraction %d!\n", line);
 						break;
 					}
-					
-					for (size_t x = 0; x < navigator->count; x++) {
-						if (strcmp(navigator->content[x]->name, name) == 0) {
-							map = navigator->content[x];
+	
+					if (strstr(namespace, "./") != NULL) {
+						location = localizeFolder(target, namespace + 2, false);
+	
+						if (location == NULL) {
+							logger("Error! Couldn't find %s at target folder\n", namespace);
+							checkpoint = NULL;
+							break;
+						}
+					} else {
+						location = localizeFolder(assets, namespace, false);
+	
+						if (location == NULL) {
+							logger("Error! Couldn't find %s at assets folder\n", namespace);
+							checkpoint = NULL;
 							break;
 						}
 					}
 	
-					//Getting pallets list
-					list = processJSON(arguments->item[2]);
-	
-					for (size_t x = 0; x < list->count; x++) {
-						char* name_pointer;
-						if (sscanf(list->value[x]->declaration, "\"%[^\"]\"", namespace) == 0) {
-							logger("Error! Failed to extract file pallet %d name!\n", x);
-							continue;
-						}
-	
-						if (strstr(name, "./") != NULL) {
-							location = localizeFolder(target, namespace, false);
-		
-							if (location == NULL) {
-								logger("Error! Couldn't find %s at target folder", namespace);
-								continue;
-							}
-						} else {
-							location = localizeFolder(assets, namespace, false);
-							if (location == NULL) {
-								logger("Error! Couldn't find %s at assets folder", namespace);
-								continue;
-							}
-						}
-	
-						if ((name_pointer = strrchr(namespace, '/')) == NULL) {
-							sprintf(name, "%.*s", 255, namespace);
-							name_pointer = name;
-						} else {
-							sprintf(name, "%s", name_pointer + 1);
-						}
-	
-						for (size_t y = 0; y < navigator->count; y++) {
-	
-							if (strcmp(location->content[y]->name, namespace) == 0) {
-								copies[texture_count] = dupFile(file.container->content[file.index]);
-	
-								name_pointer = strchr(name, '.');
-								sprintf(namespace, "%.*s_%s", (int)(name_pointer - name), name, copies[texture_count]->name);
-								free(copies[texture_count]->name);
-								copies[texture_count]->name = strdup(namespace);
-	
-								ARCHIVE *temp = location->content[y];
-								ARCHIVE *mirror = copies[texture_count];
-	
-								getPNGPixels(temp, &pallet[texture_count], NULL, NULL, NULL, NULL, NULL, true);
-								getPNGPixels(mirror, &to_paint[texture_count], NULL, NULL, NULL, NULL, NULL, true);
-	
-								if (pallet[texture_count] == NULL || to_paint[texture_count] == NULL) {
-									logger("Error! Failed to process png files: %s, %s\n", location->content[y]->name, copies[texture_count]->name);
-									continue;
-								} else {
-									texture_count++;
-								}
-	
-								temp = mirror = NULL;
-								break;
-							}
-						}
-					}
-					
-					//Continue with color substitution
-					getPNGPixels(map, &pixels, &collums, &lines, &bit_deph, &color_type[0], NULL, true);
-					getPNGPixels(file.container->content[file.index], &texture, &width, &height, &bit_deph, &color_type[1], NULL, true);
-	
-					if (pixels == NULL || texture == NULL) {
-						logger("Error! Failed to process png files: %s, %s\n", map->name, file.container->content[file.index]->name);
-						break;
+					if ((save = strrchr(namespace, '/')) == NULL) {
+						sprintf(name, "%s", namespace);
+					} else {
+						sprintf(name, "%s", save + 1);
 					}
 	
-					bpp[1] = (color_type[0] == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
-					bpp[0] = (color_type[1] == PNG_COLOR_TYPE_RGBA) ? 4 : 3;
-	
+					for (size_t x = 0; x < (location->count + 1); x++) {
+						if (x < location->count && strcmp(location->content[x]->name, name) == 0) {
+							getPNGPixels(location->content[x], &pixels, &collums, &lines, &color_type, &bit_depth, NULL, true);
+							break;
+						} else if (x == location->count) {
+							logger("Warning! Failed to find <%s>!\n", name);
+						}
+					}
+
+					// Paint iteractions
 					for (int x = 0; x < height; x++) {
-	
 						for (int y = 0; y < width; y++) {
-							png_bytep compare = &texture[x][y * bpp[0]];
-	
+							png_bytep compare = &textures[0][x][y * bpp[0]];
+
+							if (bpp[0] == 4 && compare[3] == 0) {
+								continue;
+							}
 							for (int z = 0; z < collums; z++) {
-								png_bytep px = &pixels[0][z * bpp[1]];
-	
-								if (bpp[0] == 4 && compare[3] == 0) {
-									continue;
-								}
-	
+								png_bytep px = &pixels[0][z * bpp[1]];;
+
 								if (
 									px[0] == compare[0]
 									&& px[1] == compare[1]
 									&& px[2] == compare[2]
 								) {
-									for (int a = 0; a < texture_count; a++) {
-										to_paint[a][x][(y * bpp[0]) + 0] = pallet[a][0][(z * bpp[1]) + 0];
-										to_paint[a][x][(y * bpp[0]) + 1] = pallet[a][0][(z * bpp[1]) + 1];
-										to_paint[a][x][(y * bpp[0]) + 2] = pallet[a][0][(z * bpp[1]) + 2];
+									for (int file = 0; file < count; file++) {
+										textures[file][x][(y * bpp[0]) + 0] = pallets[file][0][(z * bpp[1]) + 0];
+										textures[file][x][(y * bpp[0]) + 1] = pallets[file][0][(z * bpp[1]) + 1];
+										textures[file][x][(y * bpp[0]) + 2] = pallets[file][0][(z * bpp[1]) + 2];
 									}
 	
 									break;
@@ -3883,36 +3905,34 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 							}
 						}
 					}
-	
-					for (int x = 0; x < lines; x++) {
-						free(pixels[x]);
-					}
-					free(pixels);
-					for (int x = 0; x < height; x++) {
-						free(texture[x]);
-					}
-					free(texture);
-					freeOBJ(&list);
-	
-					for (int x = 0; x < texture_count; x++) {
-						ARCHIVE *mirror = copies[x];
-						printPNGPixels(mirror, to_paint[x], width, height);
-						addFile(navigator, &copies[x]);
-						logger("FILE <%s> was added to the same location as the base file\n", mirror->name, navigator->name);
-	
-						for (int y = 0; y < lines; y++) {
-							free(to_paint[x][y]);
-						}
-						for (int y = 0; y < height; y++) {
-							free(pallet[x][y]);
-						}
-	
-						free(to_paint[x]);
-						free(pallet[x]);
-	
+					
+					// Print
+					for (int x = 0; x < count; x++) {
+						ARCHIVE* mirror = dupFile(file.container->content[file.index]);
+						printPNGPixels(mirror, textures[x], width, height);
+
+						free(mirror->name);
+						mirror->name = strdup(list->value[x]->declaration);
+
+						logger("FILE %s painted\n", file.container->content[file.index]->name);
+						addFile(location, &mirror);
 						mirror = NULL;
 					}
-					
+
+					// Free
+					for (int x = 0; x < count; x++) {
+						for (int y = 0; y < height; y++) {
+							free(textures[x][y]);
+						}
+						for (int y = 0; y < lines; y++) {
+							free(pallets[x][y]);
+						}
+					}
+					free(textures);
+					free(pallets);
+					free(pixels);
+					freeOBJ(&list);
+
 				} else if (strcmp(arguments->item[0], "convert_overrides") == 0) {
 					logger("FILE <%s> translating overrides\n", file.container->content[file.index]->name);
 					ARCHIVE* temp = file.container->content[file.index];

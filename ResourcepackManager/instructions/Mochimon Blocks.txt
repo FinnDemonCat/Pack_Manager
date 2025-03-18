@@ -1,0 +1,26 @@
+> "window.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "window_clean.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "window_grid.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "lantern.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "bricks.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "chisel.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "diagonal_bricks.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "hexagonal.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "pillar.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "pillar_top.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "roof_tile.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "small_bricks.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "tile.png"
+	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
