@@ -80,11 +80,10 @@ This function contains a set of sub-actions related to the file:
 
 ### **Disassemble**:
 - The program selects the target file and extracts the groups into their own file models.
-
 **Example:**
 ```
 > "tools/bow.json"
-   disassemble trim "minecraft:models/item/";
+   disassemble "minecraft:models/item/";
 ```
 
 ---
