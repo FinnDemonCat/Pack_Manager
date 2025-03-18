@@ -4,7 +4,8 @@
 
 ## Instructions
 
-The instruction system works with a file containing a list of commands that point to a file and tell the program what to do with it.
+The instruction system works with a file containing a list of commands that point to a file and tell the program what to do with it. It accepts 2 resourceapcks to be called,
+with '>' on the instructions it will look for the target in the main folder, typing '<' it's going to look for the target in the secondary folder.
 
 The current version (1.0) of ResourcepackManager has the following actions:
 
@@ -90,7 +91,7 @@ This function contains a set of sub-actions related to the file:
 
 ### **Paint**:
 - The program takes the texture and paints it according to the specified palette.
-
+- Add "./" prefix to point to the target folder, by defualt it's going to look in the assets folder.
 **Example:**
 ```
 > "tools/bow.png"
@@ -101,7 +102,7 @@ This function contains a set of sub-actions related to the file:
 
 ### **Permutate_Texture**:
 - The program takes the texture and a list of palettes to paint the duplicates.
-
+- Add "./" prefix to point to the target folder, by defualt it's going to look in the assets folder.
 **Example:**
 ```
 > "bricks.png"
