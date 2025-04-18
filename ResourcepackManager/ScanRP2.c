@@ -659,7 +659,7 @@ OBJECT* processJSON (char* json) {
 				sprintf(buffer, "%.*s", (int)length, pointer);
 				value = createOBJ(buffer);
 
-				x = (checkpoint - json);
+				x = (checkpoint - json) - 1;
 			}
 			if (file->count > 0) {
 				addOBJ(file->value[file->count - 1], &value);
@@ -3779,7 +3779,7 @@ void executeInstruct(FOLDER* target, FOLDER* assets, char* instruct) {
 
 					// Texture duplicates
 					for (size_t x = 0; x < list->count; x++) {
-						if (getPNGPixels(file.container->content[file.index], &textures[x], &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
+						if (x < list->count && getPNGPixels(file.container->content[file.index], &textures[x], &width, &height, &color_type, &bit_depth, NULL, true) == 0) {
 							logger("Failed to read png file!\n");
 							checkpoint = NULL;
 							break;

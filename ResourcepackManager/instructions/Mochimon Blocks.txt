@@ -24,3 +24,118 @@
 	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
 > "tile.png"
 	permutate_texture "./snowstone_map.png" {"./yellow_stone.png", "./pink_stone.png", "./brown_stone.png", "./burgundu.png", "./limestone.png", "./blue_stone.png", "./green_stone.png", "./root_stone.png"};
+> "bricks.geo.json"
+	copy "yellow_stone_lantern.geo.json";
+	copy "yellow_stone_bricks.geo.json";
+	copy "yellow_stone_chisel.geo.json";
+	copy "yellow_stone_diagonal_bricks.geo.json";
+	copy "yellow_stone_hexagonal.geo.json";
+	copy "yellow_stone_pillar.geo.json";
+	copy "yellow_stone_pillar_top.geo.json";
+	copy "yellow_stone_roof_tile.geo.json";
+	copy "yellow_stone_small_bricks.geo.json";
+	copy "yellow_stone_tile.geo.json";
+> "bricks.geo.json"
+	copy "pink_stone_lantern.geo.json";
+	copy "pink_stone_bricks.geo.json";
+	copy "pink_stone_chisel.geo.json";
+	copy "pink_stone_diagonal_bricks.geo.json";
+	copy "pink_stone_hexagonal.geo.json";
+	copy "pink_stone_pillar.geo.json";
+	copy "pink_stone_pillar_top.geo.json";
+	copy "pink_stone_roof_tile.geo.json";
+	copy "pink_stone_small_bricks.geo.json";
+	copy "pink_stone_tile.geo.json";
+> "bricks.geo.json"
+	copy "brown_stone_lantern.geo.json";
+	copy "brown_stone_bricks.geo.json";
+	copy "brown_stone_chisel.geo.json";
+	copy "brown_stone_diagonal_bricks.geo.json";
+	copy "brown_stone_hexagonal.geo.json";
+	copy "brown_stone_pillar.geo.json";
+	copy "brown_stone_pillar_top.geo.json";
+	copy "brown_stone_roof_tile.geo.json";
+	copy "brown_stone_small_bricks.geo.json";
+	copy "brown_stone_tile.geo.json";
+> "bricks.geo.json"
+	copy "burgundu_lantern.geo.json";
+	copy "burgundu_bricks.geo.json";
+	copy "burgundu_chisel.geo.json";
+	copy "burgundu_diagonal_bricks.geo.json";
+	copy "burgundu_hexagonal.geo.json";
+	copy "burgundu_pillar.geo.json";
+	copy "burgundu_pillar_top.geo.json";
+	copy "burgundu_roof_tile.geo.json";
+	copy "burgundu_small_bricks.geo.json";
+	copy "burgundu_tile.geo.json";
+> "bricks.geo.json"
+	copy "limestone_lantern.geo.json";
+	copy "limestone_bricks.geo.json";
+	copy "limestone_chisel.geo.json";
+	copy "limestone_diagonal_bricks.geo.json";
+	copy "limestone_hexagonal.geo.json";
+	copy "limestone_pillar.geo.json";
+	copy "limestone_pillar_top.geo.json";
+	copy "limestone_roof_tile.geo.json";
+	copy "limestone_small_bricks.geo.json";
+	copy "limestone_tile.geo.json";
+> "bricks.geo.json"
+	copy "blue_stone_lantern.geo.json";
+	copy "blue_stone_bricks.geo.json";
+	copy "blue_stone_chisel.geo.json";
+	copy "blue_stone_diagonal_bricks.geo.json";
+	copy "blue_stone_hexagonal.geo.json";
+	copy "blue_stone_pillar.geo.json";
+	copy "blue_stone_pillar_top.geo.json";
+	copy "blue_stone_roof_tile.geo.json";
+	copy "blue_stone_small_bricks.geo.json";
+	copy "blue_stone_tile.geo.json";
+> "bricks.geo.json"
+	copy "green_stone_lantern.geo.json";
+	copy "green_stone_bricks.geo.json";
+	copy "green_stone_chisel.geo.json";
+	copy "green_stone_diagonal_bricks.geo.json";
+	copy "green_stone_hexagonal.geo.json";
+	copy "green_stone_pillar.geo.json";
+	copy "green_stone_pillar_top.geo.json";
+	copy "green_stone_roof_tile.geo.json";
+	copy "green_stone_small_bricks.geo.json";
+	copy "green_stone_tile.geo.json";
+> "bricks.geo.json"
+	copy "root_stone_lantern.geo.json";
+	copy "root_stone_bricks.geo.json";
+	copy "root_stone_chisel.geo.json";
+	copy "root_stone_diagonal_bricks.geo.json";
+	copy "root_stone_hexagonal.geo.json";
+	copy "root_stone_pillar.geo.json";
+	copy "root_stone_pillar_top.geo.json";
+	copy "root_stone_roof_tile.geo.json";
+	copy "root_stone_small_bricks.geo.json";
+	copy "root_stone_tile.geo.json";
+> "window.geo.json"
+	copy "yellow_stone_window.geo.json";
+	copy "pink_stone_window.geo.json";
+	copy "brown_stone_window.geo.json";
+	copy "burgundu_window.geo.json";
+	copy "limestone_window.geo.json";
+	copy "blue_stone_window.geo.json";
+	copy "green_stone_window.geo.json";
+	copy "root_stone_window.geo.json";
+> "window.geo.json"
+	copy "yellow_stone_window_clean.geo.json";
+	copy "pink_stone_window_clean.geo.json";
+	copy "brown_stone_window_clean.geo.json";
+	copy "burgundu_window_clean.geo.json";
+	copy "limestone_window_clean.geo.json";
+	copy "blue_stone_window_clean.geo.json";
+	copy "green_stone_window_clean.geo.json";
+	copy "root_stone_window_clean.geo.json";
+> "window.geo.json"
+	copy "yellow_stone_window_grid.geo.json";
+	copy "pink_stone_window_grid.geo.json";
+	copy "brown_stone_window_grid.geo.json";
+	copy "burgundu_window_grid.geo.json";
+	copy "limestone_window_grid.geo.json";
+	copy "blue_stone_window_grid.geo.json";
+	copy "green_stone_window_grid.geo.json";
+	copy "root_stone_window_grid.geo.json";

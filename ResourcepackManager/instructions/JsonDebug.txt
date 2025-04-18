@@ -1,0 +1,6 @@
+> "bow.json"
+	edit texture_path {
+		"0": "item/bow",
+		"1": "item/arrow",
+		"particle": "item/bow"
+	};

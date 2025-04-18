@@ -18,6 +18,10 @@
 	remove;
 > "minecraft:textures/entity/equipment/"
 	remove;
+> "minecraft:textures/models/bamboo.json"
+	remove;
+> "minecraft:textures/item/bamboo.png"
+	remove;
 > "minecraft:textures/item/iron_layer1.png"
 	copy "minecraft:textures/models/armor/";
 > "minecraft:textures/item/iron_layer2.png"
@@ -34,6 +38,10 @@
 	copy "minecraft:textures/models/armor/";
 > "minecraft:textures/item/chainmail_layer2.png"
 	copy "minecraft:textures/models/armor/";
+> "minecraft:textures/item/netherite_layer1.png"
+	remove;
+> "minecraft:textures/item/netherite_layer2.png"
+	remove;
 > "minecraft:models/item/sweet_berries.json"
 	remove;
 > "minecraft:models/item/glow_berries.json"
@@ -69,16 +77,4 @@
 > "minecraft:textures/item/amethyst_shard.png"
 	remove;
 > "minecraft:textures/item/copper_ingot.png"
-	remove;
-> "minecraft:textures/item/netherite_ingot.png"
-	remove;
-> "minecraft:textures/item/netherite_sword.png"
-	remove;
-> "minecraft:textures/item/netherite_axe.png"
-	remove;
-> "minecraft:textures/item/netherite_pickaxe.png"
-	remove;
-> "minecraft:textures/item/netherite_shovel.png"
-	remove;
-> "minecraft:textures/item/netherite_hoe.png"
 	remove;

@@ -7,13 +7,13 @@ INCLUDES =  -lpdcurses $(TYPE) -lminizip -lz -lbz2 -lzstd -llzma -lbcrypt -lpng
 FILE = ScanRP2
 ICON = icon
 
-$(DIR)$(ICON): $(DIR)$(ICON).rc
-	echo "Compiling $(DIR)/$(ICON).o"
-	windres -i $(DIR)$(ICON).rc -o $(DIR)$(ICON).o
+$(ICON): $(ICON).rc
+	echo "Compiling /$(ICON).o"
+	windres -i $(ICON).rc -o $(ICON).o
 
-$(FILE): $(DIR)$(FILE).c $(DIR)$(ICON).o
-	echo "Compiling $(DIR)/$(FILE).c"
-	$(CC) -g $(DIR)$(FILE).c -Wall -Wextra -o $(DIR)$(FILE).exe $(DIR)$(ICON).o $(LIBDIR) $(INCLUDES)
+$(FILE): $(FILE).c $(ICON).o
+	echo "Compiling /$(FILE).c"
+	$(CC) -g $(FILE).c -Wall -Wextra -o $(FILE).exe $(ICON).o $(LIBDIR) $(INCLUDES)
 
 all: $(FILE)
 
